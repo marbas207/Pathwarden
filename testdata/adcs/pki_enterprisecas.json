@@ -1,0 +1,188 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "33333333-0000-0000-0000-000000000001",
+      "Properties": {
+        "name": "PKI-CA@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "caname": "PKI-CA",
+        "dnshostname": "ca01.pki.local",
+        "certthumbprint": "AAAA",
+        "certchain": [
+          "AAAA"
+        ],
+        "casecuritycollected": true,
+        "enrollmentagentrestrictionscollected": true,
+        "isuserspecifiessanenabledcollected": true,
+        "enforceencryptionforrequests": false
+      },
+      "HostingComputer": "S-1-5-21-5000-5000-5000-1001",
+      "CARegistryData": {
+        "CASecurity": {
+          "Data": [
+            {
+              "PrincipalSID": "PKI.LOCAL-S-1-5-11",
+              "PrincipalType": "Group",
+              "RightName": "Enroll",
+              "IsInherited": false
+            },
+            {
+              "PrincipalSID": "S-1-5-21-5000-5000-5000-512",
+              "PrincipalType": "Group",
+              "RightName": "ManageCA",
+              "IsInherited": false
+            },
+            {
+              "PrincipalSID": "S-1-5-21-5000-5000-5000-1106",
+              "PrincipalType": "User",
+              "RightName": "ManageCA",
+              "IsInherited": false
+            },
+            {
+              "PrincipalSID": "S-1-5-21-5000-5000-5000-1001-544",
+              "PrincipalType": "LocalGroup",
+              "RightName": "ManageCA",
+              "IsInherited": false
+            }
+          ],
+          "Collected": true,
+          "FailureReason": null
+        },
+        "EnrollmentAgentRestrictions": {
+          "Restrictions": [],
+          "Collected": true,
+          "FailureReason": null
+        },
+        "IsUserSpecifiesSanEnabled": {
+          "Value": true,
+          "Collected": true,
+          "FailureReason": null
+        }
+      },
+      "EnabledCertTemplates": [
+        {
+          "ObjectIdentifier": "11111111-0000-0000-0000-000000000001",
+          "ObjectType": "CertTemplate"
+        },
+        {
+          "ObjectIdentifier": "11111111-0000-0000-0000-000000000002",
+          "ObjectType": "CertTemplate"
+        },
+        {
+          "ObjectIdentifier": "11111111-0000-0000-0000-000000000003",
+          "ObjectType": "CertTemplate"
+        },
+        {
+          "ObjectIdentifier": "11111111-0000-0000-0000-000000000004",
+          "ObjectType": "CertTemplate"
+        },
+        {
+          "ObjectIdentifier": "11111111-0000-0000-0000-000000000005",
+          "ObjectType": "CertTemplate"
+        },
+        {
+          "ObjectIdentifier": "11111111-0000-0000-0000-000000000006",
+          "ObjectType": "CertTemplate"
+        }
+      ],
+      "HttpEnrollmentEndpoints": [
+        {
+          "Result": {
+            "Url": "http://ca01.pki.local/certsrv/",
+            "Type": "WebEnrollmentApplication",
+            "Status": "Vulnerable_NtlmHttpEndpoint",
+            "ADCSWebEnrollmentHTTP": true,
+            "ADCSWebEnrollmentHTTPS": false,
+            "ADCSWebEnrollmentEPA": false
+          },
+          "Collected": true,
+          "FailureReason": null
+        },
+        {
+          "Result": {
+            "Url": "https://ca01.pki.local/certsrv/",
+            "Type": "WebEnrollmentApplication",
+            "Status": "NotVulnerable_NtlmChannelBindingRequired",
+            "ADCSWebEnrollmentHTTP": false,
+            "ADCSWebEnrollmentHTTPS": true,
+            "ADCSWebEnrollmentEPA": true
+          },
+          "Collected": true,
+          "FailureReason": null
+        }
+      ],
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-5000-5000-5000-1104",
+          "PrincipalType": "User",
+          "RightName": "ManageCA",
+          "IsInherited": false
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "33333333-0000-0000-0000-000000000002",
+      "Properties": {
+        "name": "ROGUE-CA@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "caname": "ROGUE-CA",
+        "dnshostname": "ca02.pki.local",
+        "certthumbprint": "BBBB",
+        "certchain": [
+          "BBBB"
+        ],
+        "casecuritycollected": true,
+        "enrollmentagentrestrictionscollected": true,
+        "isuserspecifiessanenabledcollected": true
+      },
+      "HostingComputer": "S-1-5-21-5000-5000-5000-1002",
+      "CARegistryData": {
+        "CASecurity": {
+          "Data": [
+            {
+              "PrincipalSID": "PKI.LOCAL-S-1-5-11",
+              "PrincipalType": "Group",
+              "RightName": "Enroll",
+              "IsInherited": false
+            }
+          ],
+          "Collected": true,
+          "FailureReason": null
+        },
+        "EnrollmentAgentRestrictions": {
+          "Restrictions": [],
+          "Collected": true,
+          "FailureReason": null
+        },
+        "IsUserSpecifiesSanEnabled": {
+          "Value": true,
+          "Collected": true,
+          "FailureReason": null
+        }
+      },
+      "EnabledCertTemplates": [
+        {
+          "ObjectIdentifier": "11111111-0000-0000-0000-000000000001",
+          "ObjectType": "CertTemplate"
+        }
+      ],
+      "HttpEnrollmentEndpoints": [],
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-5000-5000-5000-1104",
+          "PrincipalType": "User",
+          "RightName": "ManageCA",
+          "IsInherited": false
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "enterprisecas",
+    "count": 2,
+    "version": 6
+  }
+}

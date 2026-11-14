@@ -1,0 +1,81 @@
+{
+ "data": [
+  {
+   "Properties": {
+    "domain": "ESSOS.LOCAL",
+    "name": "ESSOS.LOCAL",
+    "distinguishedname": "DC=ESSOS,DC=LOCAL",
+    "domainsid": "S-1-5-21-907917752-839331996-494631781",
+    "objectguid": "364A16B4-0827-44A6-82EF-90A48047F1D9",
+    "netbios": "",
+    "isaclprotected": false,
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "highvalue": true,
+    "description": null,
+    "whencreated": 1791732527,
+    "machineaccountquota": 10,
+    "expirepasswordsonsmartcardonlyaccounts": true,
+    "minpwdlength": 5,
+    "pwdproperties": 0,
+    "pwdhistorylength": 24,
+    "lockoutthreshold": 5,
+    "minpwdage": "1 day",
+    "maxpwdage": "37201 days",
+    "lockoutduration": "5 minutes",
+    "lockoutobservationwindow": -3000000000,
+    "functionallevel": "2016",
+    "dsheuristics": "",
+    "collected": true
+   },
+   "GPOChanges": {
+    "LocalAdmins": [],
+    "RemoteDesktopUsers": [],
+    "DcomUsers": [],
+    "PSRemoteUsers": [],
+    "AffectedComputers": [
+     {
+      "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-1001",
+      "ObjectType": "Computer"
+     },
+     {
+      "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-1104",
+      "ObjectType": "Computer"
+     }
+    ]
+   },
+   "ChildObjects": [],
+   "Trusts": [
+    {
+     "TargetDomainSid": "S-1-5-21-1821261621-2407627684-1290984713",
+     "TargetDomainName": "SEVENKINGDOMS.LOCAL",
+     "IsTransitive": true,
+     "SidFilteringEnabled": true,
+     "TrustAttributes": 8,
+     "TrustDirection": "Bidirectional",
+     "TrustType": "Forest"
+    }
+   ],
+   "Links": [
+    {
+     "IsEnforced": false,
+     "GUID": "B2AFB047-69F4-4F0E-A8A6-4D655C7D402C"
+    }
+   ],
+   "InheritanceHashes": [],
+   "ForestRootIdentifier": null,
+   "Aces": [],
+   "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781",
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "ContainedBy": null
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "domains",
+  "count": 1,
+  "version": 6,
+  "collectorversion": "RustHound-CE v2.5.23"
+ }
+}

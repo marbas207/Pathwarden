@@ -1,0 +1,165 @@
+/* The Progress page: charts in the report's palette. Exposure bands and
+   severities reuse the report's classes (.low .medium .high .critical set
+   --b); everything else is ink, lines and the two brand colors. */
+.env-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 0 18px; }
+.env-tabs a {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 10px; border: 1px solid var(--line);
+  color: var(--muted); text-decoration: none; font-weight: 600; font-size: 0.88rem; background: var(--card);
+}
+.env-tabs a:hover { color: var(--ink); border-color: var(--accent); }
+.env-tabs a[aria-current="page"] { color: var(--ink); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+.env-tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kpi.low .kpi-value { color: var(--good); }
+.kpi.medium .kpi-value, .kpi.high .kpi-value, .kpi.critical .kpi-value { color: var(--b); }
+.delta { font-weight: 700; }
+.delta.good { color: var(--good); }
+.delta.bad { color: var(--critical); }
+.note-line { margin: -4px 0 14px; }
+
+/* The title row: the time range switch at the right. */
+.pv-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px 16px; flex-wrap: wrap; }
+.pv-range { flex: none; }
+.pv-range a { padding: 4px 12px; border-radius: 7px; font-size: 0.86rem; font-weight: 600; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.pv-range a:hover { color: var(--ink); }
+.pv-range a[aria-current="page"] { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--ink); }
+.pv-range a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pv-one { margin-bottom: 16px; flex-wrap: wrap; }
+.pv-one > p:first-of-type { flex: 1 1 260px; }
+.pv-one .empty-actions { margin-top: 0; }
+
+/* What changed since the last run: the word (hidden) and the mark say
+   which way; the colour repeats it. */
+.pv-since { padding: 14px 18px; margin-bottom: 16px; }
+.pv-since h2.sub { margin: 0 0 8px; }
+.pv-since-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 16px; margin-bottom: 4px; }
+.pv-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.pv-dates { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 0.84rem; color: var(--muted); }
+.pv-dates label { display: inline-flex; align-items: center; gap: 6px; }
+.pv-dates input[type=date] { font: inherit; color: var(--ink); background: var(--page); border: 1px solid var(--line); border-radius: 7px; padding: 3px 6px; color-scheme: dark; }
+:root[data-theme="light"] .pv-dates input[type=date] { color-scheme: light; }
+.pv-note, .pv-utc { margin: 10px 0 0; }
+/* What changed's own choice sits under the page's time range, the one
+   switch: plain links, the current one underlined. */
+.pv-over { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.84rem; }
+.pv-over a { color: var(--accent); text-decoration: none; padding: 2px 0; border-bottom: 2px solid transparent; white-space: nowrap; }
+.pv-over a:hover { color: var(--ink); }
+.pv-over a[aria-current] { color: var(--ink); font-weight: 600; border-bottom-color: var(--accent); }
+.pv-over a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pv-named { margin: 10px 0 0; }
+.pv-since ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pv-since li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; line-height: 1.45; overflow-wrap: anywhere; }
+.pv-since .mark { font-size: 0.72rem; line-height: 1.9; color: var(--muted); text-align: center; }
+.pv-since li.worse .mark { color: var(--critical); }
+.pv-since li.better .mark { color: var(--good); }
+.pv-since .items { display: block; color: var(--muted); font-size: 0.84rem; }
+.pv-since code.next { font-size: 0.78rem; color: var(--muted); white-space: normal; }
+
+/* Two charts a row once each can be at least 760px wide (a 27" screen);
+   one column below that. */
+.pv-charts { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 760px), 1fr)); }
+.pv { margin: 0; padding: 18px 20px 12px; min-width: 0; }
+.pv figcaption h2.sub { margin: 0 0 2px; }
+.pv-cap { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px 12px; flex-wrap: wrap; }
+.pv-cap > div { min-width: 0; flex: 1 1 260px; }
+.pv-scale { flex: none; }
+/* Linear or log: both drawn, the switch shows one (no script needed). */
+.pv-tiers:has(input[value="lin"]:checked) .pv-log, .pv-tiers:has(input[value="log"]:checked) .pv-lin { display: none; }
+.pv-note-line { margin: 4px 0 0; }
+.pv figcaption p { margin: 0; }
+.pv-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 0; padding: 0; font-size: 0.8rem; color: var(--muted); }
+.pv-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; background: var(--b); }
+/* Series colours, in a fixed order (validated for colour vision
+   deficiency on both surfaces): Tier Zero, then the first two zones.
+   Sessions and local groups have their own pair. */
+.pv { --s1: #9d5cff; --s2: #d95926; --s3: #199e70; --sess: #3987e5; --lg: #d95926; }
+:root[data-theme="light"] .pv { --s1: #6b00d6; --s2: #eb6834; --s3: #1baf7a; --sess: #2a78d6; --lg: #eb6834; }
+/* A series' value labels are in its colour; on the light card the orange,
+   aqua and blue are too light for text (under 4.5:1), so their labels
+   take a darker shade of the same hue. */
+.pv { --s1t: var(--s1); --s2t: var(--s2); --s3t: var(--s3); --sesst: var(--sess); --lgt: var(--lg); }
+:root[data-theme="light"] .pv { --s2t: #b84a1e; --s3t: #0e7a54; --sesst: #1f66bd; --lgt: #b84a1e; }
+.sw.s1 { background: var(--s1); } .sw.s2 { background: var(--s2); } .sw.s3 { background: var(--s3); } .sw.s0 { background: var(--muted); }
+.sw.sess { background: var(--sess); } .sw.lg { background: var(--lg); }
+.sw.plan { background: var(--accent); }
+.sw.none { display: none; }
+.sw.attack { height: 0; width: 16px; border-radius: 0; background: none; border-top: 2px dashed var(--ink); }
+.sw.dip { background: color-mix(in srgb, var(--warn) 22%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent); }
+.pv-scroll { overflow-x: auto; margin: 6px -4px 0; scrollbar-width: thin; }
+/* On a narrow screen the chart scrolls inside its card; its left column
+   (the y ticks, or the row names) is a second SVG over the first, of the
+   same scale, that stays in view (sticky). */
+.pv-canvas { display: grid; min-width: 560px; }
+.pv-canvas > svg { grid-area: 1 / 1; }
+.pv-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.pv-svg.pv-axis { position: sticky; left: 0; z-index: 1; justify-self: start; align-self: start; overflow: hidden; }
+.pv-axis.y { width: calc(100% * 54 / 880); }
+.pv-axis.rows { width: calc(100% * 190 / 880); }
+.pv-axis-bg { fill: var(--card); }
+.pv-svg text.pv-under { visibility: hidden; }
+.pv-empty .empty-actions { margin: 10px 0 2px; }
+
+.pv-svg text { font: 11px "Segoe UI", system-ui, sans-serif; fill: var(--muted); }
+.pv-svg .pv-y { text-anchor: end; font-variant-numeric: tabular-nums; }
+.pv-svg .pv-x { text-anchor: middle; fill: var(--ink); }
+.pv-svg .pv-x.lead { text-anchor: start; }
+.pv-svg .pv-x2 { fill: var(--muted); font-size: 10px; }
+.pv-svg .pv-val { text-anchor: middle; fill: var(--ink); font: 600 12px var(--display); font-variant-numeric: tabular-nums; }
+.pv-svg .pv-val.sm { font-size: 11px; }
+.pv-svg .pv-val.end { text-anchor: start; }
+.pv-svg .pv-val.start { text-anchor: end; }
+.pv-svg .pv-val.s1 { fill: var(--s1t); } .pv-svg .pv-val.s2 { fill: var(--s2t); } .pv-svg .pv-val.s3 { fill: var(--s3t); }
+.pv-svg .pv-val.sess { fill: var(--sesst); } .pv-svg .pv-val.lg { fill: var(--lgt); }
+/* From a dot to its label when the label was moved off it. */
+.pv-lead { stroke: var(--muted); stroke-width: 1.5; stroke-linecap: round; }
+.pv-lead.s1 { stroke: var(--s1); } .pv-lead.s2 { stroke: var(--s2); } .pv-lead.s3 { stroke: var(--s3); }
+.pv-lead.sess { stroke: var(--sess); } .pv-lead.lg { stroke: var(--lg); }
+/* Labels over lines and bars stay readable: a ring in the card colour. */
+.pv-svg .halo { paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
+.pv-svg .pv-row { fill: var(--ink); font: 600 13px "Segoe UI", system-ui, sans-serif; }
+.pv-svg .pv-row-sub { fill: var(--muted); font-size: 11px; }
+.pv-svg .pv-low-label { text-anchor: middle; fill: var(--warn); font-style: italic; }
+.pv-svg .pv-nt { text-anchor: middle; fill: var(--muted); font-style: italic; }
+.pv-grid { stroke: var(--line); stroke-width: 1; }
+.pv-grid.base { stroke: var(--muted); stroke-opacity: 0.6; }
+.pv-line { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.pv-dot { fill: var(--muted); stroke: var(--card); stroke-width: 2; }
+.pv-line.s1 { stroke: var(--s1); } .pv-dot.s1 { fill: var(--s1); }
+.pv-line.s2 { stroke: var(--s2); } .pv-dot.s2 { fill: var(--s2); }
+.pv-line.s3 { stroke: var(--s3); } .pv-dot.s3 { fill: var(--s3); }
+.pv-line.sess { stroke: var(--sess); } .pv-dot.sess { fill: var(--sess); }
+.pv-line.lg { stroke: var(--lg); } .pv-dot.lg { fill: var(--lg); }
+.pv-line.attack { stroke: var(--ink); stroke-dasharray: 6 4; }
+.pv-dot.attack { fill: var(--card); stroke: var(--ink); stroke-width: 2; }
+.pv-seg { fill: var(--b); }
+.pv-bar.plan { fill: var(--accent); }
+.pv-low { fill: color-mix(in srgb, var(--warn) 12%, transparent); }
+.pv-hit { fill: transparent; cursor: default; outline: none; }
+.pv-hit.on, .pv-hit:focus-visible { fill: var(--ink); fill-opacity: 0.06; }
+.pv-hit:focus-visible { stroke: var(--accent); stroke-width: 2; }
+
+.pv-tip {
+  position: fixed; z-index: 20; display: grid; gap: 2px; padding: 8px 11px; border-radius: 8px; pointer-events: none;
+  background: var(--card); border: 1px solid var(--line); box-shadow: 0 8px 24px rgb(0 0 0 / 0.3); font-size: 0.82rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pv-tip strong { color: var(--ink); font-weight: 650; }
+
+.pv-data { margin-top: 6px; font-size: 0.84rem; }
+.pv-data summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 4px 0; }
+.pv-table-wrap { overflow-x: auto; }
+.pv-data table { border-collapse: collapse; width: 100%; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
+.pv-data th, .pv-data td { text-align: right; padding: 5px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.pv-data th:first-child, .pv-data td:first-child { text-align: left; }
+.pv-data th { color: var(--muted); font-weight: 600; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+@media (max-width: 640px) {
+  .pv { padding: 14px 12px 10px; }
+  /* The chart is drawn at about two thirds of its size here: larger type
+     in chart units keeps it readable. */
+  .pv-svg text { font-size: 16px; }
+  .pv-svg .pv-x2 { font-size: 14px; }
+  .pv-svg .pv-val, .pv-svg .pv-val.sm { font-size: 17px; }
+  .pv-svg .pv-row { font-size: 17px; }
+  .pv-svg .pv-row-sub { font-size: 14px; }
+}

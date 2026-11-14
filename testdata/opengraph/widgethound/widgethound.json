@@ -1,0 +1,104 @@
+{
+  "metadata": {
+    "source_kind": "WidgetHound"
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "WIDGET-CONSOLE-1",
+        "kinds": [
+          "WH_Console",
+          "WidgetHound"
+        ],
+        "properties": {
+          "name": "Widget console",
+          "secret": "should never be kept"
+        }
+      },
+      {
+        "id": "S-1-5-21-1000-1000-1000-1101",
+        "kinds": [
+          "User"
+        ],
+        "properties": {
+          "name": "DA_ALICE@CONTOSO.LOCAL",
+          "enabled": false
+        }
+      }
+    ],
+    "edges": [
+      {
+        "kind": "WH_Manages",
+        "start": {
+          "value": "WIDGET-CONSOLE-1",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-1000-1000-1000-1000",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "WH_AdminOf",
+        "start": {
+          "value": "S-1-5-21-1000-1000-1000-513",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "WIDGET-CONSOLE-1",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "WH_LogsOnAs",
+        "start": {
+          "value": "WIDGET-CONSOLE-1",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-1000-1000-1000-512",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "MemberOf",
+        "start": {
+          "value": "S-1-5-21-1000-1000-1000-1102",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-1000-1000-1000-512",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "GenericAll",
+        "start": {
+          "value": "S-1-5-21-1000-1000-1000-513",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-1000-1000-1000-512",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "AdminTo",
+        "start": {
+          "value": "S-1-5-21-1000-1000-1000-513",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-1000-1000-1000-1000",
+          "match_by": "id"
+        },
+        "properties": {}
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+/target
+
+# Never commit real collector output: it is a map of your domain for an attacker.
+/data/
+*.zip
+!/testdata/**/*.zip
+!/demo/*.zip
+!/demo-history/*.zip
+
+# Release archives (scripts/package.*)
+/dist/
+
+# Local planning notes (reviews contain security findings)
+/local/
+
+# Python bytecode
+__pycache__/
+*.pyc
+

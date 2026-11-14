@@ -1,0 +1,72 @@
+# cargo-deny: run `cargo deny check` before every merge; CI runs it on
+# every push (.github/workflows/ci.yml). It compiles nothing: it reads
+# Cargo.lock, the crates' manifests and the RustSec advisory database.
+#
+#   cargo install cargo-deny --locked
+#   cargo deny check
+
+[graph]
+# The platforms Pathwarden ships for, with every feature (the desktop window
+# included), so the check covers each release build.
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+]
+all-features = true
+
+[advisories]
+# Vulnerabilities always fail, and so do unmaintained and unsound crates,
+# except the advisories below. Each one says why it is accepted and what
+# would remove it. Recheck them on every dependency bump, and drop an entry
+# as soon as a fixed version is in Cargo.lock (cargo-deny warns about an
+# entry that no longer matches anything).
+unmaintained = "all"
+unsound = "all"
+yanked = "deny"
+ignore = [
+    # --- Through rusthound-ce (=2.5.30, the built-in collector, vendored in
+    # vendor/rusthound-ce with zip, quick-xml and the DNS resolver bumped):
+    # the lean build has none of these.
+    { id = "RUSTSEC-2023-0071", reason = "rsa 0.9 via picky (rusthound-ce, and sspi under ldap3): only PKINIT and certificate auth make RSA private-key operations; Pathwarden sets no certificate (pfx: None) and kerberos: false, and holds no RSA private key. rsa 0.10.0 has the fix, but no picky release takes it (the newest, 7.0.0-rc.29, pins 0.10.0-rc.18)." },
+    { id = "RUSTSEC-2025-0141", reason = "bincode 2 unmaintained, via rusthound-ce (its cache files): no security impact." },
+    { id = "RUSTSEC-2025-0119", reason = "number_prefix unmaintained, via indicatif in rusthound-ce (progress bars): no security impact." },
+    # --- Shared.
+    { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile unmaintained, via rusthound-ce and via ureq 2's rustls-native-certs 0.7 (ServiceNow and Jira plugins): no security impact; moving the plugins to ureq 3 removes that path." },
+    { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 timing, via elliptic-curve: age 0.12 (the latest) pulls p256 for its hpke tag recipients, which Pathwarden does not use (it encrypts with scrypt passphrase and x25519 only); picky uses it for certificate auth, which is off (see RUSTSEC-2023-0071). Fixed only in 0.7, which neither age nor picky releases take." },
+    { id = "RUSTSEC-2026-0374", reason = "basic-toml unmaintained: a compile-time dependency of age's i18n-embed-fl macro, nothing at run time." },
+    # --- The desktop window on Linux (wry's GTK backend). The desktop feature
+    # is built for Windows only; no Linux release has it.
+    { id = "RUSTSEC-2024-0429", reason = "glib 0.18 unsound VariantStrIter, via wry's GTK backend: Linux desktop builds only, which no release ships." },
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error unmaintained, a compile-time dependency of wry's GTK backend: Linux desktop builds only." },
+]
+
+[licenses]
+# Keep equal to `accepted` in about.toml (the generated license file).
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "MIT-0",
+    "CDLA-Permissive-2.0",
+    "MPL-2.0",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Several versions of one crate are common in this tree (rusthound-ce pins
+# older ones).
+multiple-versions = "allow"
+# The only wildcard dependencies are the workspace's own path dependencies
+# (crates/, vendor/); every registry dependency is pinned by Cargo.lock
+# (--locked).
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

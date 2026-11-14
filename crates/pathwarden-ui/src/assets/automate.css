@@ -1,0 +1,128 @@
+/* The Automate area: Schedule status, History storage, and the run list's
+   history tags. Layered on the report's and the UI's styles. */
+.tag.local { color: var(--muted); background: var(--chip); }
+.tag.sched { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+.hs-facts { display: grid; gap: 10px; margin: 0; }
+.hs-facts > div { display: grid; grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr); gap: 4px 16px; align-items: baseline; }
+.hs-facts dt { color: var(--muted); font-size: 0.84rem; font-weight: 600; }
+.hs-facts dd { margin: 0; font-size: 0.92rem; overflow-wrap: anywhere; }
+.hs-facts code { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .hs-facts > div { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Full runs and settings: how many full runs, and the file limit. */
+.fr-grid { display: grid; grid-template-columns: minmax(9rem, 12rem) minmax(0, 1fr); gap: 16px 28px; align-items: start; }
+.fr-grid .field + .field { margin-top: 0; }
+.fr-kept { width: 6.5rem; }
+.fr-fact { margin: 22px 0 0; font-size: 0.9rem; }
+@media (max-width: 640px) {
+  .fr-grid { grid-template-columns: minmax(0, 1fr); }
+  .fr-fact { margin-top: 0; }
+}
+
+.hs-runs { margin: 8px 0 0; padding-left: 20px; display: grid; gap: 4px; font-size: 0.92rem; }
+.hs-table-wrap { overflow-x: auto; scrollbar-width: thin; }
+.hs-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+.hs-table th, .hs-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.hs-table th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+.hs-table tbody tr:last-child td { border-bottom: none; }
+.save-status.err { color: var(--critical); }
+.cfg-moved { display: flex; align-items: center; gap: 8px; margin: 4px 0 16px; }
+.cfg-moved .ic { width: 16px; height: 16px; color: var(--accent2); flex: none; }
+
+.sched-status { margin-bottom: 18px; }
+.sched-warn { color: var(--warn, var(--high)); font-weight: 600; }
+.sched-warn .ic { width: 16px; height: 16px; vertical-align: -3px; }
+.sched-pick { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.sched-pick .field { flex: 1 1 22rem; min-width: 0; margin: 0; }
+.sched-pick select { width: 100%; }
+.sched-pick .hint { margin-bottom: 0; }
+.sched-status .form-title { margin: 18px 0 6px; }
+.sched-next { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 0.92rem; }
+.sched-next code { overflow-wrap: anywhere; }
+.dup-actions { justify-content: flex-start; flex-wrap: wrap; }
+
+/* The history's passphrase (encryption_ui.rs): History storage and the card on Runs. */
+.fact-sub { display: block; color: var(--muted); font-size: 0.84rem; margin-top: 2px; }
+.enc-row { margin-top: 22px; }
+.enc-body { margin: 10px 0 0 30px; display: grid; gap: 12px; }
+.enc-body[hidden], .enc-setup[hidden], .enc-skip-warn[hidden], #state .card-actions[hidden] { display: none; }
+.enc-status { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 0.92rem; }
+.enc-status .ic, .enc-title .ic { width: 17px; height: 17px; color: var(--accent2); }
+.enc-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.enc-notes { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.86rem; }
+.enc-notes li { margin: 3px 0; }
+.enc-notes .tip, .enc-gate .tip { margin-left: 2px; }
+.enc-setup { display: grid; gap: 14px; padding: 16px 18px; border: 1px solid var(--accent); border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
+.enc-setup .check-row { margin-top: 0; }
+.enc-setup .fields2 { margin: 0; }
+.enc-title { display: flex; align-items: center; gap: 8px; margin: 0; }
+.enc-match { color: var(--accent2); display: flex; align-items: center; gap: 6px; }
+.enc-match[hidden] { display: none; }
+.enc-match .ic { width: 14px; height: 14px; }
+.enc-match.no { color: var(--muted); }
+.enc-match.no .ic { display: none; }
+.enc-strength { display: flex; align-items: center; gap: 12px; font-size: 0.86rem; color: var(--muted); }
+.enc-strength strong { color: var(--ink); }
+.enc-strength .bar { flex: none; width: 160px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--ink) 12%, transparent); overflow: hidden; }
+.enc-strength .bar > span { display: block; width: 0; height: 100%; background: var(--accent2); transition: width 0.15s; }
+.enc-strength.short .bar > span { background: var(--warn); }
+.enc-skip { font-size: 0.88rem; }
+.enc-skip-warn .enc-actions { margin-top: 10px; }
+.enc-msg.ok { color: var(--accent2); }
+.enc-msg.err { color: var(--critical); }
+.enc-gate { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 14px; padding: 20px 22px; margin-bottom: 22px; max-width: 760px; }
+.enc-gate > .ic { width: 24px; height: 24px; color: var(--accent2); margin-top: 2px; }
+.enc-gate h2 { margin: 0 0 4px; }
+.enc-field { margin-top: 16px; max-width: 600px; }
+.enc-field .input { max-width: 420px; }
+.input.bad { border-color: var(--critical); }
+.enc-err { display: flex; gap: 6px; align-items: flex-start; margin: 2px 0 0; color: var(--critical); font-size: 0.86rem; }
+.enc-err[hidden] { display: none; }
+.enc-err .ic { width: 15px; height: 15px; flex: none; margin-top: 2px; }
+.enc-gate .check-row { margin-top: 14px; }
+.enc-gate .enc-actions { margin-top: 16px; }
+.local-head { margin: 0 0 10px; }
+.nw { white-space: nowrap; }
+.note .tip-btn .ic { width: 15px; height: 15px; margin-top: 0; }
+.tip-text.wide { max-width: min(400px, calc(100vw - 32px)); }
+@media (max-width: 640px) { .enc-body { margin-left: 0; } .enc-strength { flex-wrap: wrap; } }
+
+/* ---- Connect to a shared history (#98) ---- */
+.cx-steps { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 4px 0 18px; padding: 0; color: var(--muted); font-size: 0.9rem; }
+.cx-steps li { display: flex; align-items: center; gap: 8px; }
+.cx-steps .n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--line); font-size: 0.75rem; font-weight: 700; }
+.cx-steps .n .ic { width: 13px; height: 13px; }
+.cx-steps li.on { color: var(--ink); font-weight: 600; }
+.cx-steps li.on .n { border-color: var(--accent); color: var(--accent); }
+.cx-steps li.done .n { border-color: var(--good); background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.cx-card { margin-bottom: 16px; }
+.cx-kept { margin: 14px 0 0; font-size: 0.92rem; }
+.cx-kept .ic { width: 15px; height: 15px; color: var(--accent2); vertical-align: -2px; margin-right: 8px; }
+.cx-kept a { margin-left: 6px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+.cx-remember-kept { margin-top: 16px; }
+/* The cards fill the column; their lines of text stay readable. */
+.cx-card p, .cx-card dd, .cx-card .hint, .cx-msg p { max-width: 75ch; }
+.cx-card > header { margin-bottom: 12px; }
+.cx-card .choice { margin: 0 0 14px; }
+.cx-card .card-actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.cx-found { margin: 0 0 10px; font-weight: 600; }
+.cx-found code, .cx-card code, .cx-msg code { overflow-wrap: anywhere; word-break: break-all; }
+.cx-found .linkish { margin-left: 6px; font-weight: 400; }
+.cx-adopt { margin: 14px 0 0; font-size: 0.9rem; color: var(--muted); }
+.cx-gate { margin-top: 16px; }
+.cx-gate.enc-gate { max-width: none; margin-bottom: 0; }
+.cx-push { margin-top: 18px; }
+.cx-msg .note .enc-actions { margin-top: 10px; }
+.note.ok { background: color-mix(in srgb, var(--good) 9%, transparent); border-color: color-mix(in srgb, var(--good) 35%, transparent); }
+.note.ok .ic { color: var(--good); }
+.cx-landing { margin-bottom: 16px; }
+.hs-facts dd > .ic { width: 15px; height: 15px; vertical-align: -2px; }
+.env-new .env-origin, #state .hs-origin { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin: 0 0 14px; }
+.env-form .env-origin .option { gap: 12px; font-weight: 400; }
+.env-form .env-origin legend { font-weight: 650; font-size: 0.9rem; }
+#state .note .enc-actions { margin-top: 10px; }
+#state .hs-origin-warn { margin: 0 0 14px; }

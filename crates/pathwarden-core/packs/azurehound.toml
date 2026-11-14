@@ -1,0 +1,329 @@
+# AzureHound (https://github.com/SpecterOps/AzureHound): Entra ID objects,
+# role assignments and ownerships, read by Pathwarden's built-in AzureHound
+# reader (`crate::ingest` / `crate::entra`), not as an OpenGraph file.
+#
+# Kind names follow BloodHound CE's Azure schema (AZUser, AZResetPassword,
+# SyncedToEntraUser, ...) so they read the same as in BloodHound. The edges
+# AzureHound's data states (AZMemberOf, AZOwns, AZHasRole, AZRoleEligible,
+# AZRunsAs, AZAuthenticatesTo, the Microsoft Graph permission grants) come
+# from the reader; the role abilities (AZResetPassword, AZAddMembers,
+# AZAddSecret, AZAddOwner, AZExecuteCommand), what Graph permissions allow
+# (AZMG...) and the hybrid edges are derived in `crate::entra` after the AD
+# data is read. Every traversal assumption is listed in docs/entra.md.
+#
+# Every traversable kind names a rule, so PW-030 never reports AzureHound
+# data: PW-031 (control of Entra Tier Zero) and PW-032 (Entra to on-premises
+# Tier Zero) do, with Entra wording.
+#
+# Edges drawn from a role node (AZResetPassword, ...) are not cuttable: the
+# fix is the role assignment that leads to them (AZHasRole), as for an
+# intra-forest trust.
+
+[pack]
+name = "azurehound"
+title = "AzureHound"
+version = 2
+source_kinds = ["AzureHound"]
+# BloodHound's Azure kinds have no separator after the prefix.
+kind_prefix = "AZ"
+# BloodHound's hybrid edges, and Pathwarden's two hybrid links.
+extra_kinds = ["SyncedToEntraUser", "SyncedToADUser", "SyncedToADComputer", "HasEntraSyncCredential", "SyncedToEntraGroup"]
+trusted = true
+description = "Entra ID users, groups, roles, applications and devices, and the hybrid links to Active Directory."
+
+[[node]]
+kind = "AZUser"
+label = "Entra user"
+icon = "user"
+color = "#0078D4"
+
+[[node]]
+kind = "AZGroup"
+label = "Entra group"
+icon = "users"
+color = "#0078D4"
+
+[[node]]
+kind = "AZServicePrincipal"
+label = "Entra service principal"
+icon = "gear"
+color = "#5C2D91"
+
+[[node]]
+kind = "AZApp"
+label = "Entra application"
+icon = "cube"
+color = "#5C2D91"
+
+[[node]]
+kind = "AZDevice"
+label = "Entra device"
+icon = "desktop"
+color = "#0078D4"
+
+[[node]]
+kind = "AZRole"
+label = "Entra role"
+icon = "id-card"
+color = "#D83B01"
+
+[[node]]
+kind = "AZTenant"
+label = "Entra tenant"
+icon = "cloud"
+color = "#D83B01"
+
+# One object per issuer and subject a federated identity credential trusts
+# (a GitHub repository, a Kubernetes service account, another tenant).
+[[node]]
+kind = "AZFederatedIdentityCredential"
+label = "Federated identity"
+icon = "link"
+color = "#5C2D91"
+
+# ---------------------------------------------------------------- stated
+
+[[edge]]
+kind = "AZMemberOf"
+traversable = true
+rule = "PW-031"
+description = "A direct member of the Entra group."
+fix = "Remove {from} from the Entra group {to}."
+
+[[edge]]
+kind = "AZHasRole"
+traversable = true
+rule = "PW-031"
+description = "An active, tenant-wide Entra role assignment."
+fix = "Remove the Entra role {to} from {from}. Administrative roles belong to dedicated cloud-only accounts, made eligible through Privileged Identity Management rather than assigned permanently."
+
+[[edge]]
+kind = "AZRoleEligible"
+traversable = true
+rule = "PW-031"
+description = "Eligible for the Entra role through Privileged Identity Management; it can be activated when needed."
+fix = "Remove {from}'s eligibility for the Entra role {to} in Privileged Identity Management, or require approval to activate it."
+
+[[edge]]
+kind = "AZOwns"
+traversable = true
+rule = "PW-031"
+description = "An owner of the group, application or service principal: it can change its members or add credentials to it."
+fix = "Remove {from} as an owner of {to}."
+
+[[edge]]
+kind = "AZAppAdmin"
+traversable = true
+rule = "PW-031"
+description = "Application Administrator, scoped to this application: it can add credentials to it."
+fix = "Remove the application-scoped Application Administrator assignment of {from} on {to}."
+
+[[edge]]
+kind = "AZCloudAppAdmin"
+traversable = true
+rule = "PW-031"
+description = "Cloud Application Administrator, scoped to this application: it can add credentials to it."
+fix = "Remove the application-scoped Cloud Application Administrator assignment of {from} on {to}."
+
+[[edge]]
+kind = "AZRunsAs"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "The application's credentials sign in as this service principal."
+fix = "Anyone who can add a credential to the application {from} signs in as {to}. Remove that access to {from} (its owners, or holders of the roles that can add secrets), or remove the roles {to} holds."
+
+[[edge]]
+kind = "AZAuthenticatesTo"
+traversable = true
+rule = "PW-031"
+description = "A federated identity credential: tokens this issuer gives this subject sign in as the application, with no secret."
+fix = "Remove the federated identity credential on the application {to} that trusts {from}, or narrow its subject."
+
+# Microsoft Graph application permissions, as AzureHound's app role
+# assignments state them (from the service principal to Microsoft Graph's).
+# Context only: what each allows is derived (AZMG... below).
+
+[[edge]]
+kind = "AZMGApplication_ReadWrite_All"
+traversable = false
+description = "Granted the Microsoft Graph application permission Application.ReadWrite.All."
+
+[[edge]]
+kind = "AZMGAppRoleAssignment_ReadWrite_All"
+traversable = false
+description = "Granted the Microsoft Graph application permission AppRoleAssignment.ReadWrite.All."
+
+[[edge]]
+kind = "AZMGDirectory_ReadWrite_All"
+traversable = false
+description = "Granted the Microsoft Graph application permission Directory.ReadWrite.All."
+
+[[edge]]
+kind = "AZMGGroup_ReadWrite_All"
+traversable = false
+description = "Granted the Microsoft Graph application permission Group.ReadWrite.All."
+
+[[edge]]
+kind = "AZMGGroupMember_ReadWrite_All"
+traversable = false
+description = "Granted the Microsoft Graph application permission GroupMember.ReadWrite.All."
+
+[[edge]]
+kind = "AZMGRoleManagement_ReadWrite_Directory"
+traversable = false
+description = "Granted the Microsoft Graph application permission RoleManagement.ReadWrite.Directory."
+
+[[edge]]
+kind = "AZMGServicePrincipalEndpoint_ReadWrite_All"
+traversable = false
+description = "Granted the Microsoft Graph application permission ServicePrincipalEndpoint.ReadWrite.All."
+
+# ---------------------------------------------------------------- derived
+
+# Microsoft Graph application permissions, drawn from the service principal
+# that holds them (BloodHound CE's AZMG edges). Removing the permission
+# removes every edge it gives: a finding names the exact permissions.
+
+[[edge]]
+kind = "AZMGGrantRole"
+traversable = true
+rule = "PW-031"
+description = "RoleManagement.ReadWrite.Directory: the service principal can assign itself any Entra role, including Global Administrator."
+fix = "Remove the Microsoft Graph application permission RoleManagement.ReadWrite.Directory from {from}."
+
+[[edge]]
+kind = "AZMGGrantAppRoles"
+traversable = true
+rule = "PW-031"
+description = "AppRoleAssignment.ReadWrite.All: the service principal can grant itself any application permission, including RoleManagement.ReadWrite.Directory."
+fix = "Remove the Microsoft Graph application permission AppRoleAssignment.ReadWrite.All from {from}."
+
+[[edge]]
+kind = "AZMGAddSecret"
+traversable = true
+rule = "PW-031"
+description = "Application.ReadWrite.All: the service principal can add a client secret to this application or service principal."
+fix = "Remove the Microsoft Graph application permission Application.ReadWrite.All from {from}, or grant Application.ReadWrite.OwnedBy instead."
+
+[[edge]]
+kind = "AZMGAddOwner"
+traversable = true
+rule = "PW-031"
+description = "Application.ReadWrite.All (or ServicePrincipalEndpoint.ReadWrite.All, for service principals): the service principal can make itself owner of this object."
+fix = "Remove the Microsoft Graph application permission that lets {from} add owners to {to} (Application.ReadWrite.All, or ServicePrincipalEndpoint.ReadWrite.All)."
+
+[[edge]]
+kind = "AZMGAddMember"
+traversable = true
+rule = "PW-031"
+description = "Directory.ReadWrite.All, Group.ReadWrite.All or GroupMember.ReadWrite.All: the service principal can add members to this group (it is not role-assignable)."
+fix = "Remove the Microsoft Graph application permission that lets {from} add members to {to} (Directory.ReadWrite.All, Group.ReadWrite.All or GroupMember.ReadWrite.All), or make {to} a role-assignable group."
+
+[[edge]]
+kind = "AZResetPassword"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "Holders of the role can reset this user's password (Microsoft's \"who can reset passwords\" rules)."
+fix = "Holders of {from} can reset the password of {to}. Remove holders of {from} who don't need it, or protect {to}: assign its roles through a role-assignable group, or put it in a restricted management administrative unit."
+
+[[edge]]
+kind = "AZAddMembers"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "Holders of the role can add members to this group (it is not role-assignable)."
+fix = "Holders of {from} can add members to {to}. Remove what {to} grants (its roles and ownerships), make it a role-assignable group, or remove holders of {from} who don't need it."
+
+[[edge]]
+kind = "AZAddSecret"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "Holders of the role can add a client secret to this application or service principal."
+fix = "Holders of {from} can add credentials to {to}. Remove the privileged roles held by {to} (by its service principal, for an application), or remove holders of {from} who don't need it."
+
+[[edge]]
+kind = "AZAddOwner"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "Holders of the role can make themselves owner of this application or service principal."
+fix = "Holders of {from} can take ownership of {to}. Remove the privileged roles held by {to} (by its service principal, for an application), or remove holders of {from} who don't need it."
+
+[[edge]]
+kind = "AZExecuteCommand"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "Holders of the role can run scripts as SYSTEM on this Intune-managed Windows device."
+fix = "Holders of {from} can run code as SYSTEM on {to} through Intune. Remove holders of {from} who don't need it, scope Intune administration with Intune RBAC and scope tags, and don't manage Tier Zero hosts (or hosts Tier Zero accounts log on to) through Intune."
+
+[[edge]]
+kind = "AZGlobalAdmin"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "Global Administrator controls the tenant."
+fix = "Remove holders of {from} who don't need it."
+
+[[edge]]
+kind = "AZPrivilegedRoleAdmin"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "Privileged Role Administrator can grant itself any role, including Global Administrator."
+fix = "Remove holders of {from} who don't need it."
+
+[[edge]]
+kind = "AZPrivilegedAuthAdmin"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "Privileged Authentication Administrator can reset the password and MFA of any user, including Global Administrators."
+fix = "Remove holders of {from} who don't need it."
+
+# ---------------------------------------------------------------- hybrid
+
+[[edge]]
+kind = "SyncedToEntraUser"
+traversable = true
+# The cut is giving the Entra privileges to a cloud-only account instead:
+# more work than removing a permission.
+cost = 5
+rule = "PW-031"
+description = "Entra Connect synchronizes this AD user to the Entra user (onPremisesSecurityIdentifier). With password hash sync, pass-through authentication or federation, the AD password signs in to Entra ID."
+fix = "The AD account {from} is synchronized to the Entra account {to}, so whoever controls {from} on-premises can sign in to Entra ID as {to}. Don't give Entra roles or ownerships to synchronized accounts: move the Entra account's privileges to a cloud-only account."
+
+[[edge]]
+kind = "SyncedToEntraGroup"
+traversable = true
+cost = 5
+rule = "PW-031"
+description = "Entra Connect synchronizes this AD group to the Entra group (onPremisesSecurityIdentifier): a member added to the AD group is a member of the Entra group."
+fix = "The AD group {from} is synchronized to the Entra group {to}, so whoever can change {from}'s members on-premises changes {to}'s. Don't give Entra roles, ownerships or permissions to synchronized groups: use a cloud-only group."
+
+[[edge]]
+kind = "SyncedToADUser"
+traversable = true
+cost = 3
+rule = "PW-032"
+description = "Password writeback: resetting the Entra user's password sets the AD user's password. Drawn only when the Entra Connect connector account can reset the AD user's password."
+fix = "Password writeback lets whoever resets the Entra account {from} set the password of the AD account {to}. Exclude {to} from synchronization (Tier Zero accounts should not be synchronized), or remove the Entra Connect connector account's Reset Password permission on {to}."
+
+[[edge]]
+kind = "SyncedToADComputer"
+traversable = true
+cuttable = false
+rule = "PW-032"
+description = "The hybrid-joined Entra device is this AD computer (matched by name)."
+fix = "{from} is the Intune-managed, hybrid-joined copy of {to}: Intune administrators run code on {to}. Don't manage {to} through Intune if it is Tier Zero or Tier Zero accounts log on to it, or restrict who holds Intune Administrator."
+
+[[edge]]
+kind = "HasEntraSyncCredential"
+traversable = true
+cuttable = false
+rule = "PW-031"
+description = "The Entra Connect server stores the credential of this Entra directory synchronization account."
+fix = "{from} stores the credential of the Entra sync account {to}: manage {from} as Tier Zero (only Tier Zero administrators may administer it)."

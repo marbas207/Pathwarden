@@ -1,0 +1,147 @@
+{
+ "data": [
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000-500",
+   "PrimaryGroupSID": "S-1-5-21-1000-1000-1000-513",
+   "Properties": {
+    "name": "ADMINISTRATOR@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-1000-1000-1000",
+    "enabled": true,
+    "admincount": true,
+    "lastlogontimestamp": 1262304000,
+    "pwdlastset": 1262304000
+   },
+   "Aces": [],
+   "AllowedToDelegate": [],
+   "HasSIDHistory": [],
+   "SPNTargets": [],
+   "IsDeleted": false,
+   "IsACLProtected": true,
+   "ContainedBy": null
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000-502",
+   "PrimaryGroupSID": "S-1-5-21-1000-1000-1000-513",
+   "Properties": {
+    "name": "KRBTGT@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-1000-1000-1000",
+    "enabled": false,
+    "hasspn": true,
+    "pwdlastset": 1262304000
+   },
+   "Aces": [],
+   "IsDeleted": false
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1101",
+   "PrimaryGroupSID": "S-1-5-21-1000-1000-1000-513",
+   "Properties": {
+    "name": "DA_ALICE@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-1000-1000-1000",
+    "enabled": true,
+    "admincount": true
+   },
+   "Aces": [],
+   "IsDeleted": false
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1102",
+   "PrimaryGroupSID": "S-1-5-21-1000-1000-1000-513",
+   "Properties": {
+    "name": "JDOE@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-1000-1000-1000",
+    "enabled": true,
+    "passwordnotreqd": true
+   },
+   "Aces": null,
+   "IsDeleted": false
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1103",
+   "PrimaryGroupSID": "S-1-5-21-1000-1000-1000-513",
+   "Properties": {
+    "name": "SVC_SQL@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-1000-1000-1000",
+    "enabled": true,
+    "hasspn": true,
+    "serviceprincipalnames": [
+     "MSSQLSvc/srv01.contoso.local:1433"
+    ],
+    "pwdlastset": 1262304000
+   },
+   "Aces": [
+    {
+     "PrincipalSID": "S-1-5-21-1000-1000-1000-1150",
+     "PrincipalType": "Group",
+     "RightName": "GenericAll",
+     "IsInherited": false
+    }
+   ],
+   "IsDeleted": false
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1104",
+   "PrimaryGroupSID": "S-1-5-21-1000-1000-1000-513",
+   "Properties": {
+    "name": "BOB@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-1000-1000-1000",
+    "enabled": 1,
+    "dontreqpreauth": true
+   },
+   "Aces": [
+    {
+     "PrincipalSID": "S-1-5-21-1000-1000-1000-1102",
+     "PrincipalType": "User",
+     "RightName": "SomeFutureRight",
+     "IsInherited": false
+    }
+   ],
+   "IsDeleted": false
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1105",
+   "PrimaryGroupSID": "S-1-5-21-1000-1000-1000-513",
+   "Properties": {
+    "name": "OLD_ADMIN@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-1000-1000-1000",
+    "enabled": false
+   },
+   "Aces": [],
+   "IsDeleted": false
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1106",
+   "PrimaryGroupSID": "S-1-5-21-1000-1000-1000-513",
+   "Properties": {
+    "name": "SVC_SYNC@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-1000-1000-1000",
+    "enabled": true
+   },
+   "Aces": [],
+   "IsDeleted": false
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1199",
+   "Properties": {
+    "name": "GONE@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "enabled": true
+   },
+   "IsDeleted": true
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "users",
+  "count": 9,
+  "version": 6
+ }
+}

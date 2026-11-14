@@ -1,0 +1,19 @@
+# cargo-audit: advisories it would fail on that have no fix Pathwarden can
+# take. deny.toml (cargo deny check) is the full list, with the unmaintained
+# crates too; docs/dev/threat-model.md section 16 says what each one exposes.
+# Drop an entry once a fixed version is in Cargo.lock.
+[advisories]
+ignore = [
+    # rsa 0.9, Marvin attack, through picky (rusthound-ce, and sspi under
+    # ldap3). Only PKINIT and certificate sign-in make RSA private-key
+    # operations; Pathwarden holds no RSA key and sets no certificate.
+    # Fixed in rsa 0.10.0, which no picky release takes yet.
+    "RUSTSEC-2023-0071",
+    # crypto-bigint 0.5 timing, through elliptic-curve: age 0.12 (the latest)
+    # links p256 for recipients Pathwarden doesn't use; picky uses it only
+    # for the certificate sign-in above. Fixed only in 0.7.
+    "RUSTSEC-2026-0387",
+    # glib 0.18 unsound, wry's GTK backend: Linux desktop builds only, which
+    # no release ships.
+    "RUSTSEC-2024-0429",
+]

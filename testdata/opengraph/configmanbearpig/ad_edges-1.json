@@ -1,0 +1,306 @@
+{
+  "graph": {
+    "nodes": [],
+    "edges": [
+      {
+        "kind": "SCCM_IsMappedTo",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1101",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\ALICE@PS1",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "AdminService-SMS_Admin"
+          ],
+          "SCCMInfra": true
+        }
+      },
+      {
+        "kind": "SCCM_IsMappedTo",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1102",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\BOB@PS1",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "AdminService-SMS_Admin"
+          ],
+          "SCCMInfra": true
+        }
+      },
+      {
+        "kind": "SCCM_SameHostAs",
+        "start": {
+          "value": "GUID:0D0C0001-0000-0000-0000-000000000001",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1000",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "SCCM_Invoke-PostProcessing"
+          ]
+        }
+      },
+      {
+        "kind": "SCCM_SameHostAs",
+        "start": {
+          "value": "GUID:0A0B0001-0000-0000-0000-000000000002",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1001",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "SCCM_Invoke-PostProcessing"
+          ]
+        }
+      },
+      {
+        "kind": "SCCM_CoerceAndRelayToSMB",
+        "start": {
+          "value": "CORP.LOCAL-S-1-5-11",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1000",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "Assumed-CoerceRelay",
+            "RemoteRegistry-SMBSigningCheck"
+          ],
+          "assumed": true,
+          "assumptionBasis": "relay feasibility assumed from role topology + NTLM/SMB-signing state"
+        }
+      },
+      {
+        "kind": "SCCM_CoerceAndRelayToAdminService",
+        "start": {
+          "value": "CORP.LOCAL-S-1-5-11",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "PS1",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "Assumed-CoerceRelay",
+            "Post-processing"
+          ],
+          "assumed": true,
+          "assumptionBasis": "relay feasibility assumed from role topology + NTLM/SMB-signing state"
+        }
+      },
+      {
+        "kind": "SCCM_LocalAdminRequired",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1000",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "Assumed-LocalAdminRequired",
+            "SCCM_Invoke-PostProcessing"
+          ],
+          "assumed": true,
+          "assumptionBasis": "relay feasibility assumed from role topology + NTLM/SMB-signing state"
+        }
+      },
+      {
+        "kind": "SCCM_SameHostAs",
+        "start": {
+          "value": "GUID:0FFF0001-0000-0000-0000-000000000003",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1000",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "SCCM_Invoke-PostProcessing"
+          ],
+          "assumed": true,
+          "assumptionBasis": "relay feasibility assumed from role topology + NTLM/SMB-signing state"
+        }
+      },
+      {
+        "kind": "SCCM_HasPrimaryUser",
+        "start": {
+          "value": "GUID:0A0B0001-0000-0000-0000-000000000002",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1201",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "AdminService-ClientDevices"
+          ]
+        }
+      },
+      {
+        "kind": "SCCM_HasADLastLogonUser",
+        "start": {
+          "value": "GUID:0A0B0001-0000-0000-0000-000000000002",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1201",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "AdminService-ClientDevices"
+          ]
+        }
+      },
+      {
+        "kind": "MSSQL_HasLogin",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1103",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\CAROL@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "AdminService-SiteDefinition"
+          ]
+        }
+      },
+      {
+        "kind": "MemberOf",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1104",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-512",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "AdminService-SMS_R_User"
+          ]
+        }
+      },
+      {
+        "kind": "HasSession",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1201",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "RemoteRegistry-CurrentUser"
+          ]
+        }
+      }
+    ]
+  }
+}

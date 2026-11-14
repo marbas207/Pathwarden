@@ -1,0 +1,14 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it)",
+  "width": 1440, "height": 900, "settle": 3600,
+  "startAt": "a.rr-link", "startSettle": 3000,
+  "gif": ["--hold-end", "2000"],
+  "steps": [
+    {"do": "wait", "ms": 500},
+    {"do": "click", "sel": "report: #tab-plan", "ms": 1500},
+    {"do": "hover", "sel": "report: #step-2 > summary"},
+    {"do": "wait", "ms": 500},
+    {"do": "click", "sel": "report: #step-1 > summary", "ms": 1600},
+    {"do": "click", "sel": "report: #step-1 ul.related a", "ms": 2600}
+  ]
+}

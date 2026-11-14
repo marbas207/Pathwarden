@@ -1,0 +1,116 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-1000-1000-1000",
+      "Properties": {
+        "name": "KESTRELÜBER.LOCAL",
+        "domain": "KESTRELÜBER.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000",
+        "distinguishedname": "DC=KESTRELÜBER,DC=LOCAL",
+        "functionallevel": "2016"
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "KESTRELÜBER.LOCAL-S-1-5-32-544",
+          "PrincipalType": "Group",
+          "RightName": "GetChanges",
+          "IsInherited": false
+        },
+        {
+          "PrincipalSID": "KESTRELÜBER.LOCAL-S-1-5-32-544",
+          "PrincipalType": "Group",
+          "RightName": "GetChangesAll",
+          "IsInherited": false
+        },
+        {
+          "PrincipalSID": "S-1-5-21-1000-1000-1000-1106",
+          "PrincipalType": "User",
+          "RightName": "GetChanges",
+          "IsInherited": false
+        },
+        {
+          "PrincipalSID": "S-1-5-21-1000-1000-1000-1151",
+          "PrincipalType": "Group",
+          "RightName": "GetChangesAll",
+          "IsInherited": false
+        }
+      ],
+      "Links": [
+        {
+          "IsEnforced": false,
+          "GUID": "31B2F340-016D-11D2-945F-00C04FB984F9"
+        }
+      ],
+      "ChildObjects": [
+        {
+          "ObjectIdentifier": "BBBB0000-0000-0000-0000-000000000001",
+          "ObjectType": "OU"
+        },
+        {
+          "ObjectIdentifier": "BBBB0000-0000-0000-0000-000000000002",
+          "ObjectType": "OU"
+        }
+      ],
+      "Trusts": [
+        {
+          "TargetDomainSid": "S-1-5-21-2000-2000-2000",
+          "TargetDomainName": "CHILD.KESTRELÜBER.LOCAL",
+          "IsTransitive": true,
+          "SidFilteringEnabled": false,
+          "TrustDirection": 3,
+          "TrustType": 0
+        },
+        {
+          "TargetDomainSid": "S-1-5-21-3000-3000-3000",
+          "TargetDomainName": "FABRIKAM.COM",
+          "IsTransitive": false,
+          "SidFilteringEnabled": false,
+          "TrustDirection": "Outbound",
+          "TrustType": "External"
+        }
+      ],
+      "GPOChanges": null,
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-2000-2000-2000",
+      "Properties": {
+        "name": "CHILD.KESTRELÜBER.LOCAL",
+        "domain": "CHILD.KESTRELÜBER.LOCAL",
+        "domainsid": "S-1-5-21-2000-2000-2000",
+        "distinguishedname": "DC=CHILD,DC=KESTRELÜBER,DC=LOCAL"
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-2000-2000-2000-512",
+          "PrincipalType": "Group",
+          "RightName": "WriteDacl",
+          "IsInherited": false
+        }
+      ],
+      "Links": null,
+      "ChildObjects": [],
+      "Trusts": [
+        {
+          "TargetDomainSid": "S-1-5-21-1000-1000-1000",
+          "TargetDomainName": "KESTRELÜBER.LOCAL",
+          "IsTransitive": true,
+          "SidFilteringEnabled": false,
+          "TrustDirection": "Bidirectional",
+          "TrustType": "ParentChild"
+        }
+      ],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "domains",
+    "count": 2,
+    "version": 6
+  }
+}

@@ -1,0 +1,57 @@
+[package]
+name = "pathwarden"
+description = "Defend every path to privilege: free, open-source attack path management for Active Directory"
+repository.workspace = true
+homepage.workspace = true
+keywords = ["active-directory", "security", "attack-path", "bloodhound", "tier-zero"]
+categories = ["command-line-utilities"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "pathwarden"
+path = "src/main.rs"
+
+[dependencies]
+anstream = "1"
+anstyle = "1"
+# Turning on escape sequences in Windows consoles, for the banner (src/logo.rs).
+anstyle-query = "1"
+anyhow.workspace = true
+clap.workspace = true
+pathwarden-collect = { path = "../pathwarden-collect", default-features = false }
+pathwarden-core = { path = "../pathwarden-core" }
+pathwarden-export = { path = "../pathwarden-export" }
+pathwarden-ui = { path = "../pathwarden-ui" }
+pathwarden-desktop = { path = "../pathwarden-desktop", optional = true }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+terminal_size = "0.4"
+zeroize = "1"
+zip.workspace = true
+
+# Keeping stderr aside while the live progress draws (see src/progress.rs).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[features]
+default = ["builtin-collector"]
+# The built-in LDAP collector (RustHound-CE). Build with
+# `--no-default-features` for a smaller binary that only drives external
+# collectors (`pathwarden collect --sharphound/--rusthound`), in the CLI and
+# in the UI's Collect wizard.
+builtin-collector = ["pathwarden-collect/builtin", "pathwarden-ui/builtin"]
+# Experimental, off by default: `pathwarden ui --window` opens the UI in a
+# native window with no listening port (WebView2; Windows only for now).
+# See docs/ui.md, "The desktop window (experimental)".
+desktop = ["dep:pathwarden-desktop"]
+
+[dev-dependencies]
+serde_json.workspace = true
+flate2 = "1"

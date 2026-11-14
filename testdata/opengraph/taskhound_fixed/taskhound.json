@@ -1,0 +1,212 @@
+{
+  "metadata": {
+    "source_kind": "TaskHound"
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "S-1-5-21-3000-3000-3000-1001",
+        "kinds": [
+          "Computer",
+          "Base"
+        ],
+        "properties": {
+          "name": "app01.corp.local",
+          "enabled": false
+        }
+      },
+      {
+        "id": "TH-APP01-NIGHTLYBACKUP",
+        "kinds": [
+          "TH_ScheduledTask",
+          "Base",
+          "TaskHound"
+        ],
+        "properties": {
+          "name": "\\NightlyBackup",
+          "hostname": "APP01.CORP.LOCAL",
+          "runas": "CORP\\svc_backup",
+          "logontype": "S4U",
+          "credentialsstored": false,
+          "enabled": true,
+          "command": "C:\\Tools\\backup.exe",
+          "passwordanalysis": "weak, 15 chars"
+        }
+      },
+      {
+        "id": "TH-APP01-CLEANUP",
+        "kinds": [
+          "TH_ScheduledTask",
+          "Base",
+          "TaskHound"
+        ],
+        "properties": {
+          "name": "\\Cleanup",
+          "hostname": "APP01.CORP.LOCAL",
+          "runas": "CORP\\administrator",
+          "logontype": "S4U",
+          "credentialsstored": false
+        }
+      },
+      {
+        "id": "TH-WS01-SVC-BACKUPAGENT",
+        "kinds": [
+          "TH_WindowsService",
+          "Base",
+          "TaskHound"
+        ],
+        "properties": {
+          "name": "BackupAgent",
+          "servicename": "BackupAgent",
+          "hostname": "WS01.CORP.LOCAL",
+          "startname": "CORP\\gmsa_backup$",
+          "isgmsa": true
+        }
+      },
+      {
+        "id": "TH-WS01-REPORTS",
+        "kinds": [
+          "TH_ScheduledTask",
+          "Base",
+          "TaskHound"
+        ],
+        "properties": {
+          "name": "\\Reports",
+          "hostname": "WS01.CORP.LOCAL",
+          "runas": "CORP\\dave",
+          "logontype": "Password",
+          "credentialsstored": true
+        }
+      }
+    ],
+    "edges": [
+      {
+        "kind": "TH_HasTask",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1001",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "TH-APP01-NIGHTLYBACKUP",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "TH_RunsAs",
+        "start": {
+          "value": "TH-APP01-NIGHTLYBACKUP",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1201",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "TH_HasTask",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1001",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "TH-APP01-CLEANUP",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "TH_RunsAs",
+        "start": {
+          "value": "TH-APP01-CLEANUP",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-500",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "TH_HasServiceWithStoredCreds",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "TH-WS01-SVC-BACKUPAGENT",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "TH_RunsAs",
+        "start": {
+          "value": "TH-WS01-SVC-BACKUPAGENT",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1201",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "TH_HasTaskWithStoredCreds",
+        "start": {
+          "value": "WS01.CORP.LOCAL",
+          "match_by": "name"
+        },
+        "end": {
+          "value": "TH-WS01-REPORTS",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "TH_RunsAs",
+        "start": {
+          "value": "TH-WS01-REPORTS",
+          "match_by": "id"
+        },
+        "end": {
+          "match_by": "property",
+          "kind": "User",
+          "property_matchers": [
+            {
+              "key": "samaccountname",
+              "operator": "equals",
+              "value": "DAVE"
+            }
+          ]
+        },
+        "properties": {}
+      },
+      {
+        "kind": "TH_RunsAs",
+        "start": {
+          "value": "TH-WS01-REPORTS",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1999",
+          "match_by": "id"
+        },
+        "properties": {}
+      },
+      {
+        "kind": "TH_RunsAs",
+        "start": {
+          "value": "TH-WS01-REPORTS",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "NOBODY@CORP.LOCAL",
+          "match_by": "name"
+        },
+        "properties": {}
+      }
+    ]
+  }
+}

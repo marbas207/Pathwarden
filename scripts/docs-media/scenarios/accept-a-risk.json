@@ -1,0 +1,16 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 480,
+  "startAt": "a.rr-link", "startSettle": 3000,
+  "gif": ["--hold-end", "2000"],
+  "steps": [
+    {"do": "wait", "ms": 300},
+    {"do": "click", "sel": "report: #tab-findings", "ms": 500},
+    {"do": "click", "sel": "report: details.group[data-rule=\"PW-006\"] > summary", "ms": 400},
+    {"do": "click", "sel": "report: #f-PW-006-1ba3d75126b2c612 > summary", "ms": 900},
+    {"do": "click", "sel": "report: #f-PW-006-1ba3d75126b2c612 .fa-accept", "ms": 900},
+    {"do": "type", "sel": "#ar-reason", "text": "Service account, reviewed quarterly", "delay": 28, "ms": 300},
+    {"do": "select", "sel": "#ar-expires", "value": "2027-03-31", "ms": 800},
+    {"do": "click", "sel": "#ar-submit", "ms": 2400}
+  ]
+}

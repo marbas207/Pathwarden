@@ -1,0 +1,82 @@
+# Signs a release's SHA256SUMS.txt with Sigstore (keyless), when started by
+# hand after the release is uploaded:
+#
+# 1. Downloads every file of the release (a draft too) and checks them all
+#    against its SHA256SUMS.txt, so the signature only ever covers sums that
+#    match the uploaded files.
+# 2. Signs SHA256SUMS.txt with cosign. The signing identity is this workflow
+#    on main, through GitHub's OIDC token: no key to keep, and no personal
+#    email in Sigstore's public log (which does record the repository name).
+# 3. Attaches SHA256SUMS.txt.sigstore.json to the release.
+#
+# Users verify with cosign verify-blob; see docs/dev/building.md, "Verifying a
+# download". Third-party actions are pinned to a full commit SHA (the tag is
+# in the comment); update both together.
+name: Sign release sums
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag (v1.0.0-rc.1)
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: sign-sums-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    name: Sign SHA256SUMS.txt
+    # The identity users check names refs/heads/main: refuse other refs.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # read a draft release and attach the bundle
+      id-token: write # the OIDC token Sigstore signs with
+    steps:
+      - name: Download the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          mkdir release
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir release
+          ls -l release
+
+      - name: Check every file against SHA256SUMS.txt
+        working-directory: release
+        run: |
+          test -s SHA256SUMS.txt
+          sha256sum --check --strict SHA256SUMS.txt
+          # Every file of the release (but the sums and an older bundle) is listed.
+          for f in *; do
+            case "$f" in SHA256SUMS.txt|SHA256SUMS.txt.sigstore.json) continue ;; esac
+            if ! awk '{ sub(/^\*/, "", $2); print $2 }' SHA256SUMS.txt | grep -qxF -- "$f"; then
+              echo "::error::$f is in the release but not in SHA256SUMS.txt"
+              exit 1
+            fi
+          done
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Sign
+        working-directory: release
+        run: |
+          cosign sign-blob --yes --bundle SHA256SUMS.txt.sigstore.json SHA256SUMS.txt
+          cosign verify-blob --bundle SHA256SUMS.txt.sigstore.json \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/sign-sums.yml@refs/heads/main" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            SHA256SUMS.txt
+
+      - name: Attach the bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" release/SHA256SUMS.txt.sigstore.json --repo "$GITHUB_REPOSITORY" --clobber

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "run_id": "20261030T151737.052Z",
+  "started_at": 1793373457,
+  "finished_at": 1793373457,
+  "collected_at": null,
+  "pathwarden": "0.1.6",
+  "collector_files": 5,
+  "domains": [
+    "MGMT.LOCAL"
+  ],
+  "trusted_domains": [],
+  "objects": 23,
+  "changes": {
+    "new": 0,
+    "open": 6,
+    "regressed": 0,
+    "suppressed": 6,
+    "resolved": 0,
+    "held": 0,
+    "unchecked": 0
+  },
+  "sources_exact": true
+}

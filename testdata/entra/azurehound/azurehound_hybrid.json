@@ -1,0 +1,501 @@
+{
+ "data": [
+  {
+   "kind": "AZTenant",
+   "data": {
+    "id": "/tenants/11111111-2222-3333-4444-555555555555",
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "displayName": "Hybrid Corp",
+    "defaultDomain": "hybrid.onmicrosoft.com",
+    "collected": true,
+    "tenantType": "AAD"
+   }
+  },
+  {
+   "kind": "AZTenant",
+   "data": {
+    "id": "/tenants/99999999-0000-0000-0000-000000000000",
+    "tenantId": "99999999-0000-0000-0000-000000000000",
+    "displayName": "Partner"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000001",
+    "userPrincipalName": "alice@hybrid.local",
+    "displayName": "Alice",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "userType": "Member",
+    "onPremisesSecurityIdentifier": "S-1-5-21-4000-4000-4000-1101",
+    "onPremisesSyncEnabled": true
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000002",
+    "userPrincipalName": "bob@hybrid.local",
+    "displayName": "Bob",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "userType": "Member",
+    "onPremisesSecurityIdentifier": "S-1-5-21-4000-4000-4000-1102",
+    "onPremisesSyncEnabled": true
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000003",
+    "userPrincipalName": "da_eve@hybrid.local",
+    "displayName": "Eve",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "userType": "Member",
+    "onPremisesSecurityIdentifier": "S-1-5-21-4000-4000-4000-1103",
+    "onPremisesSyncEnabled": true
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000004",
+    "userPrincipalName": "carol@hybrid.local",
+    "displayName": "Carol",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "userType": "Member",
+    "onPremisesSecurityIdentifier": "S-1-5-21-4000-4000-4000-1104",
+    "onPremisesSyncEnabled": true
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000005",
+    "userPrincipalName": "intuneop@hybrid.onmicrosoft.com",
+    "displayName": "Intuneop",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000006",
+    "userPrincipalName": "Sync_AADC01_1a2b3c4d5e6f@hybrid.onmicrosoft.com",
+    "displayName": "Sync",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000007",
+    "userPrincipalName": "appadmin@hybrid.onmicrosoft.com",
+    "displayName": "Appadmin",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000008",
+    "userPrincipalName": "frank@hybrid.onmicrosoft.com",
+    "displayName": "Frank",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000009",
+    "userPrincipalName": "paul@hybrid.onmicrosoft.com",
+    "displayName": "Paul",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "62e90394-69f5-4237-9190-012177145e10",
+    "templateId": "62e90394-69f5-4237-9190-012177145e10",
+    "displayName": "Global Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "rolePermissions": [
+     {
+      "allowedResourceActions": [
+       "microsoft.directory/x"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "e8611ab8-c189-46e8-94e1-60213ab1f814",
+    "templateId": "e8611ab8-c189-46e8-94e1-60213ab1f814",
+    "displayName": "Privileged Role Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "rolePermissions": [
+     {
+      "allowedResourceActions": [
+       "microsoft.directory/x"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "7be44c8a-adaf-4e2a-84d6-ab2649e08a13",
+    "templateId": "7be44c8a-adaf-4e2a-84d6-ab2649e08a13",
+    "displayName": "Privileged Authentication Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "rolePermissions": [
+     {
+      "allowedResourceActions": [
+       "microsoft.directory/x"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "d29b2b05-8046-44ba-8758-1e26182fcf32",
+    "templateId": "d29b2b05-8046-44ba-8758-1e26182fcf32",
+    "displayName": "Directory Synchronization Accounts",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "rolePermissions": [
+     {
+      "allowedResourceActions": [
+       "microsoft.directory/x"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+    "templateId": "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+    "displayName": "Helpdesk Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "rolePermissions": [
+     {
+      "allowedResourceActions": [
+       "microsoft.directory/x"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "3a2c62db-5318-420d-8d74-23affee5d9d5",
+    "templateId": "3a2c62db-5318-420d-8d74-23affee5d9d5",
+    "displayName": "Intune Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "rolePermissions": [
+     {
+      "allowedResourceActions": [
+       "microsoft.directory/x"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3",
+    "templateId": "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3",
+    "displayName": "Application Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "rolePermissions": [
+     {
+      "allowedResourceActions": [
+       "microsoft.directory/x"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZGroup",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000100",
+    "displayName": "PAA Admins",
+    "isAssignableToRole": true,
+    "securityEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZGroup",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000101",
+    "displayName": "Sales",
+    "securityEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZApp",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000201",
+    "appId": "aaaaaaaa-0000-0000-0000-000000000200",
+    "displayName": "Automation",
+    "publisherDomain": "hybrid.onmicrosoft.com",
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com",
+    "passwordCredentials": [
+     {
+      "keyId": "k1",
+      "hint": "abc",
+      "secretText": "DO-NOT-KEEP"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000202",
+    "appId": "aaaaaaaa-0000-0000-0000-000000000200",
+    "displayName": "Automation",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZDevice",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000300",
+    "deviceId": "aaaaaaaa-0000-0000-0000-000000000301",
+    "displayName": "WS01",
+    "operatingSystem": "Windows",
+    "trustType": "ServerAd",
+    "isManaged": true,
+    "accountEnabled": true,
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "tenantName": "hybrid.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "62e90394-69f5-4237-9190-012177145e10",
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "roleAssignments": [
+     {
+      "id": "ra-62e90394-69f5-4237-9190-012177145e10-aaaaaaaa-0000-0000-0000-000000000001",
+      "roleDefinitionId": "62e90394-69f5-4237-9190-012177145e10",
+      "principalId": "aaaaaaaa-0000-0000-0000-000000000001",
+      "directoryScopeId": "/"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "roleAssignments": [
+     {
+      "id": "ra-729827e3-9c14-49f7-bb1b-9608f156bbb8-aaaaaaaa-0000-0000-0000-000000000002",
+      "roleDefinitionId": "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+      "principalId": "aaaaaaaa-0000-0000-0000-000000000002",
+      "directoryScopeId": "/"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "3a2c62db-5318-420d-8d74-23affee5d9d5",
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "roleAssignments": [
+     {
+      "id": "ra-3a2c62db-5318-420d-8d74-23affee5d9d5-aaaaaaaa-0000-0000-0000-000000000005",
+      "roleDefinitionId": "3a2c62db-5318-420d-8d74-23affee5d9d5",
+      "principalId": "aaaaaaaa-0000-0000-0000-000000000005",
+      "directoryScopeId": "/"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "d29b2b05-8046-44ba-8758-1e26182fcf32",
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "roleAssignments": [
+     {
+      "id": "ra-d29b2b05-8046-44ba-8758-1e26182fcf32-aaaaaaaa-0000-0000-0000-000000000006",
+      "roleDefinitionId": "d29b2b05-8046-44ba-8758-1e26182fcf32",
+      "principalId": "aaaaaaaa-0000-0000-0000-000000000006",
+      "directoryScopeId": "/"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3",
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "roleAssignments": [
+     {
+      "id": "ra-9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3-aaaaaaaa-0000-0000-0000-000000000007",
+      "roleDefinitionId": "9b895d92-2cd3-44c7-9d02-a6ac2d5ea5c3",
+      "principalId": "aaaaaaaa-0000-0000-0000-000000000007",
+      "directoryScopeId": "/"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "e8611ab8-c189-46e8-94e1-60213ab1f814",
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "roleAssignments": [
+     {
+      "id": "ra-e8611ab8-c189-46e8-94e1-60213ab1f814-aaaaaaaa-0000-0000-0000-000000000202",
+      "roleDefinitionId": "e8611ab8-c189-46e8-94e1-60213ab1f814",
+      "principalId": "aaaaaaaa-0000-0000-0000-000000000202",
+      "directoryScopeId": "/"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "7be44c8a-adaf-4e2a-84d6-ab2649e08a13",
+    "tenantId": "11111111-2222-3333-4444-555555555555",
+    "roleAssignments": [
+     {
+      "id": "ra-7be44c8a-adaf-4e2a-84d6-ab2649e08a13-aaaaaaaa-0000-0000-0000-000000000100",
+      "roleDefinitionId": "7be44c8a-adaf-4e2a-84d6-ab2649e08a13",
+      "principalId": "aaaaaaaa-0000-0000-0000-000000000100",
+      "directoryScopeId": "/"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZGroupMember",
+   "data": {
+    "groupId": "aaaaaaaa-0000-0000-0000-000000000100",
+    "members": [
+     {
+      "groupId": "aaaaaaaa-0000-0000-0000-000000000100",
+      "member": {
+       "@odata.type": "#microsoft.graph.user",
+       "id": "aaaaaaaa-0000-0000-0000-000000000009",
+       "displayName": "Paul"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZGroupMember",
+   "data": {
+    "groupId": "aaaaaaaa-0000-0000-0000-000000000101",
+    "members": [
+     {
+      "groupId": "aaaaaaaa-0000-0000-0000-000000000101",
+      "member": {
+       "@odata.type": "#microsoft.graph.user",
+       "id": "aaaaaaaa-0000-0000-0000-000000000004"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZAppOwner",
+   "data": {
+    "appId": "aaaaaaaa-0000-0000-0000-000000000200",
+    "owners": [
+     {
+      "appId": "aaaaaaaa-0000-0000-0000-000000000201",
+      "owner": {
+       "@odata.type": "#microsoft.graph.user",
+       "id": "aaaaaaaa-0000-0000-0000-000000000008"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZVM",
+   "data": {
+    "id": "/subscriptions/x/vm1",
+    "name": "vm1",
+    "tenantId": "11111111-2222-3333-4444-555555555555"
+   }
+  }
+ ],
+ "meta": {
+  "type": "azure",
+  "version": 5,
+  "count": 34
+ }
+}

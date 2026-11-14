@@ -1,0 +1,49 @@
+{
+  "id": "20261030-151733-5039d8",
+  "created_at": 1793373453,
+  "collected_at": null,
+  "source": "mgmt",
+  "demo": false,
+  "domains": [
+    "MGMT.LOCAL"
+  ],
+  "trusted_domains": [],
+  "objects": 23,
+  "files": 5,
+  "exposure_percent": 37.5,
+  "exposed": 3,
+  "population": 8,
+  "relevant_population": 8,
+  "exposure_basis": 2,
+  "protection_score": 50.0,
+  "critical": 0,
+  "high": 5,
+  "medium": 1,
+  "low": 0,
+  "info": 0,
+  "suppressed": 6,
+  "plan_steps": 3,
+  "exposed_after": 0,
+  "grade": "High",
+  "grade_reason": "3 accounts outside Tier Zero can reach it",
+  "status_reason": "3 accounts outside Tier Zero can reach it.",
+  "exposure_delta": 37.5,
+  "next_step_delta": 12.5,
+  "skipped_objects": 0,
+  "pathwarden": "0.1.9",
+  "history": {
+    "run_id": "20261030T151733.132Z"
+  },
+  "next_step": "Take ALICE out of local Administrators on AADC01",
+  "completeness": {
+    "computers": 8,
+    "sessions_collected": 8,
+    "sessions_percent": 100.0,
+    "member_computers": 7,
+    "local_groups_collected": 2,
+    "local_groups_percent": 28.571428571428573,
+    "low_domains": 1,
+    "sessions_targeted": true,
+    "local_groups_targeted": true
+  }
+}

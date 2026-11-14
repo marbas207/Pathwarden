@@ -1,0 +1,4 @@
+# Faster local Windows builds: rust-lld ships with the Rust toolchain and links
+# several times faster than link.exe. Release builds use it too.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"

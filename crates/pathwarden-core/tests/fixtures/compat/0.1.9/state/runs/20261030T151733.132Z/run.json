@@ -1,0 +1,50 @@
+{
+  "schema": "pathwarden.run-bundle.v1",
+  "format": 1,
+  "run_id": "20261030T151733.132Z",
+  "pathwarden": "0.1.9",
+  "recorded_by": "SCALE\\analyst",
+  "recorded_on": "PW-DEMO-01",
+  "recorded_from": "cli",
+  "finished_at": 1793373453,
+  "settings_sha256": "540ca3fadfcda81bc39de97bf9b740b6604d0ec95e1ebbc23c1a47256ec7fcdd",
+  "files": [
+    {
+      "name": "summary.json",
+      "bytes": 1163,
+      "sha256": "f9cac9d259f73006738463a590e61f9dd200c9fb54874f6366d1d4f3b4ff7262"
+    },
+    {
+      "name": "objects.json.gz",
+      "bytes": 543,
+      "sha256": "9ffd0270eedc9a82fc3796ffc9be4f965dc8a481e75d1c7a59ee3e14def679b0"
+    },
+    {
+      "name": "graph.bin.gz",
+      "bytes": 2539,
+      "sha256": "fcba628cf9ea0157a43caf126acc69ef2ed5abe30f7a0bc098a5d872833373e6"
+    },
+    {
+      "name": "event.json.gz",
+      "bytes": 2247,
+      "sha256": "a7051ef78cb89abe0ea7932f1a502c83bcfac84e71dec457357aafeab6624c98"
+    },
+    {
+      "name": "retest.json.gz",
+      "bytes": 1932,
+      "sha256": "e5446ae296fba088fb7c893216925ded887bebb088712c752831f427eb5b3bdf"
+    },
+    {
+      "name": "settings.toml",
+      "bytes": 250,
+      "sha256": "540ca3fadfcda81bc39de97bf9b740b6604d0ec95e1ebbc23c1a47256ec7fcdd"
+    }
+  ],
+  "left_out": [
+    {
+      "name": "report.html.gz",
+      "bytes": 45054,
+      "why": "trimmed for the compat fixture"
+    }
+  ]
+}

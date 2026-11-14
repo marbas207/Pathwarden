@@ -1,0 +1,19 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 420,
+  "gif": ["--hold-end", "1300"],
+  "steps": [
+    {"do": "wait", "ms": 300},
+    {"do": "click", "sel": "nav a[href=\"/runs\"]", "ms": 500},
+    {"do": "click", "sel": "a.rr-link", "ms": 300},
+    {"do": "waitFor", "sel": "report: .hero-line", "timeout": 20000, "ms": 900},
+    {"do": "click", "sel": "report: .hero-line .tip-btn", "ms": 1500},
+    {"do": "eval", "frame": true, "js": "document.querySelectorAll('.tip.open').forEach((t) => t.classList.remove('open'))", "ms": 100},
+    {"do": "click", "sel": "report: #tab-findings", "ms": 500},
+    {"do": "click", "sel": "report: details.group[data-rule=\"PW-006\"] > summary", "ms": 500},
+    {"do": "click", "sel": "report: #f-PW-006-1ba3d75126b2c612 > summary", "ms": 1000},
+    {"do": "click", "sel": "report: #tab-environment", "ms": 1000},
+    {"do": "click", "sel": "report: #tab-details", "ms": 1100},
+    {"do": "hover", "sel": ".rh-side a >> Download report", "ms": 600}
+  ]
+}

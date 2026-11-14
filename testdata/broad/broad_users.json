@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-500",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "ADMINISTRATOR@BROAD.LOCAL",
+        "domain": "BROAD.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true
+      }
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1301",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "ALICE@BROAD.LOCAL",
+        "domain": "BROAD.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true
+      }
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1302",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "BOB@BROAD.LOCAL",
+        "domain": "BROAD.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true
+      }
+    }
+  ],
+  "meta": {
+    "type": "users",
+    "count": 3,
+    "version": 6
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000",
+      "Properties": {
+        "name": "PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000"
+      },
+      "Aces": [],
+      "Trusts": []
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "domains",
+    "count": 1,
+    "version": 6
+  }
+}

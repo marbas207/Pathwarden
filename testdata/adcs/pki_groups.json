@@ -1,0 +1,70 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-512",
+      "Properties": {
+        "name": "DOMAIN ADMINS@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1105",
+          "ObjectType": "User"
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-513",
+      "Properties": {
+        "name": "DOMAIN USERS@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000"
+      },
+      "Members": []
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1150",
+      "Properties": {
+        "name": "WEBADMINS@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1102",
+          "ObjectType": "User"
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1151",
+      "Properties": {
+        "name": "AGENTS@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1101",
+          "ObjectType": "User"
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1152",
+      "Properties": {
+        "name": "SQL OPERATORS@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000"
+      },
+      "Members": []
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "groups",
+    "count": 5,
+    "version": 6
+  }
+}

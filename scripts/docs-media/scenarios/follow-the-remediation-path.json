@@ -1,0 +1,18 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 420,
+  "startAt": "a.rr-link", "startSettle": 3000,
+  "gif": ["--hold-end", "1300"],
+  "steps": [
+    {"do": "wait", "ms": 300},
+    {"do": "click", "sel": "report: #tab-plan", "ms": 1100},
+    {"do": "click", "sel": "report: #step-1 > summary", "ms": 1300},
+    {"do": "scroll", "sel": "report: #not-covered", "block": "center", "ms": 800},
+    {"do": "hover", "sel": "report: #not-covered", "ms": 600},
+    {"do": "click", "sel": "report: #tab-findings", "ms": 600},
+    {"do": "click", "sel": "report: label >> Change that fixes it", "ms": 1400},
+    {"do": "click", "sel": "report: label >> Kind of finding", "ms": 500},
+    {"do": "click", "sel": "report: details.group[data-rule=\"PW-006\"] > summary", "ms": 500},
+    {"do": "click", "sel": "report: #guide-PW-006 > summary", "ms": 1700}
+  ]
+}

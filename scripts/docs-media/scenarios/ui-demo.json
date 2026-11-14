@@ -1,0 +1,13 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (an empty workspace)",
+  "width": 1440, "height": 900, "settle": 3600,
+  "gif": ["--fast", "5.5-19.5:8"],
+  "steps": [
+    {"do": "wait", "ms": 600},
+    {"do": "hover", "sel": ".welcome h1", "ms": 500},
+    {"do": "click", "sel": "button.action[data-demo]", "ms": 300},
+    {"do": "waitFor", "js": "location.pathname.startsWith('/runs/')", "timeout": 90000},
+    {"do": "waitFor", "sel": "report: .hero-line", "timeout": 20000, "ms": 900},
+    {"do": "hover", "sel": "report: .hero-line", "ms": 1200}
+  ]
+}

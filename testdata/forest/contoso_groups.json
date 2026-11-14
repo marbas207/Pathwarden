@@ -1,0 +1,172 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-1000-1000-1000-512",
+      "Properties": {
+        "name": "DOMAIN ADMINS@CONTOSO.LOCAL",
+        "domain": "CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000",
+        "admincount": true
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1101",
+          "ObjectType": "User"
+        },
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-500",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1000-1000-1000-513",
+      "Properties": {
+        "name": "DOMAIN USERS@CONTOSO.LOCAL",
+        "domain": "CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000"
+      },
+      "Members": [],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1000-1000-1000-516",
+      "Properties": {
+        "name": "DOMAIN CONTROLLERS@CONTOSO.LOCAL",
+        "domain": "CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000"
+      },
+      "Members": [],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1000-1000-1000-519",
+      "Properties": {
+        "name": "ENTERPRISE ADMINS@CONTOSO.LOCAL",
+        "domain": "CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-500",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1150",
+      "Properties": {
+        "name": "HELPDESK@CONTOSO.LOCAL",
+        "domain": "CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1102",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1151",
+      "Properties": {
+        "name": "SYNC_OPERATORS@CONTOSO.LOCAL",
+        "domain": "CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1106",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "CONTOSO.LOCAL-S-1-5-32-544",
+      "Properties": {
+        "name": "ADMINISTRATORS@CONTOSO.LOCAL",
+        "domain": "CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-512",
+          "ObjectType": "Group"
+        },
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-519",
+          "ObjectType": "Group"
+        },
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-500",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-2000-2000-2000-512",
+      "Properties": {
+        "name": "DOMAIN ADMINS@CHILD.CONTOSO.LOCAL",
+        "domain": "CHILD.CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-2000-2000-2000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-2000-2000-2000-1201",
+          "ObjectType": "User"
+        },
+        {
+          "ObjectIdentifier": "S-1-5-21-2000-2000-2000-500",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-2000-2000-2000-513",
+      "Properties": {
+        "name": "DOMAIN USERS@CHILD.CONTOSO.LOCAL",
+        "domain": "CHILD.CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-2000-2000-2000"
+      },
+      "Members": null,
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1000-1000-1000-525",
+      "Properties": {
+        "name": "PROTECTED USERS@CONTOSO.LOCAL",
+        "domain": "CONTOSO.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1101",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "groups",
+    "count": 10,
+    "version": 6
+  }
+}

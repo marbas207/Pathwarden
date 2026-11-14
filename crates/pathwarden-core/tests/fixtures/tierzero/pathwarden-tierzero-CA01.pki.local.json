@@ -1,0 +1,47 @@
+{
+    "schema":  "pathwarden.tierzero.v1",
+    "tool":  "Get-PathwardenTierZeroSettings.ps1",
+    "domain":  "pki.local",
+    "dc":  {
+               "hostname":  "CA01",
+               "dns_name":  "ca01.pki.local",
+               "object_sid":  "S-1-5-21-5000-5000-5000-1105",
+               "distinguished_name":  "CN=CA01,OU=PKI,DC=pki,DC=local",
+               "os_build":  "20348.2700"
+           },
+    "read_at":  "2026-10-13T08:00:00Z",
+    "values":  [
+
+               ],
+    "cas":  [
+                {
+                    "name":  "PKI-CA",
+                    "cert_hashes":  [
+                                        "3F2504E04F8911D39A0C0305E82C3301AABBCCDD"
+                                    ],
+                    "values":  [
+                                   {
+                                       "name":  "EditFlags",
+                                       "path":  "HKLM\\SYSTEM\\CurrentControlSet\\Services\\CertSvc\\Configuration\\PKI-CA\\PolicyModules\\CertificateAuthority_MicrosoftDefault.Policy",
+                                       "present":  true,
+                                       "value":  1376590,
+                                       "error":  null
+                                   },
+                                   {
+                                       "name":  "InterfaceFlags",
+                                       "path":  "HKLM\\SYSTEM\\CurrentControlSet\\Services\\CertSvc\\Configuration\\PKI-CA",
+                                       "present":  true,
+                                       "value":  1089,
+                                       "error":  null
+                                   },
+                                   {
+                                       "name":  "RoleSeparationEnabled",
+                                       "path":  "HKLM\\SYSTEM\\CurrentControlSet\\Services\\CertSvc\\Configuration\\PKI-CA",
+                                       "present":  false,
+                                       "value":  null,
+                                       "error":  null
+                                   }
+                               ]
+                }
+            ]
+}

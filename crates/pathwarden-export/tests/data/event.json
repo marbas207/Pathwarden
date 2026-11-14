@@ -1,0 +1,660 @@
+{
+  "schema": "pathwarden.event.v1",
+  "run": {
+    "version": 1,
+    "run_id": "20261010T161558.191Z",
+    "started_at": 1791648958,
+    "finished_at": 1791648958,
+    "collected_at": null,
+    "pathwarden": "0.1.0",
+    "collector_files": 6,
+    "domains": [
+      "CHILD.CONTOSO.LOCAL",
+      "CONTOSO.LOCAL"
+    ],
+    "objects": 33,
+    "changes": {
+      "new": 15,
+      "open": 0,
+      "regressed": 0,
+      "suppressed": 0,
+      "resolved": 0,
+      "held": 0
+    }
+  },
+  "posture": {
+    "tier_zero": {
+      "zone": "Tier Zero",
+      "objects": 17,
+      "population": 8,
+      "exposed": 6,
+      "exposure_percent": 75.0,
+      "objects_with_findings": 3,
+      "protection_score": 82.3529411764706
+    },
+    "zones": [],
+    "findings": {
+      "attack_path": 5,
+      "hygiene": 10,
+      "suppressed": 0,
+      "critical": 2,
+      "high": 5,
+      "medium": 7,
+      "low": 1,
+      "info": 0
+    },
+    "completeness": [
+      {
+        "domain": "CONTOSO.LOCAL",
+        "computers": 4,
+        "member_computers": 3,
+        "enabled_member_computers": 3,
+        "active_only": false,
+        "sessions_collected": 4,
+        "local_groups_collected": 2,
+        "sessions_percent": 100.0,
+        "local_groups_percent": 66.66666666666667
+      }
+    ]
+  },
+  "findings": [
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-003",
+      "category": "attack_path",
+      "severity": "critical",
+      "rule_severity": "high",
+      "exposure": {
+        "scope": "CHILD.CONTOSO.LOCAL",
+        "principals": 1,
+        "population": 1,
+        "percent": 100.0
+      },
+      "fingerprint": "PW-003-39f2ede7c479090b",
+      "title": "CAROL@CHILD.CONTOSO.LOCAL has GenericAll on CHILD_DA@CHILD.CONTOSO.LOCAL",
+      "domain": "CHILD.CONTOSO.LOCAL",
+      "summary": "CAROL@CHILD.CONTOSO.LOCAL is outside Tier Zero but has GenericAll on Tier Zero object CHILD_DA@CHILD.CONTOSO.LOCAL (Member of DOMAIN ADMINS@CHILD.CONTOSO.LOCAL). Whoever controls CAROL@CHILD.CONTOSO.LOCAL controls CHILD_DA@CHILD.CONTOSO.LOCAL.",
+      "remediation": "Remove the GenericAll permission that CAROL@CHILD.CONTOSO.LOCAL holds on CHILD_DA@CHILD.CONTOSO.LOCAL. It is inherited, so remove it where it is defined (on TIER0 ADMINS@CHILD.CONTOSO.LOCAL or a container above it); that also removes it from every other object below that container.",
+      "affected": [
+        {
+          "id": "S-1-5-21-2000-2000-2000-1202",
+          "name": "CAROL@CHILD.CONTOSO.LOCAL",
+          "kind": "User"
+        },
+        {
+          "id": "S-1-5-21-2000-2000-2000-1201",
+          "name": "CHILD_DA@CHILD.CONTOSO.LOCAL",
+          "kind": "User"
+        }
+      ],
+      "path": {
+        "source": "CAROL@CHILD.CONTOSO.LOCAL",
+        "target": "CHILD_DA@CHILD.CONTOSO.LOCAL",
+        "steps": [
+          {
+            "from": "CAROL@CHILD.CONTOSO.LOCAL",
+            "from_kind": "User",
+            "edge": "GenericAll",
+            "to": "CHILD_DA@CHILD.CONTOSO.LOCAL",
+            "to_kind": "User"
+          }
+        ]
+      },
+      "references": [],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-006",
+      "category": "attack_path",
+      "severity": "critical",
+      "rule_severity": "high",
+      "exposure": {
+        "scope": "CONTOSO.LOCAL",
+        "principals": 7,
+        "population": 7,
+        "percent": 100.0
+      },
+      "fingerprint": "PW-006-8ae0b31a46eacada",
+      "title": "Kerberoastable account SVC_SQL@CONTOSO.LOCAL has a path to Tier Zero",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "SVC_SQL@CONTOSO.LOCAL has a service principal name, so any domain user can request a ticket encrypted with its password and crack it offline, and it has a path to Tier Zero. Its password was last set 6126 days ago.",
+      "remediation": "Remove unneeded SPNs from SVC_SQL@CONTOSO.LOCAL, or move the service to a group Managed Service Account (gMSA). If the SPN must stay, set a random password of 25+ characters and allow only AES Kerberos encryption for the account.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-1103",
+          "name": "SVC_SQL@CONTOSO.LOCAL",
+          "kind": "User"
+        }
+      ],
+      "path": {
+        "source": "SVC_SQL@CONTOSO.LOCAL",
+        "target": "DA_ALICE@CONTOSO.LOCAL",
+        "steps": [
+          {
+            "from": "SVC_SQL@CONTOSO.LOCAL",
+            "from_kind": "User",
+            "edge": "AdminTo",
+            "to": "SRV01.CONTOSO.LOCAL",
+            "to_kind": "Computer"
+          },
+          {
+            "from": "SRV01.CONTOSO.LOCAL",
+            "from_kind": "Computer",
+            "edge": "HasSession",
+            "to": "DA_ALICE@CONTOSO.LOCAL",
+            "to_kind": "User"
+          }
+        ]
+      },
+      "references": [
+        "https://attack.mitre.org/techniques/T1558/003/"
+      ],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-002",
+      "category": "attack_path",
+      "severity": "high",
+      "rule_severity": "critical",
+      "exposure": {
+        "scope": "CONTOSO.LOCAL",
+        "principals": 1,
+        "population": 7,
+        "percent": 14.285714285714286
+      },
+      "fingerprint": "PW-002-1687c02cf56323ac",
+      "title": "SVC_SYNC@CONTOSO.LOCAL can DCSync CONTOSO.LOCAL",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "SVC_SYNC@CONTOSO.LOCAL holds both directory replication rights on CONTOSO.LOCAL. It can request the password hash of any account, including krbtgt, which is full domain compromise.",
+      "remediation": "Remove the 'Replicating Directory Changes' and 'Replicating Directory Changes All' rights granted to SVC_SYNC@CONTOSO.LOCAL on CONTOSO.LOCAL, or remove SVC_SYNC@CONTOSO.LOCAL from the group that grants them. Only domain controllers need these rights. If this is an Entra Connect or similar sync account, keep the rights but manage the account and its server as Tier Zero (`--tier-zero`).",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-1106",
+          "name": "SVC_SYNC@CONTOSO.LOCAL",
+          "kind": "User"
+        },
+        {
+          "id": "S-1-5-21-1000-1000-1000",
+          "name": "CONTOSO.LOCAL",
+          "kind": "Domain"
+        }
+      ],
+      "path": {
+        "source": "SVC_SYNC@CONTOSO.LOCAL",
+        "target": "CONTOSO.LOCAL",
+        "steps": [
+          {
+            "from": "SVC_SYNC@CONTOSO.LOCAL",
+            "from_kind": "User",
+            "edge": "DCSync",
+            "to": "CONTOSO.LOCAL",
+            "to_kind": "Domain"
+          }
+        ]
+      },
+      "references": [
+        "https://attack.mitre.org/techniques/T1003/006/"
+      ],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-004",
+      "category": "attack_path",
+      "severity": "high",
+      "rule_severity": "high",
+      "exposure": {
+        "scope": "CONTOSO.LOCAL",
+        "principals": 3,
+        "population": 7,
+        "percent": 42.857142857142854
+      },
+      "fingerprint": "PW-004-13b0863341b2e306",
+      "title": "DA_ALICE@CONTOSO.LOCAL is logged on to 1 non-Tier Zero host(s)",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "Tier Zero account DA_ALICE@CONTOSO.LOCAL had sessions on SRV01.CONTOSO.LOCAL. Anyone with admin rights on those hosts can take its credentials from memory.",
+      "remediation": "Use a separate admin account per tier so DA_ALICE@CONTOSO.LOCAL only logs on to Tier Zero systems. Enforce it with 'Deny log on' user rights or Authentication Policy Silos, add the account to Protected Users, and log off or reboot the listed hosts to clear cached credentials.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-1101",
+          "name": "DA_ALICE@CONTOSO.LOCAL",
+          "kind": "User"
+        },
+        {
+          "id": "S-1-5-21-1000-1000-1000-1001",
+          "name": "SRV01.CONTOSO.LOCAL",
+          "kind": "Computer"
+        }
+      ],
+      "path": null,
+      "references": [
+        "https://learn.microsoft.com/en-us/windows-server/security/credentials-protection-and-management/protected-users-security-group"
+      ],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-005",
+      "category": "attack_path",
+      "severity": "high",
+      "rule_severity": "critical",
+      "exposure": {
+        "scope": "CONTOSO.LOCAL",
+        "principals": 1,
+        "population": 7,
+        "percent": 14.285714285714286
+      },
+      "fingerprint": "PW-005-9afe06b2a004cb7a",
+      "title": "APP01.CONTOSO.LOCAL has unconstrained delegation",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "APP01.CONTOSO.LOCAL is trusted for unconstrained delegation. An attacker who controls it can coerce a domain controller to authenticate to it (PrinterBug, PetitPotam) and capture the DC's Kerberos ticket, so it is effectively Tier Zero.",
+      "remediation": "Disable unconstrained delegation on APP01.CONTOSO.LOCAL. Use constrained or resource-based constrained delegation for the specific services that need it. Until then, manage APP01.CONTOSO.LOCAL as Tier Zero and disable the Print Spooler on domain controllers to reduce coercion.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-1003",
+          "name": "APP01.CONTOSO.LOCAL",
+          "kind": "Computer"
+        },
+        {
+          "id": "S-1-5-21-1000-1000-1000",
+          "name": "CONTOSO.LOCAL",
+          "kind": "Domain"
+        }
+      ],
+      "path": {
+        "source": "APP01.CONTOSO.LOCAL",
+        "target": "CONTOSO.LOCAL",
+        "steps": [
+          {
+            "from": "APP01.CONTOSO.LOCAL",
+            "from_kind": "Computer",
+            "edge": "CoerceToTGT",
+            "to": "CONTOSO.LOCAL",
+            "to_kind": "Domain"
+          }
+        ]
+      },
+      "references": [],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-012",
+      "category": "hygiene",
+      "severity": "high",
+      "rule_severity": "high",
+      "exposure": null,
+      "fingerprint": "PW-012-9ef87557182c2d18",
+      "title": "Trust CONTOSO.LOCAL -> FABRIKAM.COM has SID filtering disabled",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "The External trust between CONTOSO.LOCAL and FABRIKAM.COM does not filter SIDs. An attacker who compromises the trusted side can forge SID history to gain privileged access across the trust.",
+      "remediation": "Enable SID filtering (quarantine) on the external trust: `netdom trust CONTOSO.LOCAL /domain:FABRIKAM.COM /quarantine:yes`. If a migration still needs SID history, plan when it ends and turn it off then.",
+      "affected": [],
+      "path": null,
+      "references": [],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-023",
+      "category": "hygiene",
+      "severity": "high",
+      "rule_severity": "high",
+      "exposure": null,
+      "fingerprint": "PW-023-0631f77fc872dfe6",
+      "title": "BOB@CONTOSO.LOCAL can log on to 1 domain controller(s) in CONTOSO.LOCAL (Remote Desktop)",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "BOB@CONTOSO.LOCAL is outside Tier Zero but can open a session on domain controllers through Remote Desktop: DC01.CONTOSO.LOCAL. A session on a DC is one local privilege escalation away from the whole domain, and it exposes the DC to whatever runs in that account's session.",
+      "remediation": "Remove BOB@CONTOSO.LOCAL from the built-in Remote Desktop Users (S-1-5-32-555) group of CONTOSO.LOCAL. On domain controllers these are domain groups shared by every DC, not local groups. Also check GPOs linked to the Domain Controllers OU for user rights that grant the same logon (for example 'Allow log on through Remote Desktop Services'). Administer DCs from Tier Zero accounts only.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-1104",
+          "name": "BOB@CONTOSO.LOCAL",
+          "kind": "User"
+        },
+        {
+          "id": "S-1-5-21-1000-1000-1000-1000",
+          "name": "DC01.CONTOSO.LOCAL",
+          "kind": "Computer"
+        }
+      ],
+      "path": {
+        "source": "BOB@CONTOSO.LOCAL",
+        "target": "DC01.CONTOSO.LOCAL",
+        "steps": [
+          {
+            "from": "BOB@CONTOSO.LOCAL",
+            "from_kind": "User",
+            "edge": "CanRDP",
+            "to": "DC01.CONTOSO.LOCAL",
+            "to_kind": "Computer"
+          }
+        ]
+      },
+      "references": [
+        "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/implementing-least-privilege-administrative-models"
+      ],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-007",
+      "category": "hygiene",
+      "severity": "medium",
+      "rule_severity": "medium",
+      "exposure": null,
+      "fingerprint": "PW-007-9330011c83e2d77e",
+      "title": "BOB@CONTOSO.LOCAL does not require Kerberos pre-authentication",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "Anyone on the network can request authentication data for BOB@CONTOSO.LOCAL that is encrypted with its password, without credentials, and crack it offline.",
+      "remediation": "Clear 'Do not require Kerberos preauthentication' on BOB@CONTOSO.LOCAL. If an application genuinely needs it, give the account a long random password.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-1104",
+          "name": "BOB@CONTOSO.LOCAL",
+          "kind": "User"
+        }
+      ],
+      "path": null,
+      "references": [
+        "https://attack.mitre.org/techniques/T1558/004/"
+      ],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-008",
+      "category": "hygiene",
+      "severity": "medium",
+      "rule_severity": "medium",
+      "exposure": null,
+      "fingerprint": "PW-008-33afb7f674dde411",
+      "title": "1 Tier Zero account(s) in CONTOSO.LOCAL can be delegated",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "1 Tier Zero account is neither in Protected Users nor marked 'sensitive and cannot be delegated', so its credentials can be cached on other systems or delegated to them.",
+      "remediation": "Add Tier Zero user accounts to the Protected Users group (test service accounts first), or at minimum set 'Account is sensitive and cannot be delegated'.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-500",
+          "name": "ADMINISTRATOR@CONTOSO.LOCAL",
+          "kind": "User"
+        }
+      ],
+      "path": null,
+      "references": [
+        "https://learn.microsoft.com/en-us/windows-server/security/credentials-protection-and-management/protected-users-security-group"
+      ],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-008",
+      "category": "hygiene",
+      "severity": "medium",
+      "rule_severity": "medium",
+      "exposure": null,
+      "fingerprint": "PW-008-6fda85cbcda4471d",
+      "title": "2 Tier Zero account(s) in CHILD.CONTOSO.LOCAL can be delegated",
+      "domain": "CHILD.CONTOSO.LOCAL",
+      "summary": "2 Tier Zero accounts are neither in Protected Users nor marked 'sensitive and cannot be delegated', so their credentials can be cached on other systems or delegated to them.",
+      "remediation": "Add Tier Zero user accounts to the Protected Users group (test service accounts first), or at minimum set 'Account is sensitive and cannot be delegated'.",
+      "affected": [
+        {
+          "id": "S-1-5-21-2000-2000-2000-1201",
+          "name": "CHILD_DA@CHILD.CONTOSO.LOCAL",
+          "kind": "User"
+        },
+        {
+          "id": "S-1-5-21-2000-2000-2000-500",
+          "name": "ADMINISTRATOR@CHILD.CONTOSO.LOCAL",
+          "kind": "User"
+        }
+      ],
+      "path": null,
+      "references": [
+        "https://learn.microsoft.com/en-us/windows-server/security/credentials-protection-and-management/protected-users-security-group"
+      ],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-009",
+      "category": "hygiene",
+      "severity": "medium",
+      "rule_severity": "medium",
+      "exposure": null,
+      "fingerprint": "PW-009-13e9dfe68431efc8",
+      "title": "1 stale Tier Zero account(s) in CONTOSO.LOCAL",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "1 enabled Tier Zero account has not logged on in over 90 days, or never. Unused privileged accounts are attack surface nobody is watching.",
+      "remediation": "Disable these accounts, or remove them from privileged groups if they are still needed.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-500",
+          "name": "ADMINISTRATOR@CONTOSO.LOCAL",
+          "kind": "User",
+          "detail": "last logon 16 years ago"
+        }
+      ],
+      "path": null,
+      "references": [],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-010",
+      "category": "hygiene",
+      "severity": "medium",
+      "rule_severity": "medium",
+      "exposure": null,
+      "fingerprint": "PW-010-af6958e599856672",
+      "title": "1 Tier Zero password(s) older than 365 days in CONTOSO.LOCAL",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "1 Tier Zero account has a password older than 365 days. Old passwords are more likely to have been exposed in past breaches, backups or memory dumps.",
+      "remediation": "Rotate these passwords. For service accounts, migrate to gMSAs so rotation is automatic.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-500",
+          "name": "ADMINISTRATOR@CONTOSO.LOCAL",
+          "kind": "User",
+          "detail": "password set 16 years ago"
+        }
+      ],
+      "path": null,
+      "references": [],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-011",
+      "category": "hygiene",
+      "severity": "medium",
+      "rule_severity": "medium",
+      "exposure": null,
+      "fingerprint": "PW-011-efa423e3a818ec8b",
+      "title": "2 computer(s) in CONTOSO.LOCAL without LAPS",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "2 computers have local administrator passwords that LAPS doesn't manage. Unmanaged local admin passwords are often the same across machines, so one compromise spreads to the others.",
+      "remediation": "Deploy Windows LAPS to these computers and restrict who can read the stored passwords.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-1001",
+          "name": "SRV01.CONTOSO.LOCAL",
+          "kind": "Computer"
+        },
+        {
+          "id": "S-1-5-21-1000-1000-1000-1003",
+          "name": "APP01.CONTOSO.LOCAL",
+          "kind": "Computer"
+        }
+      ],
+      "path": null,
+      "references": [
+        "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview"
+      ],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-014",
+      "category": "hygiene",
+      "severity": "medium",
+      "rule_severity": "medium",
+      "exposure": null,
+      "fingerprint": "PW-014-7dbabbaf90440adf",
+      "title": "KRBTGT@CONTOSO.LOCAL password is 6126 days old",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "The krbtgt key signs every Kerberos ticket in the domain. It was last changed 6126 days ago, so a golden ticket forged with a key stolen at any time since then still works.",
+      "remediation": "Rotate the krbtgt password twice, waiting at least the maximum ticket lifetime (10 hours by default) between rotations, using Microsoft's New-KrbtgtKeys script. Repeat at least every 180 days.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-502",
+          "name": "KRBTGT@CONTOSO.LOCAL",
+          "kind": "User"
+        }
+      ],
+      "path": null,
+      "references": [],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1791648958,
+      "times_seen": 1,
+      "rule": "PW-013",
+      "category": "hygiene",
+      "severity": "low",
+      "rule_severity": "low",
+      "exposure": null,
+      "fingerprint": "PW-013-78c6c84cd460f919",
+      "title": "1 account(s) in CONTOSO.LOCAL allow an empty password",
+      "domain": "CONTOSO.LOCAL",
+      "summary": "1 enabled account has PASSWD_NOTREQD set, so its password may be empty whatever the password policy says.",
+      "remediation": "Clear the PASSWD_NOTREQD flag (userAccountControl 0x20) and reset each password.",
+      "affected": [
+        {
+          "id": "S-1-5-21-1000-1000-1000-1102",
+          "name": "JDOE@CONTOSO.LOCAL",
+          "kind": "User"
+        }
+      ],
+      "path": null,
+      "references": [],
+      "suppressed": null
+    }
+  ],
+  "resolved": [],
+  "plan": {
+    "exposed_before": 6,
+    "exposed_after": 0,
+    "total_cost": 6,
+    "fixes": [
+      {
+        "from": "SRV01.CONTOSO.LOCAL",
+        "from_kind": "Computer",
+        "edges": [
+          "HasSession"
+        ],
+        "to": "DA_ALICE@CONTOSO.LOCAL",
+        "to_kind": "User",
+        "cost": 3,
+        "principals_through": 3,
+        "shortest_paths_through": 3,
+        "sdprop_copies": 0,
+        "inherited_by": 0,
+        "action": "Stop DA_ALICE@CONTOSO.LOCAL from logging on to SRV01.CONTOSO.LOCAL, then log off or reboot SRV01.CONTOSO.LOCAL to clear its cached credentials."
+      },
+      {
+        "from": "APP01.CONTOSO.LOCAL",
+        "from_kind": "Computer",
+        "edges": [
+          "CoerceToTGT"
+        ],
+        "to": "CONTOSO.LOCAL",
+        "to_kind": "Domain",
+        "cost": 1,
+        "principals_through": 1,
+        "shortest_paths_through": 1,
+        "sdprop_copies": 0,
+        "inherited_by": 0,
+        "action": "Disable unconstrained delegation on APP01.CONTOSO.LOCAL."
+      },
+      {
+        "from": "CAROL@CHILD.CONTOSO.LOCAL",
+        "from_kind": "User",
+        "edges": [
+          "GenericAll"
+        ],
+        "to": "CHILD_DA@CHILD.CONTOSO.LOCAL",
+        "to_kind": "User",
+        "cost": 1,
+        "principals_through": 1,
+        "shortest_paths_through": 1,
+        "sdprop_copies": 0,
+        "inherited_by": 0,
+        "action": "Remove the GenericAll permission that CAROL@CHILD.CONTOSO.LOCAL holds on CHILD_DA@CHILD.CONTOSO.LOCAL. It is inherited, so remove it where it is defined (on TIER0 ADMINS@CHILD.CONTOSO.LOCAL or a container above it); that also removes it from every other object below that container."
+      },
+      {
+        "from": "SVC_SYNC@CONTOSO.LOCAL",
+        "from_kind": "User",
+        "edges": [
+          "DCSync"
+        ],
+        "to": "CONTOSO.LOCAL",
+        "to_kind": "Domain",
+        "cost": 1,
+        "principals_through": 1,
+        "shortest_paths_through": 1,
+        "sdprop_copies": 0,
+        "inherited_by": 0,
+        "action": "Remove the 'Replicating Directory Changes' and 'Replicating Directory Changes All' rights granted to SVC_SYNC@CONTOSO.LOCAL on CONTOSO.LOCAL, or remove SVC_SYNC@CONTOSO.LOCAL from the group that grants them."
+      }
+    ]
+  },
+  "guides": {
+    "PW-002": "# PW-002: Non-Tier Zero principal can DCSync\n\n**Category:** Attack path\n**Typical owner:** AD / identity team\n\n## What this finding means\nA user, computer or group outside Tier Zero holds both directory replication\nrights on the domain object: \"Replicating Directory Changes\" and \"Replicating\nDirectory Changes All\" (directly or through group membership). Together they let\nit ask a domain controller for the password hash of any account.\n\n## Why attackers care\nDCSync (OS Credential Dumping: DCSync, T1003.006) lets an attacker who controls\nthis principal pull the krbtgt hash and every admin hash remotely, without touching\na domain controller's disk. With the krbtgt hash they can forge golden tickets and\nkeep domain access until krbtgt is rotated twice. Tools such as Mimikatz and\nImpacket secretsdump do this in one command.\n\n## Before you change anything\n- Identify what the principal is. Legitimate holders besides domain controllers\n  are rare: Entra Connect (MSOL_ / AAD sync) accounts, some identity governance,\n  backup or password-sync products.\n- Check whether it actually replicates: on domain controllers, audit\n  \"Directory Service Access\" and look for event 4662 with the replication GUIDs\n  `1131f6aa-9c07-11d1-f79f-00c04fc2dcd2` and `1131f6ad-9c07-11d1-f79f-00c04fc2dcd2`\n  and the principal as subject.\n- If it is a sync account that must keep the rights, do not remove them: treat the\n  account and its server as Tier Zero instead (Option B).\n\n## Fix\n### Option A: Remove the replication rights (recommended when not needed)\n1. In **Active Directory Users and Computers**, enable **View > Advanced Features**.\n2. Right-click the domain, **Properties > Security > Advanced**.\n3. Find entries for the principal (or the group that grants it) with\n   \"Replicating Directory Changes\" / \"Replicating Directory Changes All\".\n4. Select each and click **Remove**, then **OK**.\n5. If the right comes through a group, remove the principal from that group instead.\n### Option B: Keep the rights, manage the principal as Tier Zero\n1. Add the account and the server it runs on to `tier_zero` in `pathwarden.toml`.\n2. Restrict logon to that server to Tier Zero admins, protect the account\n   (long random password or gMSA where the product supports it), and monitor\n   event 4662 for replication from any other source.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n$domainDN = (Get-ADDomain).DistinguishedName\n$acl = Get-Acl -Path \"AD:\\$domainDN\"\n\n# Replication extended rights\n$getChanges    = [Guid]\"1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\"\n$getChangesAll = [Guid]\"1131f6ad-9c07-11d1-f79f-00c04fc2dcd2\"\n\n# Show who holds them\n$acl.Access | Where-Object { $_.ObjectType -in $getChanges, $getChangesAll } |\n    Select-Object IdentityReference, ObjectType, IsInherited\n\n# Save the current descriptor, then remove the principal's entries\n$acl.Sddl | Out-File \".\\domain-acl-backup.txt\"\n$acl.Access | Where-Object {\n    $_.ObjectType -in $getChanges, $getChangesAll -and $_.IdentityReference -like \"*<Account>\"\n} | ForEach-Object { [void]$acl.RemoveAccessRule($_) }\nSet-Acl -Path \"AD:\\$domainDN\" -AclObject $acl\n```\n\n## Verify\nRe-run the \"Show who holds them\" query; only domain controllers, Enterprise Domain\nControllers, Administrators and intended sync accounts should remain. Collect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone.\n\n## Rollback\nRestore the saved descriptor:\n`$acl = Get-Acl \"AD:\\$domainDN\"; $acl.SetSecurityDescriptorSddlForm((Get-Content .\\domain-acl-backup.txt)); Set-Acl \"AD:\\$domainDN\" $acl`\n\n## References\n- https://attack.mitre.org/techniques/T1003/006/\n- https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/how-to-connect-configure-ad-ds-connector-account\n- https://bloodhound.specterops.io/\n",
+    "PW-003": "# PW-003: Non-Tier Zero principal controls a Tier Zero object\n\n**Category:** Attack path\n**Typical owner:** AD / identity team (server team for local rights, PKI team for ManageCA)\n\n## What this finding means\nA principal outside Tier Zero holds a permission or relationship over a Tier Zero\nobject (a privileged account or group, a domain controller, a Tier Zero GPO or OU,\na certificate authority). Whoever controls that principal can take over the Tier\nZero object, so Tier Zero is only as safe as the weaker principal.\n\n## Why attackers care\nAttackers chain these relationships: compromise a helpdesk account, use its\nGenericAll on a Domain Admin to reset the password (T1098, Account Manipulation),\nor its local admin rights on a server where an admin is logged on. Each edge kind\nhas a known, tool-supported abuse; BloodHound shows them all in one graph.\n\n## Before you change anything\n- Check whether the permission is inherited: the finding names the container to\n  fix if so. Removing it there also removes it from every object below.\n- Find out who uses it: Directory Service Changes auditing (event 5136) on the\n  target shows modifications; for local rights check logon events 4624 on the host.\n- Back up the security descriptor before editing:\n  `(Get-Acl \"AD:\\<TargetDN>\").Sddl | Out-File .\\acl-backup.txt`\n\n## Fix\n### Option A: Remove the relationship (recommended)\nUse the table for the edge in the finding.\n\n| Edge | Fix |\n|---|---|\n| GenericAll, GenericWrite, WriteDacl, WriteOwner, AllExtendedRights, AddMember, AddSelf, ForceChangePassword, AddKeyCredentialLink, AddAllowedToAct, WriteSPN, WriteAccountRestrictions, WriteGPLink, ReadLAPSPassword, ReadGMSAPassword, SyncLAPSPassword | ADUC (Advanced Features) > target **Properties > Security > Advanced** > remove the entry (on the parent if inherited) |\n| Owns | Same dialog > **Owner: Change** to Domain Admins |\n| GPLink | GPMC: restrict who can edit the GPO, or unlink it from the Tier Zero OU |\n| AdminTo, CanRDP, ExecuteDCOM, CanPSRemote | Remove the principal from the local group on the host or from the GPO that adds it |\n| AllowedToDelegate | Target **Properties > Delegation**: remove the Tier Zero service from the list |\n| AllowedToAct | Clear the principal from `msDS-AllowedToActOnBehalfOfOtherIdentity` |\n| HasSIDHistory | Clear `sIDHistory` on the principal |\n| ManageCA | certsrv.msc > CA **Properties > Security** > remove Manage CA |\n\n### Option B: Move the principal into Tier Zero\nIf the principal genuinely administers Tier Zero, add it to `tier_zero` in\n`pathwarden.toml` and protect it like Tier Zero (dedicated admin account, Tier Zero\nlogon restrictions). Use this only for real Tier Zero administrators.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n$dn  = (Get-ADObject -Identity \"<TargetDN>\").DistinguishedName\n$acl = Get-Acl -Path \"AD:\\$dn\"\n\n# Show the principal's entries\n$acl.Access | Where-Object { $_.IdentityReference -like \"*<Principal>\" } |\n    Select-Object ActiveDirectoryRights, ObjectType, IsInherited\n\n# Remove explicit entries for the principal\n$acl.Access | Where-Object { $_.IdentityReference -like \"*<Principal>\" -and -not $_.IsInherited } |\n    ForEach-Object { [void]$acl.RemoveAccessRule($_) }\nSet-Acl -Path \"AD:\\$dn\" -AclObject $acl\n\n# Owns: hand ownership back to Domain Admins\n$acl = Get-Acl -Path \"AD:\\$dn\"\n$acl.SetOwner([System.Security.Principal.NTAccount]\"<Domain>\\Domain Admins\")\nSet-Acl -Path \"AD:\\$dn\" -AclObject $acl\n\n# HasSIDHistory: clear SID history\nSet-ADUser -Identity \"<Principal>\" -Clear sIDHistory\n\n# AllowedToAct: clear resource-based constrained delegation on the target computer\nSet-ADComputer -Identity \"<Computer>\" -PrincipalsAllowedToDelegateToAccount $null\n```\n\n## Verify\nRe-run the \"Show the principal's entries\" query on the target (and on the parent if\ninherited); it should return nothing. Collect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone.\n\n## Rollback\nRestore the saved descriptor:\n`$acl = Get-Acl \"AD:\\$dn\"; $acl.SetSecurityDescriptorSddlForm((Get-Content .\\acl-backup.txt)); Set-Acl \"AD:\\$dn\" $acl`.\nFor local group or delegation changes, re-add the removed entry.\n\n## References\n- https://attack.mitre.org/techniques/T1098/\n- https://bloodhound.specterops.io/\n- https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/best-practices-for-securing-active-directory\n",
+    "PW-004": "# PW-004: Tier Zero account logged on to non-Tier Zero hosts\n\n**Category:** Attack path\n**Typical owner:** AD / identity team together with the admins who own the account\n\n## What this finding means\nA Tier Zero account (for example a Domain Admin) had a session on servers or\nworkstations outside Tier Zero. While logged on, and often afterwards, its\ncredentials are in that host's memory, so anyone with admin rights on the host can\ntake them.\n\n## Why attackers care\nAttackers who gain local admin on any listed host dump LSASS or steal Kerberos\ntickets (OS Credential Dumping: LSASS Memory, T1003.001) and immediately become\nDomain Admin. This is one of the most common paths in real intrusions and pentests,\nand usually the biggest choke point in `pathwarden plan`.\n\n## Before you change anything\n- Ask the account owner why they log on to those hosts (RDP, scheduled task,\n  service, mapped drive). Event 4624 on the host shows logon type: 2/10 interactive\n  or RDP, 3 network, 4 batch, 5 service.\n- Services or scheduled tasks running as a Tier Zero account must be moved to a\n  dedicated, non-privileged service account (or gMSA) first, or they will break.\n- Make sure each admin has a separate, non-Tier Zero account for daily work.\n\n## Fix\n### Option A: Separate accounts per tier and deny Tier Zero logon elsewhere (recommended)\n1. Give the admin a normal account for workstations and a Tier 1 account for\n   servers if needed.\n2. In **Group Policy Management**, edit a GPO linked to all non-Tier Zero\n   computers: **Computer Configuration > Policies > Windows Settings > Security\n   Settings > Local Policies > User Rights Assignment**.\n3. Add the Tier Zero groups (Domain Admins, Enterprise Admins, Schema Admins) to\n   **Deny log on locally**, **Deny log on through Remote Desktop Services**,\n   **Deny log on as a batch job** and **Deny log on as a service**.\n4. Log off the account on the listed hosts, or reboot them, to clear cached\n   credentials.\n### Option B: Authentication Policy Silos\n1. In **Active Directory Administrative Center > Authentication**, create an\n   authentication policy and silo that allows Tier Zero accounts to authenticate\n   only from Tier Zero hosts (requires Windows Server 2012 R2+ domain functional level).\n2. Assign the accounts and Tier Zero hosts to the silo; test in audit mode first.\n### Option C: Protected Users\nAdd the account to **Protected Users**: no NTLM, no delegation, no cached\ncredentials, 4-hour TGTs. Test first: it breaks NTLM-only apps for that account.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# Where has the account logged on recently? (run on a host from the finding)\nGet-WinEvent -FilterHashtable @{ LogName = 'Security'; Id = 4624 } -MaxEvents 2000 |\n    Where-Object { $_.Properties[5].Value -eq '<Account>' } |\n    Select-Object TimeCreated, @{ n = 'LogonType'; e = { $_.Properties[8].Value } }\n\n# Services and scheduled tasks running as the account on a host\nGet-CimInstance Win32_Service -ComputerName <Computer> | Where-Object StartName -like '*<Account>*'\nGet-ScheduledTask -CimSession <Computer> | Where-Object { $_.Principal.UserId -like '*<Account>*' }\n\n# Add the account to Protected Users (after testing)\nAdd-ADGroupMember -Identity \"Protected Users\" -Members \"<Account>\"\n```\n\n## Verify\nAfter the deny rights apply (`gpupdate /force`, or the next refresh), a logon attempt\nby the Tier Zero account on a listed host must fail. Collect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone.\n\n## Rollback\nRemove the groups from the Deny user rights in the GPO (or unlink it) and run\n`gpupdate /force`; remove the account from Protected Users with\n`Remove-ADGroupMember \"Protected Users\" -Members \"<Account>\"`.\n\n## References\n- https://attack.mitre.org/techniques/T1003/001/\n- https://learn.microsoft.com/en-us/windows-server/security/credentials-protection-and-management/protected-users-security-group\n- https://learn.microsoft.com/en-us/windows-server/security/credentials-protection-and-management/authentication-policies-and-authentication-policy-silos\n",
+    "PW-005": "# PW-005: Unconstrained delegation outside domain controllers\n\n**Category:** Attack path\n**Typical owner:** AD / identity team with the server or application owner\n\n## What this finding means\nA computer or user that is not a domain controller is \"trusted for delegation to\nany service\" (unconstrained delegation). Every account that authenticates to it\nwith Kerberos leaves a forwardable ticket (TGT) in its memory. That makes the host\nas sensitive as a domain controller.\n\n## Why attackers care\nAn attacker with admin rights on the host coerces a domain controller to\nauthenticate to it (PrinterBug / MS-RPRN, PetitPotam / MS-EFSR), captures the DC's\nTGT from memory and uses it to DCSync the domain (Steal or Forge Kerberos Tickets,\nT1558). No credentials of the victim DC are needed; only control of this host.\n\n## Before you change anything\n- Ask the application owner why delegation was enabled. Common legacy reasons: IIS\n  or SQL Server front ends that access back-end services as the user.\n- Identify which back-end services the host must delegate to (SPNs). Kerberos\n  service ticket events 4769 on domain controllers with this host as the requesting\n  service show what it actually requests.\n- Constrained or resource-based constrained delegation (RBCD) supports nearly all\n  such scenarios; plan the replacement before removing the flag.\n\n## Fix\n### Option A: Switch to constrained delegation (recommended)\n1. **Active Directory Users and Computers** > the computer (or service account) >\n   **Properties > Delegation**.\n2. Select **Trust this computer for delegation to specified services only**, then\n   **Use Kerberos only** where possible.\n3. **Add** only the back-end services (SPNs) the application needs, **OK**.\n### Option B: Remove delegation entirely\nIf nothing needs it, select **Do not trust this computer for delegation**.\n### Option C: Resource-based constrained delegation\nConfigure delegation on the back-end resource instead (its\n`PrincipalsAllowedToDelegateToAccount`), which keeps control with the resource owner.\n\nUntil fixed, manage the host as Tier Zero, and disable the Print Spooler service on\ndomain controllers to reduce coercion.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# Find all non-DC principals with unconstrained delegation\nGet-ADComputer -Filter { TrustedForDelegation -eq $true -and PrimaryGroupID -ne 516 -and PrimaryGroupID -ne 521 } -Properties TrustedForDelegation\nGet-ADUser -Filter { TrustedForDelegation -eq $true } -Properties TrustedForDelegation\n\n# Remove unconstrained delegation from one computer\nSet-ADAccountControl -Identity \"<Computer>$\" -TrustedForDelegation $false\n\n# Optional: constrained delegation to a specific back-end service\nSet-ADComputer -Identity \"<Computer>\" -Add @{ 'msDS-AllowedToDelegateTo' = 'MSSQLSvc/<backend>.<domain>:1433' }\n\n# Resource-based alternative, set on the back-end computer\nSet-ADComputer -Identity \"<BackendComputer>\" -PrincipalsAllowedToDelegateToAccount (Get-ADComputer \"<Computer>\")\n```\n\n## Verify\n`Get-ADComputer \"<Computer>\" -Properties TrustedForDelegation` must show `False`.\nTest the application end to end as a normal user. Collect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone.\n\n## Rollback\n`Set-ADAccountControl -Identity \"<Computer>$\" -TrustedForDelegation $true` restores\nthe previous setting. Clear any added constrained delegation with\n`Set-ADComputer \"<Computer>\" -Clear msDS-AllowedToDelegateTo`.\n\n## References\n- https://attack.mitre.org/techniques/T1558/\n- https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview\n",
+    "PW-006": "# PW-006: Kerberoastable account with Tier Zero access\n\n**Category:** Attack path\n**Typical owner:** AD / identity team with the service owner\n\n## What this finding means\nA user account with a service principal name (SPN) is in Tier Zero or has a path\nto it. Any domain user can request a Kerberos service ticket for it, and that\nticket is encrypted with a key derived from the account's password.\n\n## Why attackers care\nKerberoasting (Steal or Forge Kerberos Tickets: Kerberoasting, T1558.003) needs only\na normal domain account: request tickets for every SPN, take them offline and crack\nthe passwords. Service account passwords are often old, human-chosen and never\nrotated, and RC4 tickets crack quickly. A cracked privileged service account means\ndomain compromise without any alert on the target.\n\n## Before you change anything\n- Identify the service using the SPN (`setspn -L <Account>`), the hosts running it,\n  and who owns it.\n- Check whether the SPN is still used: event 4769 on domain controllers shows\n  service ticket requests for the account. No requests over weeks often means a\n  stale SPN.\n- If the account is privileged only because of a group it does not need (common\n  for old SQL service accounts in Domain Admins), removing that membership is part\n  of the fix.\n\n## Fix\n### Option A: Move the service to a group Managed Service Account (recommended)\n1. Create a gMSA (`New-ADServiceAccount`) allowed for the service's hosts.\n2. Install it on the hosts (`Install-ADServiceAccount`) and change the service to\n   run as `<Domain>\\<gMSA>$` with an empty password.\n3. Move the SPNs to the gMSA, then disable the old account.\ngMSA passwords are 120 random characters rotated automatically: not crackable.\n### Option B: Remove unneeded SPNs or privileges\nRemove stale SPNs with `setspn -D`, and remove the account from privileged groups it\ndoes not need.\n### Option C: If the account must stay\nSet a random password of 25+ characters, enable AES-only Kerberos for the account\n(\"This account supports Kerberos AES 128/256 bit encryption\" in ADUC **Account**\ntab), and rotate the password on a schedule.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# Kerberoastable user accounts\nGet-ADUser -Filter { ServicePrincipalName -like \"*\" } -Properties ServicePrincipalName, PasswordLastSet, MemberOf\n\n# Option A: create a gMSA (needs a KDS root key in the forest)\nNew-ADServiceAccount -Name \"<gMSA>\" -DNSHostName \"<gMSA>.<Domain>\" `\n    -PrincipalsAllowedToRetrieveManagedPassword \"<ServerGroup>\"\nInstall-ADServiceAccount -Identity \"<gMSA>\"     # run on each service host\n\n# Option B: remove a stale SPN\nsetspn -D <SPN> <Account>\n\n# Option C: AES only (0x18 = AES128 + AES256), then reset the password\nSet-ADUser -Identity \"<Account>\" -Replace @{ 'msDS-SupportedEncryptionTypes' = 24 }\nSet-ADAccountPassword -Identity \"<Account>\" -Reset -NewPassword (Read-Host -AsSecureString \"New password\")\n```\n\n## Verify\n`Get-ADUser \"<Account>\" -Properties ServicePrincipalName` shows no SPNs (Options A/B),\nor `msDS-SupportedEncryptionTypes` is 24 and PasswordLastSet is recent (Option C).\nCollect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone.\n\n## Rollback\nRe-register an SPN with `setspn -S <SPN> <Account>`; switch the service back to the\nold account in the Services console. Keep the old account disabled, not deleted,\nuntil the gMSA has run cleanly for a while.\n\n## References\n- https://attack.mitre.org/techniques/T1558/003/\n- https://learn.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/group-managed-service-accounts-overview\n",
+    "PW-007": "# PW-007: Kerberos pre-authentication disabled (AS-REP roasting)\n\n**Category:** Attack path or hygiene (hygiene when the account has no path to Tier Zero)\n**Typical owner:** AD / identity team\n\n## What this finding means\nThe account has \"Do not require Kerberos preauthentication\" set. Anyone who can\nreach a domain controller can request an authentication response for it without\nknowing its password, and part of that response is encrypted with the password.\n\n## Why attackers care\nAS-REP roasting (Steal or Forge Kerberos Tickets: AS-REP Roasting, T1558.004) does\nnot even need a domain account: an attacker on the network asks for the response and\ncracks it offline. If the password is weak, they get the account; if the account is\nprivileged or has a path to Tier Zero, that is domain compromise.\n\n## Before you change anything\n- The flag is almost always a leftover from old Unix/Kerberos interop or a vendor\n  install guide. Ask the account owner which system uses it.\n- Check recent use: event 4768 on domain controllers with \"Pre-Authentication Type\"\n  0 for this account shows clients authenticating without pre-auth.\n- Very old MIT Kerberos or Java clients may fail once pre-auth is required; test with\n  the owning application.\n\n## Fix\n### Option A: Require pre-authentication (recommended)\n1. **Active Directory Users and Computers** > the account > **Properties > Account**.\n2. Under **Account options**, clear **Do not require Kerberos preauthentication**.\n3. **OK**, then test the application that uses the account.\n### Option B: If an application genuinely needs it\nKeep the flag only with a long random password (25+ characters), no privileged group\nmemberships, and monitoring of event 4768 for that account.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# All accounts with pre-authentication disabled\nGet-ADUser -Filter { DoesNotRequirePreAuth -eq $true } -Properties DoesNotRequirePreAuth, Enabled\n\n# Require pre-authentication again\nSet-ADAccountControl -Identity \"<Account>\" -DoesNotRequirePreAuth $false\n\n# Option B: set a long random password if the flag must stay\nSet-ADAccountPassword -Identity \"<Account>\" -Reset -NewPassword (Read-Host -AsSecureString \"New password\")\n```\n\n## Verify\n`Get-ADUser \"<Account>\" -Properties DoesNotRequirePreAuth` must show `False`. Collect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone.\n\n## Rollback\n`Set-ADAccountControl -Identity \"<Account>\" -DoesNotRequirePreAuth $true` restores the\nprevious behavior if an application breaks; then plan Option B for that account.\n\n## References\n- https://attack.mitre.org/techniques/T1558/004/\n- https://learn.microsoft.com/en-us/powershell/module/activedirectory/set-adaccountcontrol\n",
+    "PW-008": "# PW-008: Tier Zero accounts without delegation protection\n\n**Category:** Hygiene\n**Typical owner:** AD / identity team\n\n## What this finding means\nThese Tier Zero user accounts are neither members of the Protected Users group nor marked\n\"Account is sensitive and cannot be delegated\". Their credentials can therefore be cached on the\nmachines they log on to, and their Kerberos tickets can be forwarded by any service trusted for\ndelegation.\n\n## Why attackers care\nAn attacker who controls a server trusted for unconstrained or constrained delegation can\nimpersonate any delegatable account that authenticates to it, including Domain Admins\n(Kerberos delegation abuse, MITRE ATT&CK T1558). Accounts outside Protected Users also leave\nNTLM hashes and long-lived credentials in LSASS memory, which tools like Mimikatz extract\n(OS Credential Dumping, T1003.001). Protected Users removes both of these options for its members.\n\n## Before you change anything\n- Protected Users members **cannot** use NTLM, DES or RC4 Kerberos encryption, Kerberos\n  delegation, or cached (offline) logons, and their Kerberos TGTs last 4 hours. Anything\n  that relies on these will break for the account.\n- Never add service accounts or computer accounts to Protected Users. Use the\n  \"sensitive and cannot be delegated\" flag (Option B) for service accounts that are Tier Zero.\n- Check for NTLM use by the account first: enable NTLM auditing\n  (\"Network security: Restrict NTLM: Audit NTLM authentication in this domain\") and review\n  event 8004 on domain controllers, or 4624 events with Authentication Package NTLM.\n- Make sure the domain functional level is Windows Server 2012 R2 or later. Protected Users\n  only takes full effect from that level.\n- Keep at least one break-glass account **outside** Protected Users in case Kerberos fails.\n  Store its password offline.\n\n## Fix\n### Option A: Add Tier Zero user accounts to Protected Users (recommended)\n1. Open **Active Directory Users and Computers** (dsa.msc).\n2. Go to the **Users** container and open the **Protected Users** group.\n3. **Members** tab > **Add**. Add one test admin account first.\n4. Sign out and sign back in with that account. Confirm your admin tools still work.\n5. Add the remaining interactive Tier Zero admin accounts listed in the finding.\n\n### Option B: Mark the account \"sensitive and cannot be delegated\"\nUse this for accounts that cannot join Protected Users, such as Tier Zero service accounts.\n1. In dsa.msc, open the account > **Account** tab.\n2. Under **Account options**, tick **Account is sensitive and cannot be delegated**.\n3. Click **OK**.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# Option A: add an interactive admin account to Protected Users\nAdd-ADGroupMember -Identity \"Protected Users\" -Members \"<Account>\"\n\n# Option B: block delegation for an account that cannot join Protected Users\nSet-ADUser -Identity \"<Account>\" -AccountNotDelegated $true\n```\n\n## Verify\n```powershell\n# Members of Protected Users\nGet-ADGroupMember -Identity \"Protected Users\" | Select-Object SamAccountName\n\n# Accounts flagged as not delegatable\nGet-ADUser -Identity \"<Account>\" -Properties AccountNotDelegated |\n    Select-Object SamAccountName, AccountNotDelegated\n```\nCollect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone (or lists fewer accounts).\n\n## Rollback\n- Remove the account from the group: `Remove-ADGroupMember -Identity \"Protected Users\" -Members \"<Account>\"`.\n  The change applies at the account's next logon. Existing tickets expire within 4 hours.\n- Clear the flag: `Set-ADUser -Identity \"<Account>\" -AccountNotDelegated $false`.\n\n## References\n- https://learn.microsoft.com/en-us/windows-server/security/credentials-protection-and-management/protected-users-security-group\n- https://attack.mitre.org/techniques/T1558/\n- https://attack.mitre.org/techniques/T1003/001/\n",
+    "PW-009": "# PW-009: Stale Tier Zero accounts\n\n**Category:** Hygiene\n**Typical owner:** AD / identity team\n\n## What this finding means\nThese accounts are enabled and hold Tier Zero privileges, but they have not logged on within the\nconfigured period (90 days by default) or have never logged on at all. Nobody appears to use them,\nyet they could still take over the domain.\n\n## Why attackers care\nDormant privileged accounts are ideal targets. Their passwords are often old or reused, and\nnobody notices when they are used again. An attacker who guesses, sprays or cracks such a password\ngets Tier Zero access through a legitimate account (Valid Accounts: Domain Accounts, MITRE\nATT&CK T1078.002). Unused accounts also tend to sit outside monitoring and MFA rollouts.\n\n## Before you change anything\n- Confirm with the account owner (from the description, the manager attribute or your IAM\n  system) that the account is not needed.\n- Service accounts may authenticate without updating lastLogonTimestamp the way you expect.\n  Check for recent 4624 / 4768 / 4769 events for the account on domain controllers before disabling.\n- lastLogonTimestamp replicates with up to a 14-day lag. Treat dates as approximate.\n- For break-glass accounts that are meant to be unused, document them and suppress the finding\n  in `pathwarden.toml` with an expiry date instead of disabling them.\n\n## Fix\n### Option A: Disable the account (recommended)\n1. Open **Active Directory Users and Computers** (dsa.msc).\n2. Find the account, right-click > **Disable Account**.\n3. Add a note in the **Description** field (date, ticket number) and leave it disabled for a\n   grace period (for example 30 days) before deleting it.\n\n### Option B: Remove the privileged group memberships\nIf the account must stay enabled, for example for a rarely used process:\n1. Open the account > **Member Of** tab.\n2. Remove Domain Admins, Enterprise Admins, Administrators and any other Tier Zero group.\n3. Grant only the specific rights the process needs.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# Review last logon and group memberships first\nGet-ADUser -Identity \"<Account>\" -Properties LastLogonDate, MemberOf, Description |\n    Select-Object SamAccountName, LastLogonDate, Description, MemberOf\n\n# Option A: disable and annotate\nDisable-ADAccount -Identity \"<Account>\"\nSet-ADUser -Identity \"<Account>\" -Description \"Disabled <date> - stale Tier Zero account, ticket <ID>\"\n\n# Option B: remove from a privileged group instead\nRemove-ADGroupMember -Identity \"Domain Admins\" -Members \"<Account>\" -Confirm:$false\n```\n\n## Verify\n```powershell\nGet-ADUser -Identity \"<Account>\" -Properties Enabled, MemberOf |\n    Select-Object SamAccountName, Enabled, MemberOf\n```\nCollect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone (or lists fewer accounts).\n\n## Rollback\n- Re-enable the account with `Enable-ADAccount -Identity \"<Account>\"`.\n- Re-add removed group memberships with `Add-ADGroupMember`. Record the original\n  memberships (the review command above) before removing them.\n\n## References\n- https://attack.mitre.org/techniques/T1078/002/\n- https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/implementing-least-privilege-administrative-models\n",
+    "PW-010": "# PW-010: Old Tier Zero passwords\n\n**Category:** Hygiene\n**Typical owner:** AD / identity team (service account owners for service accounts)\n\n## What this finding means\nThese Tier Zero accounts have passwords older than the configured limit (365 days by default).\nThe longer a privileged password lives, the more places it may have leaked to: old backups,\nscripts, memory dumps, password managers of former staff, or earlier breaches.\n\n## Why attackers care\nAttackers routinely recover old credential material, such as NTDS.dit backups, LSASS dumps from\ndecommissioned servers and cracked hashes from earlier intrusions. A password that has not changed\nsince then still works (Valid Accounts: Domain Accounts, MITRE ATT&CK T1078.002). If an attacker\nhas the NTLM hash of an unchanged account, pass-the-hash keeps working until the password changes\n(Use Alternate Authentication Material: Pass the Hash, T1550.002).\n\n## Before you change anything\n- For **service accounts**, find every place the password is configured (services, scheduled\n  tasks, IIS application pools, application config files, scripts) before rotating. Check\n  4625 failures on domain controllers right after the change to catch anything you missed.\n- Check for \"password never expires\": `Get-ADUser <Account> -Properties PasswordNeverExpires`.\n- Interactive admins should change their own password so they choose and store it securely.\n- Prefer migrating service accounts to group Managed Service Accounts (gMSA), which rotate\n  automatically.\n\n## Fix\n### Option A: Rotate the password now (recommended)\n1. Open **Active Directory Users and Computers** (dsa.msc).\n2. Right-click the account > **Reset Password**.\n3. Set a long random password (25+ characters for service accounts) and store it in your\n   privileged access vault.\n4. For service accounts, update every place that uses the password, then restart the dependent\n   services.\n\n### Option B: Move service accounts to a gMSA\n1. Create a gMSA (`New-ADServiceAccount`) that the hosts running the service are allowed to use.\n2. Install it on those hosts (`Install-ADServiceAccount`) and reconfigure the service to run as\n   `<Domain>\\<gMSA>$` with an empty password.\n3. Disable the old account once the service runs under the gMSA.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# Review password age\nGet-ADUser -Identity \"<Account>\" -Properties PasswordLastSet, PasswordNeverExpires |\n    Select-Object SamAccountName, PasswordLastSet, PasswordNeverExpires\n\n# Reset the password (prompts for the new value without echoing it)\nSet-ADAccountPassword -Identity \"<Account>\" -Reset -NewPassword (Read-Host -AsSecureString \"New password\")\n\n# Optional: let the normal password policy apply again\nSet-ADUser -Identity \"<Account>\" -PasswordNeverExpires $false\n```\n\n## Verify\n```powershell\nGet-ADUser -Identity \"<Account>\" -Properties PasswordLastSet |\n    Select-Object SamAccountName, PasswordLastSet\n```\nCollect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone (or lists fewer accounts).\n\n## Rollback\nA password cannot be \"un-rotated\". If a service breaks, set the new password wherever the\nservice is configured (or reset again to a value you control and update the service), then\nrestart the service. Check 4625 events to find the failing host.\n\n## References\n- https://attack.mitre.org/techniques/T1078/002/\n- https://attack.mitre.org/techniques/T1550/002/\n- https://learn.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/group-managed-service-accounts-overview\n",
+    "PW-011": "# PW-011: Computers without LAPS\n\n**Category:** Hygiene\n**Typical owner:** Desktop / server team, with the AD team for schema and permissions\n\n## What this finding means\nThese enabled computers (domain controllers excluded) do not have their local administrator\npassword managed by LAPS. Their built-in local Administrator password is probably set by an\nimage or a script, and is often identical across many machines.\n\n## Why attackers care\nAfter compromising one computer, an attacker dumps the local Administrator hash from the SAM and\ntries it everywhere. If the password is shared, every computer with the same password falls\n(Use Alternate Authentication Material: Pass the Hash, MITRE ATT&CK T1550.002, and Lateral\nMovement via SMB/Windows Admin Shares, T1021.002). This is one of the most common ways a single\nphished workstation turns into domain-wide compromise during a pentest.\n\n## Before you change anything\n- Windows LAPS is built into Windows 10/11 and Windows Server 2019 and later with the April 2023\n  update. Older systems need legacy Microsoft LAPS, or an upgrade.\n- Decide who may read passwords. By default only Domain Admins can. Grant read access to a\n  dedicated helpdesk/desktop group per OU, never to broad groups.\n- Check for tooling that relies on the shared local admin password (deployment scripts, remote\n  support tools) and move it to LAPS retrieval or domain accounts first.\n- The schema update is forest-wide and needs Schema Admins rights. Plan it with the AD team.\n\n## Fix\n### Option A: Deploy Windows LAPS by Group Policy (recommended)\n1. Extend the schema once: run `Update-LapsADSchema` as a Schema Admin.\n2. Let computers write their own password: `Set-LapsADComputerSelfPermission -Identity \"<OU>\"`.\n3. Grant read access to the support group: `Set-LapsADReadPasswordPermission -Identity \"<OU>\" -AllowedPrincipals \"<Domain>\\<SupportGroup>\"`.\n4. In **Group Policy Management**, create a GPO linked to the OU and open\n   **Computer Configuration > Policies > Administrative Templates > System > LAPS**.\n5. Enable **Configure password backup directory** = **Active Directory**, and set\n   **Password Settings** (complexity, length 15+, age 30 days).\n6. Run `gpupdate /force` on a test computer and check that a password appears (see Verify).\n7. Widen the GPO to the remaining OUs in the finding.\n\n### Option B: Intune (for Entra-joined or co-managed devices)\nUse an Intune **Endpoint security > Account protection > Local admin password solution**\npolicy with the backup directory set to Active Directory (for hybrid-joined) or Entra ID.\n\n### PowerShell\n```powershell\n# One-time forest preparation (Schema Admins)\nUpdate-LapsADSchema\n\n# Per OU: allow computers to update their own password attributes\nSet-LapsADComputerSelfPermission -Identity \"<OU>\"\n\n# Per OU: allow the support group to read passwords\nSet-LapsADReadPasswordPermission -Identity \"<OU>\" -AllowedPrincipals \"<Domain>\\<SupportGroup>\"\n\n# After GPO deployment: confirm a computer has a managed password\nGet-LapsADPassword -Identity \"<Computer>\" -AsPlainText\n```\n\n## Verify\n`Get-LapsADPassword -Identity \"<Computer>\"` returns a password and an expiration time. On the\nclient, the event log **Applications and Services Logs > Microsoft > Windows > LAPS > Operational**\nshows successful password updates. Collect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone (or lists\nfewer computers).\n\n## Rollback\nUnlink or disable the LAPS GPO. Computers keep their last LAPS-set password, so retrieve it with\n`Get-LapsADPassword` before removing read permissions. The schema extension is permanent but\nharmless.\n\n## References\n- https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview\n- https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-scenarios-windows-server-active-directory\n- https://attack.mitre.org/techniques/T1550/002/\n",
+    "PW-012": "# PW-012: Cross-forest trust without SID filtering\n\n**Category:** Hygiene\n**Typical owner:** AD / identity team\n\n## What this finding means\nThis external or forest trust does not filter security identifiers (SIDs). Authentication\ncoming from the trusted domain may carry SIDs that belong to your domain, for example in the\nSID history of an account, and your domain will honour them.\n\n## Why attackers care\nAn attacker who compromises the trusted domain can forge a Kerberos ticket that includes the SID\nof a privileged group in your domain, such as Domain Admins, in its SID history. Without\nfiltering, your domain grants that access across the trust (Access Token Manipulation: SID-History\nInjection, MITRE ATT&CK T1134.005). The other forest's security then becomes yours: a breach there\nis a breach here.\n\n## Before you change anything\n- SID filtering is usually disabled on purpose during a **migration**, so migrated accounts keep\n  access through their old SIDs in sIDHistory. Confirm with the AD team whether a migration is\n  still running.\n- Find users who still depend on SID history: `Get-ADUser -Filter * -Properties SIDHistory | Where-Object SIDHistory`.\n  Re-permission their resources with their new SIDs before enabling filtering.\n- Enabling quarantine on an **external** trust also filters SIDs from other domains in the\n  trusted forest. Plan for access that crosses those domains.\n\n## Fix\n### Option A: Enable SID filtering (quarantine) on the trust (recommended)\nRun on a domain controller of the trusting domain (the domain that grants access), as a\nDomain Admin. `<TrustingDomain>` is the domain shown first in the finding title.\n1. Open an elevated command prompt.\n2. Run: `netdom trust <TrustingDomain> /domain:<TrustedDomain> /quarantine:yes`\n3. For a **forest** trust, also make sure SID history is not enabled across it:\n   `netdom trust <TrustingDomain> /domain:<TrustedDomain> /enablesidhistory:no`\n\n### Option B: Finish the migration, clean up SID history, then filter\n1. Re-permission resources that still rely on old SIDs.\n2. Clear sIDHistory from migrated accounts.\n3. Apply Option A.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# Inspect the trust (SIDFilteringQuarantined / SIDFilteringForestAware columns)\nGet-ADTrust -Filter \"Target -eq '<TrustedDomain>'\" |\n    Select-Object Name, Direction, TrustType, SIDFilteringQuarantined, SIDFilteringForestAware\n\n# Find accounts that still carry SID history\nGet-ADUser -Filter * -Properties SIDHistory | Where-Object { $_.SIDHistory } |\n    Select-Object SamAccountName, SIDHistory\n\n# Enable quarantine (run from an elevated prompt on a DC of the trusting domain)\nnetdom trust <TrustingDomain> /domain:<TrustedDomain> /quarantine:yes\n```\n\n## Verify\n`netdom trust <TrustingDomain> /domain:<TrustedDomain> /quarantine` reports that SID filtering is\nenabled. Collect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone.\n\n## Rollback\n`netdom trust <TrustingDomain> /domain:<TrustedDomain> /quarantine:no` restores the previous\nbehaviour. Do this only temporarily, and with a dated suppression in `pathwarden.toml`.\n\n## References\n- https://attack.mitre.org/techniques/T1134/005/\n- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netdom-trust\n",
+    "PW-013": "# PW-013: Accounts that may have an empty password\n\n**Category:** Hygiene\n**Typical owner:** AD / identity team\n\n## What this finding means\nThese enabled accounts have the PASSWD_NOTREQD flag (userAccountControl 0x20) set. With this\nflag, the account is exempt from the domain password policy and may have an empty password. The\nflag is often left behind by old provisioning tools or scripted account creation.\n\n## Why attackers care\nAttackers enumerate accounts with this flag (any domain user can read userAccountControl) and try\na blank password against each one. A hit gives a working domain account with no cracking needed\n(Valid Accounts: Domain Accounts, MITRE ATT&CK T1078.002). If any of these accounts is privileged,\nthe finding is rated higher because it is a direct route to Tier Zero.\n\n## Before you change anything\n- Find out which tool created the accounts. Some provisioning systems set the flag again on their\n  next sync. Fix the tool's template as well.\n- Clearing the flag does not change the current password. If the password is actually empty,\n  the account keeps working with an empty password until you reset it.\n- For service accounts, find where the password is configured before resetting it (see PW-010).\n\n## Fix\n### Option A: Clear the flag and reset the password (recommended)\n1. Clear the flag with PowerShell (below). Active Directory Users and Computers does not show\n   this flag; to do it in the GUI, use the **Attribute Editor** tab and remove 0x20 from\n   **userAccountControl**.\n2. In **Active Directory Users and Computers**, right-click the account > **Reset Password** and\n   set a strong password.\n3. For service accounts, update the password wherever it is configured and restart the services.\n\n### Option B: Disable unused accounts\nIf an account in the list is not needed, disable it instead (`Disable-ADAccount`).\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# List enabled accounts with PASSWD_NOTREQD (0x20)\nGet-ADUser -LDAPFilter \"(&(userAccountControl:1.2.840.113556.1.4.803:=32)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))\" |\n    Select-Object SamAccountName\n\n# Clear the flag\nSet-ADAccountControl -Identity \"<Account>\" -PasswordNotRequired $false\n\n# Reset the password so it meets policy (prompts without echoing)\nSet-ADAccountPassword -Identity \"<Account>\" -Reset -NewPassword (Read-Host -AsSecureString \"New password\")\n```\n\n## Verify\n```powershell\nGet-ADUser -Identity \"<Account>\" -Properties PasswordNotRequired |\n    Select-Object SamAccountName, PasswordNotRequired\n```\n`PasswordNotRequired` should be `False`. Collect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone (or lists\nfewer accounts).\n\n## Rollback\n`Set-ADAccountControl -Identity \"<Account>\" -PasswordNotRequired $true` restores the flag. This\nis rarely needed: an account with a valid password works the same with or without the flag.\n\n## References\n- https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/useraccountcontrol-manipulate-account-properties\n- https://attack.mitre.org/techniques/T1078/002/\n",
+    "PW-014": "# PW-014: krbtgt password not rotated\n\n**Category:** Hygiene\n**Typical owner:** AD / identity team\n\n## What this finding means\nThe krbtgt account's password has not been changed within the configured period (180 days by\ndefault). The key derived from this password signs and encrypts every Kerberos ticket-granting\nticket (TGT) in the domain.\n\n## Why attackers care\nAnyone who has ever obtained the krbtgt hash, for example through DCSync, a stolen DC backup or a\npast breach, can forge TGTs for any user with any group membership. These are \"golden tickets\"\n(Steal or Forge Kerberos Tickets: Golden Ticket, MITRE ATT&CK T1558.001). The forged tickets keep\nworking until the krbtgt password has been changed **twice**, because domain controllers accept\nboth the current and the previous key. Regular rotation limits how long a stolen key stays useful.\n\n## Before you change anything\n- Make sure Active Directory replication is healthy: `repadmin /replsummary` should show no\n  failures. A rotation that does not reach every DC causes Kerberos failures.\n- Read-only DCs have their own krbtgt_XXXXX accounts. Microsoft's script can handle those too.\n- Rotate **twice**, with a wait between the rotations. The first change invalidates nothing on\n  its own (the old key is still accepted as the previous key). The second change invalidates\n  every ticket signed with the original key. Rotating twice in quick succession can break\n  existing sessions and services before their tickets renew.\n- Schedule the work in a change window and tell the service desk. Users may need to log off and on.\n\n## Fix\n### Option A: Microsoft's New-KrbtgtKeys.ps1 (recommended)\n1. Download `New-KrbtgtKeys.ps1` from Microsoft's official GitHub repository (see References).\n2. Run it on a domain-joined admin host as a Domain Admin. Start with the **simulation** /\n   read-only test modes it offers to check that all DCs are reachable and replicating.\n3. Run the **reset** mode for the domain's krbtgt account (first rotation).\n4. Wait at least the maximum user ticket lifetime (10 hours by default, see\n   **Default Domain Policy > Kerberos Policy**) **and** until replication of the change to every\n   DC is confirmed. Many organisations wait 24 hours.\n5. Run the reset mode a second time (second rotation).\n6. Repeat the double rotation at least every 180 days. After a suspected compromise, do it\n   immediately.\n\n### Option B: Manual reset\nIn **Active Directory Users and Computers**, enable **View > Advanced Features**, right-click\n**krbtgt** in the Users container > **Reset Password** and enter any value. Windows replaces it\nwith a random password. Repeat after the wait described above. The script is preferred because\nit verifies replication.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# Check the current password age\nGet-ADUser -Identity krbtgt -Properties PasswordLastSet | Select-Object Name, PasswordLastSet\n\n# Confirm replication health before and between rotations\nrepadmin /replsummary\n\n# Run Microsoft's script and follow its menu: simulation first, then reset.\n# Run it twice in total, waiting >= max ticket lifetime (default 10h) and for full\n# replication between the two resets.\n.\\New-KrbtgtKeys.ps1\n```\n\n## Verify\n`Get-ADUser krbtgt -Properties PasswordLastSet` shows a recent date, and `repadmin /showobjmeta\n<DC> \"CN=krbtgt,CN=Users,DC=<domain>,DC=<tld>\"` shows the same unicodePwd version on every DC.\nCollect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone.\n\n## Rollback\nA krbtgt rotation cannot be undone. If clients report Kerberos errors after the first rotation,\nwait for replication to finish and have affected users log off and on (or run `klist purge`).\nDo not perform the second rotation until the first has fully replicated.\n\n## References\n- https://github.com/microsoft/New-KrbtgtKeys.ps1\n- https://attack.mitre.org/techniques/T1558/001/\n- https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/ad-forest-recovery-resetting-the-krbtgt-password\n",
+    "PW-023": "# PW-023: Non-Tier Zero principal can log on to domain controllers\n\n**Category:** Hygiene\n**Typical owner:** AD / identity team\n\n## What this finding means\nA user, computer or group outside Tier Zero can open a session on domain\ncontrollers through Remote Desktop, PowerShell remoting (WinRM) or DCOM. On a\ndomain controller these rights do not come from a local group, because DCs have\nno local accounts database. They come from the domain's built-in groups:\n**Remote Desktop Users** (S-1-5-32-555), **Remote Management Users**\n(S-1-5-32-580) and **Distributed COM Users** (S-1-5-32-562). These groups are\nshared by every DC in the domain. A GPO linked to the Domain Controllers OU can\nalso grant them.\n\nPathwarden does not draw this as an attack path: a session alone is not control\nof the domain. It is one step from it, though.\n\n## Why attackers care\nA logon on a DC puts an attacker's code on the most sensitive server in the\ndomain. One local privilege escalation (an unpatched driver, a misconfigured\nservice, a token impersonation bug) turns it into SYSTEM on the DC, which means\nthe NTDS.dit database, every password hash and the krbtgt key (OS Credential\nDumping: NTDS, T1003.003). It also lets the attacker read whatever the DC\nexposes to logged-on users: scripts, shares and memory left by other sessions.\n\n## Before you change anything\n- Find out who uses the access and why. Helpdesk and monitoring teams are\n  often given RDP to DCs \"temporarily\", and some monitoring agents use WinRM.\n- Monitoring and management tools that need WinRM on DCs should use a\n  dedicated, tightly scoped account, ideally in Tier Zero and managed as such,\n  or a pull model that needs no inbound logon.\n- Check whether the right comes from group membership (most common) or from a\n  GPO user right on the Domain Controllers OU; the finding's fix lists both.\n\n## Fix\n### Option A: Empty the built-in groups (recommended)\n1. In **Active Directory Users and Computers**, open the **Builtin** container\n   of the domain.\n2. Open **Remote Desktop Users**, **Remote Management Users** and\n   **Distributed COM Users**, and remove the principal from the finding (and\n   anything else that is not Tier Zero).\n3. Leave Domain Admins and other Tier Zero administrators as they are: they\n   can already log on to DCs through Administrators.\n### Option B: Remove GPO-granted logon rights\n1. In **Group Policy Management**, review every GPO linked to the **Domain\n   Controllers** OU (usually only the Default Domain Controllers Policy).\n2. Under **Computer Configuration > Policies > Windows Settings > Security\n   Settings > Local Policies > User Rights Assignment**, check **Allow log on\n   through Remote Desktop Services** and **Access this computer from the\n   network**, and remove the principal from both.\n\n### PowerShell\n```powershell\nImport-Module ActiveDirectory\n\n# Who is in the built-in remote access groups?\n'Remote Desktop Users', 'Remote Management Users', 'Distributed COM Users' |\n    ForEach-Object { Get-ADGroupMember -Identity $_ -Recursive | Select-Object @{ n = 'Group'; e = { $_ } }, Name, objectClass }\n\n# Remove the principal from the finding\nRemove-ADGroupMember -Identity 'Remote Desktop Users' -Members '<Principal>' -Confirm:$false\n```\n\n## Verify\nA Remote Desktop or `Enter-PSSession` attempt by the principal to a listed DC\nmust be refused. Collect again (or use Retest in the app, or `pathwarden retest` on the CLI) and confirm the finding ID is gone.\n\n## Rollback\nAdd the principal back with\n`Add-ADGroupMember -Identity '<Group>' -Members '<Principal>'`, or restore the\nuser right in the GPO and run `gpupdate /force` on the domain controllers.\n\n## References\n- https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/implementing-least-privilege-administrative-models\n- https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/understand-security-groups\n- https://attack.mitre.org/techniques/T1003/003/\n"
+  }
+}

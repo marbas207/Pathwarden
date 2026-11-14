@@ -1,0 +1,36 @@
+{
+  "_comment": "The parity query set Q for the Cypher engine. The spike implements the six shapes below (design §6.1). The fuller Q1-Q16 (design §4.3) drop in here as the parser grows (variable-length, shortestPath, functions). Each query gets a golden at golden/<id>.json once captured from a pinned BHE.",
+  "capture": "data/goad (SharpHound 2.3.3, SEVENKINGDOMS / NORTH / ESSOS)",
+  "queries": [
+    {
+      "id": "S1",
+      "shape": "label match",
+      "query": "MATCH (n:Domain) RETURN n"
+    },
+    {
+      "id": "S2",
+      "shape": "tier-zero virtual label",
+      "query": "MATCH (n:Tag_Tier_Zero) RETURN n"
+    },
+    {
+      "id": "S3",
+      "shape": "boolean property filter (Kerberoastable)",
+      "query": "MATCH (n:User) WHERE n.hasspn = true RETURN n"
+    },
+    {
+      "id": "S4",
+      "shape": "string filter (case-sensitive CONTAINS)",
+      "query": "MATCH (c:Computer) WHERE c.operatingsystem CONTAINS \"Server\" RETURN c"
+    },
+    {
+      "id": "S5",
+      "shape": "fixed relationship pattern (raw adjacency)",
+      "query": "MATCH (a)-[:MemberOf]->(b) RETURN a, b"
+    },
+    {
+      "id": "S6",
+      "shape": "ADCS abuse edge (probes Gap 4 data-equivalence)",
+      "query": "MATCH (a)-[:ADCSESC1]->(b) RETURN a, b"
+    }
+  ]
+}

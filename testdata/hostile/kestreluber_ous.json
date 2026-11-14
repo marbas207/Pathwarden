@@ -1,0 +1,86 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "BBBB0000-0000-0000-0000-000000000001",
+      "Properties": {
+        "name": "WORKSTATIONS@KESTRELÜBER.LOCAL",
+        "domain": "KESTRELÜBER.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000",
+        "distinguishedname": "OU=WORKSTATIONS,DC=KESTRELÜBER,DC=LOCAL"
+      },
+      "Links": [
+        {
+          "IsEnforced": false,
+          "GUID": "AAAA0000-0000-0000-0000-000000000001"
+        }
+      ],
+      "ChildObjects": [
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1002",
+          "ObjectType": "Computer"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false,
+      "ContainedBy": {
+        "ObjectIdentifier": "S-1-5-21-1000-1000-1000",
+        "ObjectType": "Domain"
+      }
+    },
+    {
+      "ObjectIdentifier": "BBBB0000-0000-0000-0000-000000000002",
+      "Properties": {
+        "name": "DOMAIN CONTROLLERS@KESTRELÜBER.LOCAL",
+        "domain": "KESTRELÜBER.LOCAL",
+        "domainsid": "S-1-5-21-1000-1000-1000",
+        "distinguishedname": "OU=DOMAIN CONTROLLERS,DC=KESTRELÜBER,DC=LOCAL"
+      },
+      "Links": [
+        {
+          "IsEnforced": false,
+          "GUID": "6AC1786C-016F-11D2-945F-00C04FB984F9"
+        }
+      ],
+      "ChildObjects": [
+        {
+          "ObjectIdentifier": "S-1-5-21-1000-1000-1000-1000",
+          "ObjectType": "Computer"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false,
+      "ContainedBy": {
+        "ObjectIdentifier": "S-1-5-21-1000-1000-1000",
+        "ObjectType": "Domain"
+      }
+    },
+    {
+      "ObjectIdentifier": "CCCC0000-0000-0000-0000-000000000001",
+      "Properties": {
+        "name": "TIER0 ADMINS@CHILD.KESTRELÜBER.LOCAL",
+        "domain": "CHILD.KESTRELÜBER.LOCAL",
+        "domainsid": "S-1-5-21-2000-2000-2000",
+        "distinguishedname": "OU=TIER0 ADMINS,DC=CHILD,DC=KESTRELÜBER,DC=LOCAL"
+      },
+      "Links": [],
+      "ChildObjects": [
+        {
+          "ObjectIdentifier": "S-1-5-21-2000-2000-2000-1201",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false,
+      "ContainedBy": {
+        "ObjectIdentifier": "S-1-5-21-2000-2000-2000",
+        "ObjectType": "Domain"
+      }
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "ous",
+    "count": 3,
+    "version": 6
+  }
+}

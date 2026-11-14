@@ -1,0 +1,83 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1101",
+      "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-513",
+      "Properties": {
+        "name": "ALICE@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "enabled": true
+      },
+      "Aces": []
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1102",
+      "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-513",
+      "Properties": {
+        "name": "BOB@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "enabled": true
+      },
+      "Aces": []
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1103",
+      "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-513",
+      "Properties": {
+        "name": "CAROL@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "enabled": true
+      },
+      "Aces": []
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1104",
+      "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-513",
+      "Properties": {
+        "name": "DAVE@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "enabled": true
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-5000-5000-5000-1103",
+          "PrincipalType": "User",
+          "RightName": "GenericWrite",
+          "IsInherited": false
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1105",
+      "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-513",
+      "Properties": {
+        "name": "EVE@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "enabled": true
+      },
+      "Aces": []
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1106",
+      "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-513",
+      "Properties": {
+        "name": "FRANK@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "enabled": true
+      },
+      "Aces": []
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "users",
+    "count": 6,
+    "version": 6
+  }
+}

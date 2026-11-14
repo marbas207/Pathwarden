@@ -1,0 +1,19 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (an empty workspace, on a drive P:)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 520,
+  "gif": ["--hold-end", "1200", "--fast", "8.6-11.0:2"],
+  "steps": [
+    {"do": "wait", "ms": 400},
+    {"do": "click", "sel": "nav a[href=\"/collect\"]", "ms": 900},
+    {"do": "click", "sel": "a.src-choice[href=\"/analyze\"]", "ms": 900},
+    {"do": "hover", "sel": "#dropzone .link", "ms": 300},
+    {"do": "upload", "sel": "#files", "files": ["demo/20261001020000_PathwardenDemo.zip"], "ms": 1300},
+    {"do": "scroll", "sel": "#ew", "block": "center", "ms": 600},
+    {"do": "hover", "sel": "#ew", "ms": 900},
+    {"do": "waitFor", "js": "!document.getElementById('start').disabled", "timeout": 30000},
+    {"do": "click", "sel": "#start", "ms": 300},
+    {"do": "waitFor", "js": "location.pathname.startsWith('/runs/')", "timeout": 120000},
+    {"do": "waitFor", "sel": "report: .hero-line", "timeout": 20000, "ms": 900},
+    {"do": "hover", "sel": "report: .hero-line", "ms": 1000}
+  ]
+}

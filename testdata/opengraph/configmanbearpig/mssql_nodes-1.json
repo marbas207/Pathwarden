@@ -1,0 +1,55 @@
+{
+  "graph": {
+    "nodes": [
+      {
+        "id": "S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_Server"
+        ],
+        "properties": {
+          "name": "ws01.corp.local",
+          "SCCMInfra": true,
+          "SCCMSite": "PS1",
+          "databases": [
+            "CM_PS1"
+          ]
+        }
+      },
+      {
+        "id": "CORP\\CAROL@S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_Login"
+        ],
+        "properties": {
+          "name": "CORP\\CAROL",
+          "type": "WINDOWS_LOGIN",
+          "disabled": false
+        }
+      },
+      {
+        "id": "sysadmin@S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_ServerRole"
+        ],
+        "properties": {
+          "name": "sysadmin",
+          "isFixedRole": true
+        }
+      },
+      {
+        "id": "S-1-5-21-3000-3000-3000-1002:1433\\CM_PS1",
+        "kinds": [
+          "MSSQL_Database"
+        ],
+        "properties": {
+          "name": "CM_PS1",
+          "SCCMSite": "PS1"
+        }
+      }
+    ],
+    "edges": []
+  },
+  "metadata": {
+    "source_kind": "MSSQL"
+  }
+}

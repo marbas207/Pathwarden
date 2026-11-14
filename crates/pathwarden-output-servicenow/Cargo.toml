@@ -1,0 +1,25 @@
+[package]
+name = "pathwarden-output-servicenow"
+description = "Pathwarden output plugin: findings as ServiceNow incidents or requested items"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "pathwarden-output-servicenow"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+url = "2"
+zeroize = "1"
+ureq = { version = "2", default-features = false, features = ["tls", "json", "native-certs"] }
+
+[dev-dependencies]
+# A local TLS server with a self-signed certificate, which the client must
+# refuse (the version ureq already uses).
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

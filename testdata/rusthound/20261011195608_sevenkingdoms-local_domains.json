@@ -1,0 +1,86 @@
+{
+ "data": [
+  {
+   "Properties": {
+    "domain": "SEVENKINGDOMS.LOCAL",
+    "name": "SEVENKINGDOMS.LOCAL",
+    "distinguishedname": "DC=SEVENKINGDOMS,DC=LOCAL",
+    "domainsid": "S-1-5-21-1821261621-2407627684-1290984713",
+    "objectguid": "79C1C4BB-02F9-4C82-8916-938C7F451489",
+    "netbios": "",
+    "isaclprotected": false,
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "highvalue": true,
+    "description": null,
+    "whencreated": 1791732644,
+    "machineaccountquota": 10,
+    "expirepasswordsonsmartcardonlyaccounts": true,
+    "minpwdlength": 5,
+    "pwdproperties": 0,
+    "pwdhistorylength": 24,
+    "lockoutthreshold": 5,
+    "minpwdage": "1 day",
+    "maxpwdage": "37201 days",
+    "lockoutduration": "5 minutes",
+    "lockoutobservationwindow": -3000000000,
+    "functionallevel": "2016",
+    "dsheuristics": "",
+    "collected": true
+   },
+   "GPOChanges": {
+    "LocalAdmins": [],
+    "RemoteDesktopUsers": [],
+    "DcomUsers": [],
+    "PSRemoteUsers": [],
+    "AffectedComputers": [
+     {
+      "ObjectIdentifier": "S-1-5-21-1821261621-2407627684-1290984713-1001",
+      "ObjectType": "Computer"
+     }
+    ]
+   },
+   "ChildObjects": [],
+   "Trusts": [
+    {
+     "TargetDomainSid": "S-1-5-21-598173948-4160376358-1679180510",
+     "TargetDomainName": "NORTH.SEVENKINGDOMS.LOCAL",
+     "IsTransitive": true,
+     "SidFilteringEnabled": false,
+     "TrustAttributes": 32,
+     "TrustDirection": "Bidirectional",
+     "TrustType": "ParentChild"
+    },
+    {
+     "TargetDomainSid": "S-1-5-21-907917752-839331996-494631781",
+     "TargetDomainName": "ESSOS.LOCAL",
+     "IsTransitive": true,
+     "SidFilteringEnabled": true,
+     "TrustAttributes": 72,
+     "TrustDirection": "Bidirectional",
+     "TrustType": "Forest"
+    }
+   ],
+   "Links": [
+    {
+     "IsEnforced": false,
+     "GUID": "BCBDC121-4CD8-4D92-93FC-1EA4CF560314"
+    }
+   ],
+   "InheritanceHashes": [],
+   "ForestRootIdentifier": null,
+   "Aces": [],
+   "ObjectIdentifier": "S-1-5-21-1821261621-2407627684-1290984713",
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "ContainedBy": null
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "domains",
+  "count": 1,
+  "version": 6,
+  "collectorversion": "RustHound-CE v2.5.23"
+ }
+}

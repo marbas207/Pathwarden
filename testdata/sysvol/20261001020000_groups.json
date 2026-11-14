@@ -1,0 +1,40 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-512",
+      "Properties": {
+        "name": "DOMAIN ADMINS@SYS.LOCAL",
+        "domain": "SYS.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "admincount": true
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-500",
+          "ObjectType": "User"
+        },
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1101",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": []
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "DOMAIN USERS@SYS.LOCAL",
+        "domain": "SYS.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000"
+      },
+      "Members": [],
+      "Aces": []
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "groups",
+    "count": 2,
+    "version": 6
+  }
+}

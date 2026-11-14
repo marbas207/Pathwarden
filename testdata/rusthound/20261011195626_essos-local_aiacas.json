@@ -1,0 +1,116 @@
+{
+ "data": [
+  {
+   "Properties": {
+    "domain": "ESSOS.LOCAL",
+    "name": "ESSOS-CA@ESSOS.LOCAL",
+    "distinguishedname": "CN=ESSOS-CA,CN=AIA,CN=PUBLIC KEY SERVICES,CN=SERVICES,CN=CONFIGURATION,DC=ESSOS,DC=LOCAL",
+    "domainsid": "S-1-5-21-907917752-839331996-494631781",
+    "objectguid": "9B7FB174-816E-41A6-B5BC-395E456FC43E",
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "isaclprotected": false,
+    "description": null,
+    "whencreated": 1791737991,
+    "crosscertificatepair": [],
+    "hascrosscertificatepair": false,
+    "certthumbprint": "5206FC4F6CAFC22D78410DB6B49938E8B81B59C2",
+    "certname": "5206FC4F6CAFC22D78410DB6B49938E8B81B59C2",
+    "certchain": [
+     "5206FC4F6CAFC22D78410DB6B49938E8B81B59C2"
+    ],
+    "hasbasicconstraints": false,
+    "basicconstraintpathlength": 0
+   },
+   "DomainSID": "S-1-5-21-907917752-839331996-494631781",
+   "Aces": [
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "Owns",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+     "PrincipalType": "Group",
+     "RightName": "GenericAll",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "GenericAll",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-1104",
+     "PrincipalType": "Computer",
+     "RightName": "GenericAll",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "ESSOS.LOCAL-S-1-5-32-544",
+     "PrincipalType": "Group",
+     "RightName": "GenericAll",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "GenericAll",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+     "PrincipalType": "Group",
+     "RightName": "WriteOwner",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+     "PrincipalType": "Group",
+     "RightName": "WriteDacl",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    }
+   ],
+   "ObjectIdentifier": "9B7FB174-816E-41A6-B5BC-395E456FC43E",
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "ContainedBy": {
+    "ObjectIdentifier": "C20E772F-94B1-491A-B996-5FAFD6EF92E0",
+    "ObjectType": "Container"
+   }
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "aiacas",
+  "count": 1,
+  "version": 6,
+  "collectorversion": "RustHound-CE v2.5.23"
+ }
+}

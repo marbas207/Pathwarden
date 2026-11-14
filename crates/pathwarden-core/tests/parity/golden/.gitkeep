@@ -1,0 +1,2 @@
+# Goldens drop in here once captured from a pinned BloodHound CE (see ../README.md).
+# BHE capture is a separate, manual lab step and is NOT part of the #81 spike.

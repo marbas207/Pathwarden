@@ -1,0 +1,16 @@
+{{#each licenses}}
+### {{{name}}}
+
+Used by:
+
+{{#each used_by}}
+{{#unless (eq crate.repository "https://github.com/marbas207/Pathwarden")}}
+- {{crate.name}} {{crate.version}}{{#if crate.repository}} <{{crate.repository}}>{{/if}}
+{{/unless}}
+{{/each}}
+
+~~~~text
+{{{text}}}
+~~~~
+
+{{/each}}

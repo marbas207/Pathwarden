@@ -1,0 +1,580 @@
+{
+ "data": [
+  {
+   "kind": "AZTenant",
+   "data": {
+    "id": "/tenants/22222222-3333-4444-5555-666666666666",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "displayName": "Contoso",
+    "defaultDomain": "contoso.onmicrosoft.com",
+    "collected": true,
+    "tenantType": "AAD"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000001",
+    "userPrincipalName": "ga@contoso.onmicrosoft.com",
+    "displayName": "Ga",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000002",
+    "userPrincipalName": "helpdesk@contoso.onmicrosoft.com",
+    "displayName": "Helpdesk",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000003",
+    "userPrincipalName": "useradmin@contoso.onmicrosoft.com",
+    "displayName": "Useradmin",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000004",
+    "userPrincipalName": "dev@contoso.onmicrosoft.com",
+    "displayName": "Dev",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000005",
+    "userPrincipalName": "auadmin@contoso.onmicrosoft.com",
+    "displayName": "Auadmin",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com",
+    "userType": "Member"
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000006",
+    "userPrincipalName": "mark@contoso.com",
+    "displayName": "Mark",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com",
+    "userType": "Member",
+    "onPremisesSecurityIdentifier": "S-1-5-21-5000-5000-5000-1101",
+    "onPremisesSyncEnabled": true
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "62e90394-69f5-4237-9190-012177145e10",
+    "templateId": "62e90394-69f5-4237-9190-012177145e10",
+    "displayName": "Global Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "e8611ab8-c189-46e8-94e1-60213ab1f814",
+    "templateId": "e8611ab8-c189-46e8-94e1-60213ab1f814",
+    "displayName": "Privileged Role Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "7be44c8a-adaf-4e2a-84d6-ab2649e08a13",
+    "templateId": "7be44c8a-adaf-4e2a-84d6-ab2649e08a13",
+    "displayName": "Privileged Authentication Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "d29b2b05-8046-44ba-8758-1e26182fcf32",
+    "templateId": "d29b2b05-8046-44ba-8758-1e26182fcf32",
+    "displayName": "Directory Synchronization Accounts",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+    "templateId": "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+    "displayName": "Helpdesk Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "fe930be7-5e62-47db-91af-98c3a49a38b1",
+    "templateId": "fe930be7-5e62-47db-91af-98c3a49a38b1",
+    "displayName": "User Administrator",
+    "isBuiltIn": true,
+    "isEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZGroup",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000800",
+    "displayName": "App Owners",
+    "securityEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZGroup",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000810",
+    "displayName": "Tier0 Admins",
+    "isAssignableToRole": true,
+    "securityEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZGroup",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000820",
+    "displayName": "Cloud Ops",
+    "securityEnabled": true,
+    "onPremisesSyncEnabled": true,
+    "onPremisesSecurityIdentifier": "S-1-5-21-5000-5000-5000-1201",
+    "onPremisesSamAccountName": "CLOUD-OPS",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "displayName": "Microsoft Graph",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZApp",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000110",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000100",
+    "displayName": "Provisioner",
+    "publisherDomain": "contoso.onmicrosoft.com",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000101",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000100",
+    "displayName": "Provisioner",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000201",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000251",
+    "displayName": "Grantor",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000301",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000351",
+    "displayName": "AppManager",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000401",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000451",
+    "displayName": "EndpointBot",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000501",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000551",
+    "displayName": "GroupBot",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000601",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000651",
+    "displayName": "DirBot",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000701",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000751",
+    "displayName": "MemberBot",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZServicePrincipal",
+   "data": {
+    "id": "bbbbbbbb-0000-0000-0000-000000000801",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000851",
+    "displayName": "Reader",
+    "servicePrincipalType": "Application",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "contoso.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "9e3f62cf-ca93-4989-b6ce-bf83c28f9fe8",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000101-RoleManagement.ReadWrite.Directory",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000101",
+    "principalType": "ServicePrincipal",
+    "resourceDisplayName": "Microsoft Graph",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "06b708a9-e830-4db3-a914-8e69da51d44f",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000201-AppRoleAssignment.ReadWrite.All",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000201",
+    "principalType": "ServicePrincipal",
+    "resourceDisplayName": "Microsoft Graph",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000301-Application.ReadWrite.All",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000301",
+    "principalType": "ServicePrincipal",
+    "resourceDisplayName": "Microsoft Graph",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "89c8469c-83ad-45f7-8ff2-6e3d4285709e",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000401-ServicePrincipalEndpoint.ReadWrite.All",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000401",
+    "principalType": "ServicePrincipal",
+    "resourceDisplayName": "Microsoft Graph",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "62a82d76-70ea-41e2-9197-370581804d09",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000501-Group.ReadWrite.All",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000501",
+    "principalType": "ServicePrincipal",
+    "resourceDisplayName": "Microsoft Graph",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "19dbc75e-c2e2-444c-a770-ec69d8559fc7",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000601-Directory.ReadWrite.All",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000601",
+    "principalType": "ServicePrincipal",
+    "resourceDisplayName": "Microsoft Graph",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "dbaae8cf-10b5-4b86-a4a1-f871c94c6695",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000701-GroupMember.ReadWrite.All",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000701",
+    "principalType": "ServicePrincipal",
+    "resourceDisplayName": "Microsoft Graph",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "df021288-bdef-4463-88db-98f22de89214",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000801-User.Read.All",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000801",
+    "principalType": "ServicePrincipal",
+    "resourceDisplayName": "Microsoft Graph",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "9e3f62cf-ca93-4989-b6ce-bf83c28f9fe8",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000801-RoleManagement.ReadWrite.Directory",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000801",
+    "principalType": "ServicePrincipal",
+    "resourceDisplayName": "Provisioner",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000101",
+    "appId": "bbbbbbbb-0000-0000-0000-000000000150",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZAppRoleAssignment",
+   "data": {
+    "appRoleId": "9e3f62cf-ca93-4989-b6ce-bf83c28f9fe8",
+    "id": "ara-bbbbbbbb-0000-0000-0000-000000000004-RoleManagement.ReadWrite.Directory",
+    "principalDisplayName": "x",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000004",
+    "principalType": "User",
+    "resourceDisplayName": "Microsoft Graph",
+    "resourceId": "bbbbbbbb-0000-0000-0000-000000000900",
+    "appId": "00000003-0000-0000-c000-000000000000",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "62e90394-69f5-4237-9190-012177145e10",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "roleAssignments": [
+     {
+      "id": "ra-62e90394-69f5-4237-9190-012177145e10-bbbbbbbb-0000-0000-0000-000000000001",
+      "roleDefinitionId": "62e90394-69f5-4237-9190-012177145e10",
+      "principalId": "bbbbbbbb-0000-0000-0000-000000000001",
+      "directoryScopeId": "/"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "roleAssignments": [
+     {
+      "id": "ra-729827e3-9c14-49f7-bb1b-9608f156bbb8-bbbbbbbb-0000-0000-0000-000000000002",
+      "roleDefinitionId": "729827e3-9c14-49f7-bb1b-9608f156bbb8",
+      "principalId": "bbbbbbbb-0000-0000-0000-000000000002",
+      "directoryScopeId": "/administrativeUnits/cccccccc-0000-0000-0000-000000000001"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "62e90394-69f5-4237-9190-012177145e10",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "roleAssignments": [
+     {
+      "id": "ra-62e90394-69f5-4237-9190-012177145e10-bbbbbbbb-0000-0000-0000-000000000005",
+      "roleDefinitionId": "62e90394-69f5-4237-9190-012177145e10",
+      "principalId": "bbbbbbbb-0000-0000-0000-000000000005",
+      "directoryScopeId": "/administrativeUnits/cccccccc-0000-0000-0000-000000000001"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZRoleEligibilityScheduleInstance",
+   "data": {
+    "id": "elig-1",
+    "roleDefinitionId": "fe930be7-5e62-47db-91af-98c3a49a38b1",
+    "principalId": "bbbbbbbb-0000-0000-0000-000000000003",
+    "directoryScopeId": "/administrativeUnits/cccccccc-0000-0000-0000-000000000001",
+    "tenantId": "22222222-3333-4444-5555-666666666666"
+   }
+  },
+  {
+   "kind": "AZServicePrincipalOwner",
+   "data": {
+    "servicePrincipalId": "bbbbbbbb-0000-0000-0000-000000000101",
+    "owners": [
+     {
+      "servicePrincipalId": "bbbbbbbb-0000-0000-0000-000000000101",
+      "owner": {
+       "@odata.type": "#microsoft.graph.user",
+       "id": "bbbbbbbb-0000-0000-0000-000000000004"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZServicePrincipalOwner",
+   "data": {
+    "servicePrincipalId": "bbbbbbbb-0000-0000-0000-000000000301",
+    "owners": [
+     {
+      "servicePrincipalId": "bbbbbbbb-0000-0000-0000-000000000301",
+      "owner": {
+       "@odata.type": "#microsoft.graph.user",
+       "id": "bbbbbbbb-0000-0000-0000-000000000006"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "kind": "AZFederatedIdentityCredential",
+   "data": {
+    "appId": "BBBBBBBB-0000-0000-0000-000000000100",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "CONTOSO",
+    "fics": [
+     {
+      "appId": "BBBBBBBB-0000-0000-0000-000000000100",
+      "fic": {
+       "id": "DDDDDDDD-0000-0000-0000-000000000001",
+       "name": "deploy-main",
+       "issuer": "https://token.actions.githubusercontent.com",
+       "subject": "repo:contoso/provisioner:ref:refs/heads/main",
+       "audiences": [
+        "api://AzureADTokenExchange"
+       ],
+       "description": ""
+      }
+     },
+     {
+      "appId": "BBBBBBBB-0000-0000-0000-000000000100",
+      "fic": {
+       "id": "DDDDDDDD-0000-0000-0000-000000000002",
+       "name": "aks",
+       "issuer": "https://oidc.prod-aks.azure.com/fabrikam-cluster/",
+       "subject": "system:serviceaccount:provisioning:runner",
+       "audiences": [
+        "api://AzureADTokenExchange"
+       ],
+       "description": ""
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "meta": {
+  "type": "azure",
+  "version": 5,
+  "count": 43
+ }
+}

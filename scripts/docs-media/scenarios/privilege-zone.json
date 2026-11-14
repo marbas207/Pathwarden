@@ -1,0 +1,17 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it, on a drive P:)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 450,
+  "gif": ["--hold-end", "1300"],
+  "steps": [
+    {"do": "wait", "ms": 400},
+    {"do": "click", "sel": "nav a[href=\"/zones\"]", "ms": 700},
+    {"do": "click", "sel": "main a[href=\"/zones/new\"]", "ms": 700},
+    {"do": "click", "sel": "button.kchip-btn >> Tier 1 servers", "ms": 600},
+    {"do": "click", "sel": "main button.primary >> Next: members", "ms": 600},
+    {"do": "type", "sel": "#zp-q", "text": "r02s00-serv", "delay": 55, "ms": 200},
+    {"do": "waitFor", "sel": "li[role=\"option\"]", "timeout": 10000, "ms": 500},
+    {"do": "click", "sel": "li[role=\"option\"] >> R02S00-SERVERS@", "ms": 1500},
+    {"do": "click", "sel": "main button.primary >> Next: review", "ms": 1100},
+    {"do": "click", "sel": "main button.primary >> Save zone", "ms": 1800}
+  ]
+}

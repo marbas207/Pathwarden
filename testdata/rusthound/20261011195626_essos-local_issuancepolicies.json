@@ -1,0 +1,82 @@
+{
+ "data": [
+  {
+   "Properties": {
+    "domain": "ESSOS.LOCAL",
+    "name": "ISSUANCEPOLICYESC13@ESSOS.LOCAL",
+    "distinguishedname": "CN=71523850.4127C8E953A40C8AE2C931BB5439B10E,CN=OID,CN=PUBLIC KEY SERVICES,CN=SERVICES,CN=CONFIGURATION,DC=ESSOS,DC=LOCAL",
+    "domainsid": "S-1-5-21-907917752-839331996-494631781",
+    "objectguid": "935822EE-0E83-4A18-A97F-60D3B8F9F991",
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "isaclprotected": false,
+    "description": null,
+    "whencreated": 1791752963,
+    "displayname": "IssuancePolicyESC13",
+    "certtemplateoid": "1.3.6.1.4.1.311.21.8.15379420.11269011.1329286.12020410.14802519.153.15694297.71523850"
+   },
+   "GroupLink": {
+    "ObjectIdentifier": null,
+    "ObjectType": "Base"
+   },
+   "Aces": [
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "Owns",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+     "PrincipalType": "Group",
+     "RightName": "GenericAll",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "GenericAll",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+     "PrincipalType": "Group",
+     "RightName": "WriteOwner",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+     "PrincipalType": "Group",
+     "RightName": "WriteDacl",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    }
+   ],
+   "ObjectIdentifier": "935822EE-0E83-4A18-A97F-60D3B8F9F991",
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "ContainedBy": null
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "issuancepolicies",
+  "count": 1,
+  "version": 6,
+  "collectorversion": "RustHound-CE v2.5.23"
+ }
+}

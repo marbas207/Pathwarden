@@ -1,0 +1,81 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/pathwarden-core",
+    "crates/pathwarden-cli",
+    "crates/pathwarden-collect",
+    "crates/pathwarden-export",
+    "crates/pathwarden-output-jira",
+    "crates/pathwarden-output-servicenow",
+    "crates/pathwarden-ui",
+    "crates/pathwarden-desktop",
+]
+# Third-party code patched in (see [patch.crates-io]): not a member.
+exclude = ["vendor/ldap3", "vendor/rusthound-ce", "vendor/smb2-client"]
+
+# ldap3 0.12.1 (the latest release) with its SASL decoder fixed: it lost
+# data, and hung the current-user (Kerberos-sealed) collection, whenever a
+# sealed buffer held more than one LDAP message or one message spanned
+# several buffers. See vendor/ldap3/src/protocol.rs. RustHound-CE uses the
+# same ldap3, so the patch covers it too. Source: the `pathwarden` branch of
+# https://github.com/marbas207/ldap3 (upstream plus inejge/ldap3#160, this
+# fix, and inejge/ldap3#159, a public SASL bind step); see vendor/ldap3/Cargo.toml.
+#
+# smb2-client 0.2.5 (the latest release), the SMB client of RustHound-CE and
+# dcerpc, with required signing added: as published it signs requests
+# but never checks the signature on a reply. See vendor/smb2-client/Cargo.toml.
+#
+# rusthound-ce 2.5.30 (the built-in collector) with its vulnerable or
+# unmaintained dependencies bumped: zip 9, quick-xml 0.41, and
+# hickory-resolver 0.26 in place of trust-dns-resolver 0.23. Nothing else
+# changes. See vendor/rusthound-ce/Cargo.toml.
+[patch.crates-io]
+ldap3 = { path = "vendor/ldap3" }
+rusthound-ce = { path = "vendor/rusthound-ce" }
+smb2-client = { path = "vendor/smb2-client" }
+
+[workspace.package]
+version = "1.0.0-rc.1"
+edition = "2021"
+rust-version = "1.89"
+license = "Apache-2.0"
+repository = "https://github.com/marbas207/Pathwarden"
+homepage = "https://github.com/marbas207/Pathwarden"
+
+[workspace.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+petgraph = { version = "0.6", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
+toml_edit = "0.22"
+# Pinned: zip 9.4.2 and later require zeroize 1.9, which dcerpc's ntlmssp
+# 0.1.1 refuses (<1.9), so cargo would fall back to ntlmssp 0.1.0, which
+# doesn't wipe NTLM keys. 9.4.1 has every read-side fix (9.4.2's are AES and
+# ZipCrypto, which are off). Move on once ntlmssp accepts zeroize 1.9.
+zip = { version = "=9.4.1", default-features = false, features = ["deflate"] }
+
+# The history's passphrase (pathwarden-core/src/crypt.rs) runs scrypt at
+# 2^18: unoptimized, that takes many seconds in debug builds and tests.
+# Line numbers in backtraces, without full debug info: about half the build
+# folder and faster links.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.test]
+debug = "line-tables-only"
+
+[profile.dev.package.scrypt]
+opt-level = 3
+[profile.dev.package.salsa20]
+opt-level = 3
+[profile.dev.package.pbkdf2]
+opt-level = 3
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

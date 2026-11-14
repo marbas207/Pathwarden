@@ -1,0 +1,50 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-512",
+      "Properties": {
+        "name": "DOMAIN ADMINS@BROAD.LOCAL",
+        "domain": "BROAD.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-4000-4000-4000-500",
+          "ObjectType": "User"
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "DOMAIN USERS@BROAD.LOCAL",
+        "domain": "BROAD.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000"
+      },
+      "Members": []
+    },
+    {
+      "ObjectIdentifier": "BROAD.LOCAL-S-1-5-32-544",
+      "Properties": {
+        "name": "ADMINISTRATORS@BROAD.LOCAL",
+        "domain": "BROAD.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-4000-4000-4000-512",
+          "ObjectType": "Group"
+        },
+        {
+          "ObjectIdentifier": "S-1-5-21-4000-4000-4000-513",
+          "ObjectType": "Group"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "type": "groups",
+    "count": 3,
+    "version": 6
+  }
+}

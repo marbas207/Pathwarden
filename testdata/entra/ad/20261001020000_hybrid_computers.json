@@ -1,0 +1,81 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1000",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-516",
+      "Properties": {
+        "name": "DC01.HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true,
+        "operatingsystem": "Windows Server 2022 Standard"
+      },
+      "IsDC": true,
+      "DomainSID": "S-1-5-21-4000-4000-4000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1001",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-515",
+      "Properties": {
+        "name": "AADC01.HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true,
+        "operatingsystem": "Windows Server 2022 Standard"
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-4000-4000-4000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1002",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-515",
+      "Properties": {
+        "name": "WS01.HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true,
+        "operatingsystem": "Windows 11 Enterprise"
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-4000-4000-4000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [
+          {
+            "UserSID": "S-1-5-21-4000-4000-4000-1103",
+            "ComputerSID": "S-1-5-21-4000-4000-4000-1002"
+          }
+        ],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false,
+      "ContainedBy": null
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "computers",
+    "count": 3,
+    "version": 6
+  }
+}

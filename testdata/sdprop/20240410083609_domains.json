@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-6000-6000-6000",
+      "Properties": {
+        "name": "SDP.LOCAL",
+        "domain": "SDP.LOCAL",
+        "domainsid": "S-1-5-21-6000-6000-6000"
+      },
+      "Aces": [],
+      "Trusts": []
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "domains",
+    "count": 1,
+    "version": 6
+  }
+}

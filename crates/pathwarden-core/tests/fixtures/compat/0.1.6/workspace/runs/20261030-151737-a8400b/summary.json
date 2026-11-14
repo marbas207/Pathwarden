@@ -1,0 +1,39 @@
+{
+  "id": "20261030-151737-a8400b",
+  "created_at": 1793373457,
+  "collected_at": null,
+  "source": "C:\\pathwarden\\compat",
+  "demo": false,
+  "domains": [
+    "MGMT.LOCAL"
+  ],
+  "trusted_domains": [],
+  "objects": 23,
+  "files": 5,
+  "exposure_percent": 33.333333333333336,
+  "exposed": 3,
+  "population": 9,
+  "relevant_population": 9,
+  "exposure_basis": 2,
+  "protection_score": 44.44444444444444,
+  "critical": 0,
+  "high": 5,
+  "medium": 3,
+  "low": 5,
+  "info": 0,
+  "suppressed": 0,
+  "plan_steps": 3,
+  "exposed_after": 0,
+  "grade": "High",
+  "grade_reason": "3 accounts outside Tier Zero can reach it",
+  "status_reason": "3 accounts outside Tier Zero can reach it.",
+  "exposure_delta": 33.333333333333336,
+  "next_step_delta": 11.111111111111114,
+  "skipped_objects": 0,
+  "pathwarden": "0.1.6",
+  "history": {
+    "run_id": "20261030T151737.122Z"
+  },
+  "next_step": "Take ALICE out of local Administrators on AADC01",
+  "assigned": "chosen"
+}

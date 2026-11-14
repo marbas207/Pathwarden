@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Pathwarden"><defs><clipPath id="cwkfl"><rect x="0" y="0" width="64" height="44.5"/></clipPath><linearGradient id="cwkl" gradientUnits="userSpaceOnUse" x1="9" y1="25" x2="32" y2="12"><stop offset="0" stop-color="#6B00D6"/><stop offset="0.22" stop-color="#6B00D6"/><stop offset="0.9" stop-color="#1F8A3A"/></linearGradient><linearGradient id="cwkr" gradientUnits="userSpaceOnUse" x1="55" y1="25" x2="32" y2="12"><stop offset="0" stop-color="#6B00D6"/><stop offset="0.22" stop-color="#6B00D6"/><stop offset="0.9" stop-color="#1F8A3A"/></linearGradient><radialGradient id="cwkhg"><stop offset="0" stop-color="#1F8A3A" stop-opacity=".75"/><stop offset="1" stop-color="#1F8A3A" stop-opacity="0"/></radialGradient></defs><style>
+.cwk .n{transform-box:fill-box;transform-origin:center}
+.cwk .dr{stroke-dasharray:1.002 2}
+.cwk .pl{stroke-dasharray:.11 3;stroke-dashoffset:.11;opacity:0}
+.cwk .burst,.cwk .ring,.cwk .flash{opacity:0}
+.cwk .nl{animation:cwkpop .42s cubic-bezier(.2,.7,.2,1) 0.10s both}
+.cwk .nr{animation:cwkpop .42s cubic-bezier(.2,.7,.2,1) 1.56s both}
+.cwk .hl{animation:cwkdrawF 0.68s cubic-bezier(.55,0,.85,.5) 0.30s both}
+.cwk .hr{animation:cwkdrawR 0.64s cubic-bezier(.15,.5,.45,1) 0.98s both}
+.cwk .jw{animation:cwkjewel 2.14s linear both}
+.cwk .burst{animation:cwkburst .9s cubic-bezier(.1,.6,.3,1) 1.72s forwards}
+.cwk .bar{transform-box:fill-box;transform-origin:left center;animation:cwkwipe 0.55s cubic-bezier(.7,0,.2,1) 1.90s both}
+.cwk .pl{animation:cwkrun 4.0s cubic-bezier(.45,0,.6,1) 2.75s infinite}
+.cwk .flash{animation:cwkflash 4.0s ease-out 2.75s infinite}
+.cwk .ring{animation:cwkring 4.0s ease-out 2.75s infinite}
+.cwk .halo{transform-box:fill-box;transform-origin:center;animation:cwkhalo-in .8s ease-out 1.72s both,cwkbreathe 4.0s ease-in-out 2.75s infinite}
+@keyframes cwkpop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.28);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes cwkdrawF{from{stroke-dashoffset:1.002}to{stroke-dashoffset:0}}
+@keyframes cwkdrawR{from{stroke-dashoffset:-1.002}to{stroke-dashoffset:0}}
+@keyframes cwkjewel{0%,42.0%{transform:scale(0);opacity:0;fill:var(--seed)}
+ 48.1%{transform:scale(.62);opacity:1;fill:var(--seed)}
+ 79.4%{transform:scale(.62);opacity:1;fill:var(--seed)}
+ 89.2%{transform:scale(1.3);opacity:1;fill:var(--jewel)}
+ 100%{transform:scale(1);opacity:1;fill:var(--jewel)}}
+@keyframes cwkburst{0%{transform:scale(1);opacity:.95}100%{transform:scale(3.4);opacity:0}}
+@keyframes cwkwipe{from{transform:scaleX(0);opacity:.2}to{transform:scaleX(1);opacity:1}}
+@keyframes cwkrun{0%{stroke-dashoffset:.11;opacity:1}27%{stroke-dashoffset:-1;opacity:1}28%,100%{stroke-dashoffset:-1;opacity:0}}
+@keyframes cwkflash{0%,24%{opacity:0}29%{opacity:.85}48%,100%{opacity:0}}
+@keyframes cwkring{0%,26%{transform:scale(1);opacity:0}29%{transform:scale(1);opacity:.8}62%,100%{transform:scale(2.7);opacity:0}}
+@keyframes cwkhalo-in{from{opacity:0}to{opacity:.55}}
+@keyframes cwkbreathe{0%,100%{opacity:.55;transform:scale(1)}30%{opacity:.9;transform:scale(1.12)}}
+@media (prefers-reduced-motion: reduce){.cwk *{animation:none!important}.cwk .halo{opacity:.55}}
+</style><g class="cwk" transform="scale(4.0000)"><circle class="halo" cx="32" cy="12" r="17.55" fill="url(#cwkhg)" opacity=".55"/><g clip-path="url(#cwkfl)" fill="none" stroke-width="7" stroke-linejoin="miter" stroke-miterlimit="2.6"><path class="dr hl" pathLength="1" d="M9 19 L20.5 44 L32 12" stroke="url(#cwkl)"/><path class="dr hr" pathLength="1" d="M55 19 L43.5 44 L32 12" stroke="url(#cwkr)"/><path class="pl" pathLength="1" d="M9 19 L20.5 44 L32 12" stroke="#7CE46B" stroke-width="4.34" stroke-linecap="round"/><path class="pl" pathLength="1" d="M55 19 L43.5 44 L32 12" stroke="#7CE46B" stroke-width="4.34" stroke-linecap="round"/></g><rect class="bar" x="11" y="50" width="42" height="6" fill="#0B0E14"/><circle class="n nl" cx="9" cy="19" r="5.25" fill="#6B00D6"/><circle class="n nr" cx="55" cy="19" r="5.25" fill="#6B00D6"/><circle class="n burst" cx="32" cy="12" r="6.75" fill="none" stroke="#1F8A3A" stroke-width="1.6"/><circle class="n ring" cx="32" cy="12" r="6.75" fill="none" stroke="#1F8A3A" stroke-width="1.2"/><circle class="n jw" cx="32" cy="12" r="6.75" fill="#1F8A3A" style="--seed:#B9B2C9;--jewel:#1F8A3A"/><circle class="n flash" cx="32" cy="12" r="4.18" fill="#FFFFFF"/></g></svg>

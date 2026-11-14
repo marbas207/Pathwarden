@@ -1,0 +1,54 @@
+{
+ "data": [
+  {
+   "kind": "AZTenant",
+   "data": {
+    "id": "/tenants/22222222-3333-4444-5555-666666666666",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "displayName": "Other",
+    "defaultDomain": "other.onmicrosoft.com",
+    "collected": true
+   }
+  },
+  {
+   "kind": "AZUser",
+   "data": {
+    "id": "aaaaaaaa-0000-0000-0000-000000000900",
+    "userPrincipalName": "admin@other.onmicrosoft.com",
+    "accountEnabled": true,
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "other.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZRole",
+   "data": {
+    "id": "62e90394-69f5-4237-9190-012177145e10",
+    "templateId": "62e90394-69f5-4237-9190-012177145e10",
+    "displayName": "Global Administrator",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "tenantName": "other.onmicrosoft.com"
+   }
+  },
+  {
+   "kind": "AZRoleAssignment",
+   "data": {
+    "roleDefinitionId": "62e90394-69f5-4237-9190-012177145e10",
+    "tenantId": "22222222-3333-4444-5555-666666666666",
+    "roleAssignments": [
+     {
+      "id": "x",
+      "roleDefinitionId": "62e90394-69f5-4237-9190-012177145e10",
+      "principalId": "aaaaaaaa-0000-0000-0000-000000000900",
+      "directoryScopeId": "/"
+     }
+    ]
+   }
+  }
+ ],
+ "meta": {
+  "type": "azure",
+  "version": 5,
+  "count": 4
+ }
+}

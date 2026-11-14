@@ -1,0 +1,114 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-3000-3000-3000-500",
+      "PrimaryGroupSID": "S-1-5-21-3000-3000-3000-513",
+      "Properties": {
+        "name": "ADMINISTRATOR@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "domainsid": "S-1-5-21-3000-3000-3000",
+        "enabled": true,
+        "admincount": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-3000-3000-3000-1201",
+      "PrimaryGroupSID": "S-1-5-21-3000-3000-3000-513",
+      "Properties": {
+        "name": "SVC_BACKUP@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "domainsid": "S-1-5-21-3000-3000-3000",
+        "enabled": true,
+        "admincount": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-3000-3000-3000-1101",
+      "PrimaryGroupSID": "S-1-5-21-3000-3000-3000-513",
+      "Properties": {
+        "name": "ALICE@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "domainsid": "S-1-5-21-3000-3000-3000",
+        "enabled": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-3000-3000-3000-1102",
+      "PrimaryGroupSID": "S-1-5-21-3000-3000-3000-513",
+      "Properties": {
+        "name": "BOB@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "domainsid": "S-1-5-21-3000-3000-3000",
+        "enabled": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-3000-3000-3000-1103",
+      "PrimaryGroupSID": "S-1-5-21-3000-3000-3000-513",
+      "Properties": {
+        "name": "CAROL@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "domainsid": "S-1-5-21-3000-3000-3000",
+        "enabled": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-3000-3000-3000-1104",
+      "PrimaryGroupSID": "S-1-5-21-3000-3000-3000-513",
+      "Properties": {
+        "name": "DAVE@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "domainsid": "S-1-5-21-3000-3000-3000",
+        "enabled": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "users",
+    "count": 6,
+    "version": 6
+  }
+}

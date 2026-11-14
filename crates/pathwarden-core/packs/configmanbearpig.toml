@@ -1,0 +1,211 @@
+# ConfigManBearPig (https://github.com/SpecterOps/ConfigManBearPig): SCCM /
+# MECM sites, role-based administration, client devices and site databases.
+#
+# Reviewed against ConfigManBearPig commit
+# 231575ae0c3ddab485f8aeae3d907c9e6af173be (2026-10-07, v2.0.x):
+# src/openhound_sccm/kinds/{edges,nodes}.py, schema_SCCM.json, transforms.py
+# and the sample_data collections (privileged and unprivileged). Every SCCM_
+# kind it writes is listed below.
+#
+# What it writes, and how Pathwarden reads it:
+# - `sccm_nodes` / `sccm_edges` files (source_kind "SCCM"): this pack.
+# - `mssql_nodes` / `mssql_edges` files (source_kind "MSSQL"): the site
+#   databases, read with the MSSQLHound pack (it claims "MSSQL").
+# - `ad_nodes` / `ad_edges` files, with no metadata: the edges file is
+#   attributed to this source by its edge kinds; its MSSQL_ edges keep the
+#   MSSQLHound pack's meaning (`companions`), and its native edges
+#   (MemberOf, HasSession, GenericAll) are dropped like any file's. The
+#   nodes file only merges onto AD objects.
+#
+# UNTRUSTED until validated in a lab (docs/opengraph.md, "Validating a
+# pack"): every edge below is context only, whatever `traversable` says.
+#
+# Paths (once trusted): role-based administration (an AD account mapped to
+# an SCCM administrative user whose role can run code on clients, or that
+# has every permission on a site), the site database's control of its site,
+# and a client device's identity with its AD computer.
+#
+# Context only, always: every edge ConfigManBearPig marks `assumed` (relay
+# feasibility and site system co-location it inferred, not measured), the
+# relay edges, SCCM_LocalAdminRequired (assumes the site server's account
+# installed every role), the user-affinity edges (not credential exposure),
+# stored accounts and collection membership.
+#
+# The `sccm` correction re-keys sites by site server, so two hierarchies
+# with the same site code don't merge, and makes an edge between two
+# hierarchies context only (src/opengraph/sccm.rs).
+
+[pack]
+name = "configmanbearpig"
+title = "ConfigManBearPig"
+version = 1
+source_kinds = ["SCCM", "ConfigManBearPig"]
+kind_prefix = "SCCM_"
+trusted = false
+corrections = ["sccm"]
+companions = ["mssqlhound"]
+description = "SCCM sites, administrative users, collections and client devices."
+
+[[node]]
+kind = "SCCM_Site"
+label = "SCCM site"
+icon = "sitemap"
+color = "#0891B2"
+keep = ["sitecode", "rootsitecode", "parentsitecode", "sitetype", "siteserverfqdn", "siteservername", "siteguid"]
+
+[[node]]
+kind = "SCCM_ClientDevice"
+label = "SCCM client"
+icon = "desktop"
+color = "#F59E0B"
+
+[[node]]
+kind = "SCCM_Collection"
+label = "SCCM collection"
+icon = "folder"
+color = "#EAB308"
+
+[[node]]
+kind = "SCCM_AdminUser"
+label = "SCCM administrative user"
+icon = "user-gear"
+color = "#2563EB"
+
+[[node]]
+kind = "SCCM_SecurityRole"
+label = "SCCM security role"
+icon = "users"
+color = "#7C3AED"
+
+# ------------------------------------------------------------ paths (once trusted)
+
+[[edge]]
+kind = "SCCM_IsMappedTo"
+traversable = true
+description = "The AD account or group is this SCCM administrative user."
+fix = "Remove {from} as an SCCM administrative user ({to}), or give it a role scoped to collections without Tier Zero hosts."
+unless = { "edge.assumed" = true }
+
+[[edge]]
+kind = "SCCM_FullAdministrator"
+traversable = true
+description = "Full Administrator over a collection that holds this client: can deploy applications, scripts and task sequences that run as SYSTEM on it."
+fix = "Take {to} out of the collections {from} administers as Full Administrator, or limit {from} to a role and scope without Tier Zero hosts."
+unless = { "edge.assumed" = true }
+
+[[edge]]
+kind = "SCCM_ApplicationAdministrator"
+traversable = true
+description = "Application Administrator over a collection that holds this client: can deploy applications that run as SYSTEM on it."
+fix = "Take {to} out of the collections {from} administers, or remove the Application Administrator role from {from}."
+unless = { "edge.assumed" = true }
+
+[[edge]]
+kind = "SCCM_AllPermissions"
+traversable = true
+description = "Every permission on the site (Full Administrator scoped to All): control of the site and every client."
+fix = "Remove Full Administrator over All Systems from {from} on {to}; give administrators roles scoped to the collections they manage."
+unless = { "edge.assumed" = true }
+
+[[edge]]
+kind = "SCCM_AssignAllPermissions"
+traversable = true
+cuttable = false
+description = "Control of the site database (or SMS Provider) lets its holder make any account a Full Administrator of the site."
+fix = "Manage {from} at the tier of the SCCM site {to}: whoever controls it controls the site."
+unless = { "edge.assumed" = true }
+
+[[edge]]
+kind = "SCCM_AdminsReplicatedTo"
+traversable = true
+cuttable = false
+cost = 5
+description = "Role-based administration is replicated across the hierarchy: who administers one site administers this one."
+unless = { "edge.assumed" = true }
+
+[[edge]]
+kind = "SCCM_Contains"
+traversable = true
+cuttable = false
+cost = 5
+description = "The site contains the collection, role or administrative user: who controls the site controls it."
+unless = { "edge.assumed" = true }
+
+[[edge]]
+kind = "SCCM_HasClient"
+traversable = true
+cuttable = false
+cost = 5
+description = "The site manages this client device (an AdminService or WMI client record)."
+fix = "Take {to} out of SCCM management by {from} (uninstall the client, or move it to a site managed only from Tier Zero)."
+# A "possible" client inferred from a CmRcService SPN.
+unless = { "edge.assumed" = true }
+
+[[edge]]
+kind = "SCCM_SameHostAs"
+traversable = true
+cuttable = false
+rule = "PW-035"
+description = "The SCCM client device is this AD computer: who controls the client through SCCM runs code on the computer as SYSTEM."
+fix = "Take {to} out of SCCM management (uninstall the client) or manage it from a site that is itself Tier Zero."
+unless = { "edge.assumed" = true }
+
+[[edge]]
+kind = "SCCM_HasCurrentUser"
+traversable = true
+cost = 3
+description = "The account was signed in to the client when SCCM last reported it: whoever runs code on the client can take its credentials, like a session."
+fix = "Sign {to} out of {from}, and keep accounts of a higher tier off it."
+unless = { "edge.assumed" = true }
+
+# ------------------------------------------------------------ context only
+
+# Inferred, not measured: relay feasibility, and that the site server's
+# account installed every site system role.
+[[edge]]
+kind = "SCCM_CoerceAndRelayToSMB"
+
+[[edge]]
+kind = "SCCM_CoerceAndRelayToAdminService"
+
+[[edge]]
+kind = "SCCM_LocalAdminRequired"
+
+# User affinity is not credential exposure.
+[[edge]]
+kind = "SCCM_HasPrimaryUser"
+
+[[edge]]
+kind = "SCCM_HasADLastLogonUser"
+
+# A stored account (network access, client push) is a credential the site
+# holds; whether it matters depends on its rights (a hygiene finding, later).
+[[edge]]
+kind = "SCCM_HasStoredAccount"
+
+[[edge]]
+kind = "SCCM_HasNetworkAccessAccount"
+
+# Membership and assignment facts; the role edges above carry the paths.
+[[edge]]
+kind = "SCCM_IsAssigned"
+
+[[edge]]
+kind = "SCCM_HasMember"
+
+# Roles that can't deploy code on their own (ConfigManBearPig does not
+# treat them as paths either).
+[[edge]]
+kind = "SCCM_ApplicationAuthor"
+
+[[edge]]
+kind = "SCCM_ComplianceSettingsManager"
+
+[[edge]]
+kind = "SCCM_OSDManager"
+
+[[edge]]
+kind = "SCCM_OperationsAdministrator"
+
+[[edge]]
+kind = "SCCM_SecurityAdministrator"

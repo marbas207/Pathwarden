@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<HealthcheckData xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <EngineVersion>3.3.0.1</EngineVersion>
+  <GenerationDate>2026-10-01T09:00:00+02:00</GenerationDate>
+  <IsPrivilegedMode>false</IsPrivilegedMode>
+  <Level>Full</Level>
+  <DomainFQDN>contoso.local</DomainFQDN>
+  <NetBIOSName>CONTOSO</NetBIOSName>
+  <ForestFQDN>contoso.local</ForestFQDN>
+  <DomainSid>S-1-5-21-1111111111-2222222222-3333333333</DomainSid>
+  <NumberOfDC>1</NumberOfDC>
+  <GlobalScore>50</GlobalScore>
+  <StaleObjectsScore>0</StaleObjectsScore>
+  <PrivilegiedGroupScore>50</PrivilegiedGroupScore>
+  <TrustScore>0</TrustScore>
+  <AnomalyScore>10</AnomalyScore>
+  <RiskRules>
+    <HealthcheckRiskRule>
+      <Points>10</Points>
+      <Category>Anomalies</Category>
+      <Model>WeakPassword</Model>
+      <RiskId>A-MinPwdLen</RiskId>
+      <Rationale>Password policy allows length less than 8 characters</Rationale>
+    </HealthcheckRiskRule>
+    <HealthcheckRiskRule>
+      <Points>50</Points>
+      <Category>PrivilegedAccounts</Category>
+      <Model>AccountTakeOver</Model>
+      <RiskId>P-Kerberoasting</RiskId>
+      <Rationale>Presence of 1 admin account which can be kerberoasted</Rationale>
+      <Details>
+        <string>svc_sql</string>
+      </Details>
+    </HealthcheckRiskRule>
+  </RiskRules>
+</HealthcheckData>

@@ -1,0 +1,414 @@
+{
+ "data": [
+  {
+   "Properties": {
+    "domain": "ESSOS.LOCAL",
+    "name": "ESSOS-CA@ESSOS.LOCAL",
+    "distinguishedname": "CN=ESSOS-CA,CN=ENROLLMENT SERVICES,CN=PUBLIC KEY SERVICES,CN=SERVICES,CN=CONFIGURATION,DC=ESSOS,DC=LOCAL",
+    "domainsid": "S-1-5-21-907917752-839331996-494631781",
+    "objectguid": "48D81C4C-8857-4A69-9BED-AFC5AC63F8AB",
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "isaclprotected": false,
+    "description": null,
+    "whencreated": 1791737991,
+    "flags": "",
+    "caname": "ESSOS-CA",
+    "dnshostname": "braavos.essos.local",
+    "certthumbprint": "5206FC4F6CAFC22D78410DB6B49938E8B81B59C2",
+    "certname": "5206FC4F6CAFC22D78410DB6B49938E8B81B59C2",
+    "certchain": [
+     "5206FC4F6CAFC22D78410DB6B49938E8B81B59C2"
+    ],
+    "hasbasicconstraints": false,
+    "basicconstraintpathlength": 0,
+    "unresolvedpublishedtemplates": [],
+    "casecuritycollected": true,
+    "enrollmentagentrestrictionscollected": false,
+    "isuserspecifiessanenabledcollected": false,
+    "roleseparationenabledcollected": false
+   },
+   "HostingComputer": "S-1-5-21-907917752-839331996-494631781-1104",
+   "CARegistryData": {
+    "CASecurity": {
+     "Data": [
+      {
+       "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-1104-544",
+       "PrincipalType": "LocalGroup",
+       "RightName": "Owns",
+       "IsInherited": false,
+       "InheritanceHash": "",
+       "IsPermissionForOwnerRightsSid": false,
+       "IsInheritedPermissionForOwnerRightsSid": false
+      },
+      {
+       "PrincipalSID": "ESSOS.LOCAL-S-1-5-11",
+       "PrincipalType": "",
+       "RightName": "Enroll",
+       "IsInherited": false,
+       "InheritanceHash": "",
+       "IsPermissionForOwnerRightsSid": false,
+       "IsInheritedPermissionForOwnerRightsSid": false
+      },
+      {
+       "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+       "PrincipalType": "Group",
+       "RightName": "ManageCertificates",
+       "IsInherited": false,
+       "InheritanceHash": "",
+       "IsPermissionForOwnerRightsSid": false,
+       "IsInheritedPermissionForOwnerRightsSid": false
+      },
+      {
+       "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+       "PrincipalType": "Group",
+       "RightName": "ManageCA",
+       "IsInherited": false,
+       "InheritanceHash": "",
+       "IsPermissionForOwnerRightsSid": false,
+       "IsInheritedPermissionForOwnerRightsSid": false
+      },
+      {
+       "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-1104-544",
+       "PrincipalType": "LocalGroup",
+       "RightName": "ManageCertificates",
+       "IsInherited": false,
+       "InheritanceHash": "",
+       "IsPermissionForOwnerRightsSid": false,
+       "IsInheritedPermissionForOwnerRightsSid": false
+      },
+      {
+       "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-1104-544",
+       "PrincipalType": "LocalGroup",
+       "RightName": "ManageCA",
+       "IsInherited": false,
+       "InheritanceHash": "",
+       "IsPermissionForOwnerRightsSid": false,
+       "IsInheritedPermissionForOwnerRightsSid": false
+      },
+      {
+       "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+       "PrincipalType": "Group",
+       "RightName": "ManageCertificates",
+       "IsInherited": false,
+       "InheritanceHash": "",
+       "IsPermissionForOwnerRightsSid": false,
+       "IsInheritedPermissionForOwnerRightsSid": false
+      },
+      {
+       "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+       "PrincipalType": "Group",
+       "RightName": "ManageCA",
+       "IsInherited": false,
+       "InheritanceHash": "",
+       "IsPermissionForOwnerRightsSid": false,
+       "IsInheritedPermissionForOwnerRightsSid": false
+      },
+      {
+       "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+       "PrincipalType": "Group",
+       "RightName": "ManageCA",
+       "IsInherited": false,
+       "InheritanceHash": "",
+       "IsPermissionForOwnerRightsSid": false,
+       "IsInheritedPermissionForOwnerRightsSid": false
+      }
+     ],
+     "Collected": true,
+     "FailureReason": null
+    },
+    "EnrollmentAgentRestrictions": {
+     "Restrictions": [],
+     "Collected": true,
+     "FailureReason": null
+    },
+    "IsUserSpecifiesSanEnabled": {
+     "Value": false,
+     "Collected": true,
+     "FailureReason": null
+    },
+    "RoleSeparationEnabled": {
+     "Value": false,
+     "Collected": true,
+     "FailureReason": null
+    }
+   },
+   "EnabledCertTemplates": [
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    },
+    {
+     "ObjectIdentifier": "",
+     "ObjectType": "CertTemplate"
+    }
+   ],
+   "HttpEnrollmentEndpoints": [
+    {
+     "Result": {
+      "Url": "http://braavos.essos.local/certsrv/",
+      "Type": "WebEnrollmentApplication",
+      "Status": "Vulnerable_NtlmHttpEndpoint",
+      "ADCSWebEnrollmentHTTP": true,
+      "ADCSWebEnrollmentHTTPS": false,
+      "ADCSWebEnrollmentEPA": false
+     },
+     "Collected": true,
+     "FailureReason": null
+    },
+    {
+     "Result": {
+      "Url": "https://braavos.essos.local/certsrv/",
+      "Type": "WebEnrollmentApplication",
+      "Status": "NotVulnerable_PortInaccessible",
+      "ADCSWebEnrollmentHTTP": false,
+      "ADCSWebEnrollmentHTTPS": false,
+      "ADCSWebEnrollmentEPA": false
+     },
+     "Collected": true,
+     "FailureReason": null
+    },
+    {
+     "Result": null,
+     "Collected": false,
+     "FailureReason": "Response status code does not indicate success: 404 (Not Found) for http://braavos.essos.local/ESSOS-CA_CES_Kerberos/service.svc/CES"
+    },
+    {
+     "Result": {
+      "Url": "https://braavos.essos.local/ESSOS-CA_CES_Kerberos/service.svc/CES",
+      "Type": "CertificateEnrollmentWebService",
+      "Status": "NotVulnerable_PortInaccessible",
+      "ADCSWebEnrollmentHTTP": false,
+      "ADCSWebEnrollmentHTTPS": false,
+      "ADCSWebEnrollmentEPA": false
+     },
+     "Collected": true,
+     "FailureReason": null
+    },
+    {
+     "Result": null,
+     "Collected": false,
+     "FailureReason": "Response status code does not indicate success: 404 (Not Found) for http://braavos.essos.local/ESSOS-CA_CES_NTLM/service.svc/CES"
+    },
+    {
+     "Result": {
+      "Url": "https://braavos.essos.local/ESSOS-CA_CES_NTLM/service.svc/CES",
+      "Type": "CertificateEnrollmentWebService",
+      "Status": "NotVulnerable_PortInaccessible",
+      "ADCSWebEnrollmentHTTP": false,
+      "ADCSWebEnrollmentHTTPS": false,
+      "ADCSWebEnrollmentEPA": false
+     },
+     "Collected": true,
+     "FailureReason": null
+    }
+   ],
+   "Aces": [
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "Owns",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "ESSOS.LOCAL-S-1-5-11",
+     "PrincipalType": "Group",
+     "RightName": "Enroll",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "WriteOwner",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "WriteDacl",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "ManageCA",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "ManageCertificates",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-1104",
+     "PrincipalType": "Computer",
+     "RightName": "WriteOwner",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-1104",
+     "PrincipalType": "Computer",
+     "RightName": "WriteDacl",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-1104",
+     "PrincipalType": "Computer",
+     "RightName": "ManageCA",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-1104",
+     "PrincipalType": "Computer",
+     "RightName": "ManageCertificates",
+     "IsInherited": false,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-519",
+     "PrincipalType": "Group",
+     "RightName": "GenericAll",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+     "PrincipalType": "Group",
+     "RightName": "WriteOwner",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+     "PrincipalType": "Group",
+     "RightName": "WriteDacl",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-907917752-839331996-494631781-512",
+     "PrincipalType": "Group",
+     "RightName": "ManageCA",
+     "IsInherited": true,
+     "InheritanceHash": "",
+     "IsPermissionForOwnerRightsSid": false,
+     "IsInheritedPermissionForOwnerRightsSid": false
+    }
+   ],
+   "ObjectIdentifier": "48D81C4C-8857-4A69-9BED-AFC5AC63F8AB",
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "ContainedBy": {
+    "ObjectIdentifier": "05A0C303-304A-46A3-932D-8097F1CB4F77",
+    "ObjectType": "Container"
+   }
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "enterprisecas",
+  "count": 1,
+  "version": 6,
+  "collectorversion": "RustHound-CE v2.5.23"
+ }
+}

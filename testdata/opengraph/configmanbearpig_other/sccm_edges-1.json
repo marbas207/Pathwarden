@@ -1,0 +1,121 @@
+{
+  "graph": {
+    "nodes": [],
+    "edges": [
+      {
+        "kind": "SCCM_Contains",
+        "start": {
+          "value": "PS1",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "SMS00001@PS1",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "SCCM_Invoke-PostProcessing"
+          ],
+          "composed": false
+        }
+      },
+      {
+        "kind": "SCCM_Contains",
+        "start": {
+          "value": "PS1",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\DAVE@PS1",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "SCCM_Invoke-PostProcessing"
+          ]
+        }
+      },
+      {
+        "kind": "SCCM_FullAdministrator",
+        "start": {
+          "value": "CORP\\DAVE@PS1",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "GUID:0E0E0001-0000-0000-0000-000000000004",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "SCCM_Invoke-PostProcessing"
+          ]
+        }
+      },
+      {
+        "kind": "SCCM_HasClient",
+        "start": {
+          "value": "PS1",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "GUID:0E0E0001-0000-0000-0000-000000000004",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "AdminService-ClientDevices"
+          ]
+        }
+      },
+      {
+        "kind": "SCCM_HasMember",
+        "start": {
+          "value": "SMS00001@PS1",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "GUID:0E0E0001-0000-0000-0000-000000000004",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": false,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "collectionSource": [
+            "AdminService-SMS_FullCollectionMembership"
+          ]
+        }
+      }
+    ]
+  },
+  "metadata": {
+    "source_kind": "SCCM"
+  }
+}

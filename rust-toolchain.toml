@@ -1,0 +1,9 @@
+# The Rust release every build, test and release archive uses. rustup
+# installs it on first use in this folder. Bump it on purpose, in its own
+# commit, and rerun the checks (docs/dev/building.md, "Pinned toolchain").
+# Cargo.toml's rust-version (the oldest Rust that builds Pathwarden) is
+# separate and stays lower.
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

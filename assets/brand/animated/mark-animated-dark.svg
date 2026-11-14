@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Pathwarden"><defs><clipPath id="cwdfl"><rect x="0" y="0" width="64" height="44.5"/></clipPath><linearGradient id="cwdl" gradientUnits="userSpaceOnUse" x1="9" y1="25" x2="32" y2="12"><stop offset="0" stop-color="#9D5CFF"/><stop offset="0.22" stop-color="#9D5CFF"/><stop offset="0.9" stop-color="#7CE46B"/></linearGradient><linearGradient id="cwdr" gradientUnits="userSpaceOnUse" x1="55" y1="25" x2="32" y2="12"><stop offset="0" stop-color="#9D5CFF"/><stop offset="0.22" stop-color="#9D5CFF"/><stop offset="0.9" stop-color="#7CE46B"/></linearGradient><radialGradient id="cwdhg"><stop offset="0" stop-color="#7CE46B" stop-opacity=".75"/><stop offset="1" stop-color="#7CE46B" stop-opacity="0"/></radialGradient><filter id="cwdgf" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur in="SourceGraphic" stdDeviation="2.2" result="b"/><feColorMatrix in="b" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0.9 0" result="bb"/><feMerge><feMergeNode in="bb"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><style>
+.cwd .n{transform-box:fill-box;transform-origin:center}
+.cwd .dr{stroke-dasharray:1.002 2}
+.cwd .pl{stroke-dasharray:.11 3;stroke-dashoffset:.11;opacity:0}
+.cwd .burst,.cwd .ring,.cwd .flash{opacity:0}
+.cwd .nl{animation:cwdpop .42s cubic-bezier(.2,.7,.2,1) 0.10s both}
+.cwd .nr{animation:cwdpop .42s cubic-bezier(.2,.7,.2,1) 1.56s both}
+.cwd .hl{animation:cwddrawF 0.68s cubic-bezier(.55,0,.85,.5) 0.30s both}
+.cwd .hr{animation:cwddrawR 0.64s cubic-bezier(.15,.5,.45,1) 0.98s both}
+.cwd .jw{animation:cwdjewel 2.14s linear both}
+.cwd .burst{animation:cwdburst .9s cubic-bezier(.1,.6,.3,1) 1.72s forwards}
+.cwd .bar{transform-box:fill-box;transform-origin:left center;animation:cwdwipe 0.55s cubic-bezier(.7,0,.2,1) 1.90s both}
+.cwd .pl{animation:cwdrun 4.0s cubic-bezier(.45,0,.6,1) 2.75s infinite}
+.cwd .flash{animation:cwdflash 4.0s ease-out 2.75s infinite}
+.cwd .ring{animation:cwdring 4.0s ease-out 2.75s infinite}
+.cwd .halo{transform-box:fill-box;transform-origin:center;animation:cwdhalo-in .8s ease-out 1.72s both,cwdbreathe 4.0s ease-in-out 2.75s infinite}
+@keyframes cwdpop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.28);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes cwddrawF{from{stroke-dashoffset:1.002}to{stroke-dashoffset:0}}
+@keyframes cwddrawR{from{stroke-dashoffset:-1.002}to{stroke-dashoffset:0}}
+@keyframes cwdjewel{0%,42.0%{transform:scale(0);opacity:0;fill:var(--seed)}
+ 48.1%{transform:scale(.62);opacity:1;fill:var(--seed)}
+ 79.4%{transform:scale(.62);opacity:1;fill:var(--seed)}
+ 89.2%{transform:scale(1.3);opacity:1;fill:var(--jewel)}
+ 100%{transform:scale(1);opacity:1;fill:var(--jewel)}}
+@keyframes cwdburst{0%{transform:scale(1);opacity:.95}100%{transform:scale(3.4);opacity:0}}
+@keyframes cwdwipe{from{transform:scaleX(0);opacity:.2}to{transform:scaleX(1);opacity:1}}
+@keyframes cwdrun{0%{stroke-dashoffset:.11;opacity:1}27%{stroke-dashoffset:-1;opacity:1}28%,100%{stroke-dashoffset:-1;opacity:0}}
+@keyframes cwdflash{0%,24%{opacity:0}29%{opacity:.85}48%,100%{opacity:0}}
+@keyframes cwdring{0%,26%{transform:scale(1);opacity:0}29%{transform:scale(1);opacity:.8}62%,100%{transform:scale(2.7);opacity:0}}
+@keyframes cwdhalo-in{from{opacity:0}to{opacity:.55}}
+@keyframes cwdbreathe{0%,100%{opacity:.55;transform:scale(1)}30%{opacity:.9;transform:scale(1.12)}}
+@media (prefers-reduced-motion: reduce){.cwd *{animation:none!important}.cwd .halo{opacity:.55}}
+</style><g class="cwd" transform="scale(4.0000)"><g filter="url(#cwdgf)"><circle class="halo" cx="32" cy="12" r="17.55" fill="url(#cwdhg)" opacity=".55"/><g clip-path="url(#cwdfl)" fill="none" stroke-width="7" stroke-linejoin="miter" stroke-miterlimit="2.6"><path class="dr hl" pathLength="1" d="M9 19 L20.5 44 L32 12" stroke="url(#cwdl)"/><path class="dr hr" pathLength="1" d="M55 19 L43.5 44 L32 12" stroke="url(#cwdr)"/><path class="pl" pathLength="1" d="M9 19 L20.5 44 L32 12" stroke="#FFFFFF" stroke-width="4.34" stroke-linecap="round"/><path class="pl" pathLength="1" d="M55 19 L43.5 44 L32 12" stroke="#FFFFFF" stroke-width="4.34" stroke-linecap="round"/></g><rect class="bar" x="11" y="50" width="42" height="6" fill="#F7F7F7"/><circle class="n nl" cx="9" cy="19" r="5.25" fill="#9D5CFF"/><circle class="n nr" cx="55" cy="19" r="5.25" fill="#9D5CFF"/><circle class="n burst" cx="32" cy="12" r="6.75" fill="none" stroke="#7CE46B" stroke-width="1.6"/><circle class="n ring" cx="32" cy="12" r="6.75" fill="none" stroke="#7CE46B" stroke-width="1.2"/><circle class="n jw" cx="32" cy="12" r="6.75" fill="#7CE46B" style="--seed:#E9E3F7;--jewel:#7CE46B"/><circle class="n flash" cx="32" cy="12" r="4.18" fill="#FFFFFF"/></g></g></svg>

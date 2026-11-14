@@ -1,0 +1,131 @@
+{
+ "data": [
+  {
+   "ObjectIdentifier": "S-1-5-21-1000-1000-1000",
+   "Properties": {
+    "name": "CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-1000-1000-1000",
+    "distinguishedname": "DC=CONTOSO,DC=LOCAL",
+    "functionallevel": "2016"
+   },
+   "Aces": [
+    {
+     "PrincipalSID": "CONTOSO.LOCAL-S-1-5-32-544",
+     "PrincipalType": "Group",
+     "RightName": "GetChanges",
+     "IsInherited": false
+    },
+    {
+     "PrincipalSID": "CONTOSO.LOCAL-S-1-5-32-544",
+     "PrincipalType": "Group",
+     "RightName": "GetChangesAll",
+     "IsInherited": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-1000-1000-1000-1106",
+     "PrincipalType": "User",
+     "RightName": "GetChanges",
+     "IsInherited": false
+    },
+    {
+     "PrincipalSID": "S-1-5-21-1000-1000-1000-1151",
+     "PrincipalType": "Group",
+     "RightName": "GetChangesAll",
+     "IsInherited": false
+    }
+   ],
+   "Links": [
+    {
+     "IsEnforced": false,
+     "GUID": "31B2F340-016D-11D2-945F-00C04FB984F9"
+    }
+   ],
+   "ChildObjects": [
+    {
+     "ObjectIdentifier": "BBBB0000-0000-0000-0000-000000000001",
+     "ObjectType": "OU"
+    },
+    {
+     "ObjectIdentifier": "BBBB0000-0000-0000-0000-000000000002",
+     "ObjectType": "OU"
+    }
+   ],
+   "Trusts": [
+    {
+     "TargetDomainSid": "S-1-5-21-2000-2000-2000",
+     "TargetDomainName": "CHILD.CONTOSO.LOCAL",
+     "IsTransitive": true,
+     "SidFilteringEnabled": true,
+     "TrustDirection": "Bidirectional",
+     "TrustType": "ParentChild",
+     "TrustAttributes": 32
+    },
+    {
+     "TargetDomainSid": "S-1-5-21-3000-3000-3000",
+     "TargetDomainName": "FABRIKAM.COM",
+     "IsTransitive": true,
+     "SidFilteringEnabled": true,
+     "TrustDirection": "Bidirectional",
+     "TrustType": "Forest",
+     "TrustAttributes": 8
+    },
+    {
+     "TargetDomainSid": "S-1-5-21-4000-4000-4000",
+     "TargetDomainName": "TAILSPIN.COM",
+     "IsTransitive": false,
+     "SidFilteringEnabled": true,
+     "TrustDirection": "Inbound",
+     "TrustType": "External",
+     "TrustAttributes": 4
+    },
+    {
+     "TargetDomainSid": "S-1-5-21-5000-5000-5000",
+     "TargetDomainName": "WINGTIP.COM",
+     "IsTransitive": false,
+     "SidFilteringEnabled": true,
+     "TrustDirection": "Bidirectional",
+     "TrustType": "External",
+     "TrustAttributes": 20
+    },
+    {
+     "TargetDomainSid": "S-1-5-21-6000-6000-6000",
+     "TargetDomainName": "NORTHWIND.COM",
+     "IsTransitive": false,
+     "SidFilteringEnabled": true,
+     "TrustDirection": "Outbound",
+     "TrustType": "External",
+     "TrustAttributes": 4
+    },
+    {
+     "TargetDomainSid": "S-1-5-21-7000-7000-7000",
+     "TargetDomainName": "ADVENTURE-WORKS.COM",
+     "IsTransitive": false,
+     "SidFilteringEnabled": true,
+     "TrustDirection": "Disabled",
+     "TrustType": "External",
+     "TrustAttributes": 4
+    },
+    {
+     "TargetDomainSid": "S-1-5-21-8000-8000-8000",
+     "TargetDomainName": null,
+     "IsTransitive": false,
+     "SidFilteringEnabled": true,
+     "TrustDirection": "Bidirectional",
+     "TrustType": "External",
+     "TrustAttributes": 4
+    }
+   ],
+   "GPOChanges": null,
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "ContainedBy": null
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "domains",
+  "count": 1,
+  "version": 6
+ }
+}

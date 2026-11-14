@@ -1,0 +1,31 @@
+# cargo-about: writes the license texts of every Rust crate in a build into
+# THIRD-PARTY-LICENSES.md (scripts/package.*, template about.hbs). The
+# hand-written THIRD-PARTY-NOTICES.md covers what is not a crate (RustHound-CE
+# credits, the query library, Cytoscape.js, the WebView2 loader).
+#
+# Keep this list equal to [licenses] allow in deny.toml. Order matters: for a
+# choice such as "MIT OR Apache-2.0", the first one listed here is the one
+# reproduced (MIT first, so each crate's own copyright line is kept).
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "MIT-0",
+    "CDLA-Permissive-2.0",
+    "MPL-2.0",
+]
+# The platforms release archives are built for.
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+]
+# Test-only crates are not shipped.
+ignore-dev-dependencies = true
+# Build dependencies (cc, bindgen) run at build time, but some put code into
+# the binary: keep them listed.
+ignore-build-dependencies = false

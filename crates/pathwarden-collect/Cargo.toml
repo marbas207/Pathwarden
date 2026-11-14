@@ -1,0 +1,72 @@
+[package]
+name = "pathwarden-collect"
+description = "Active Directory collection for Pathwarden, producing BloodHound-compatible output"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+# Private output folders and files (pathwarden_core::perms).
+pathwarden-core = { path = "../pathwarden-core" }
+rpassword = "7"
+serde.workspace = true
+serde_json.workspace = true
+zeroize = "1"
+zip.workspace = true
+
+# Built-in collector: RustHound-CE (MIT, see THIRD-PARTY-NOTICES.md; patched
+# in from vendor/rusthound-ce with newer dependencies) does the
+# LDAP collection and BloodHound CE JSON output; Pathwarden owns the bind so
+# that TLS certificates are verified and secrets never reach a log line.
+# `nogssapi` keeps system Kerberos libraries (libgssapi/krb5) out of the build.
+rusthound-ce = { version = "=2.5.30", default-features = false, features = ["nogssapi"], optional = true }
+ldap3 = { version = "0.12.1", default-features = false, features = ["tls-rustls-ring", "ntlm"], optional = true }
+log = { version = "0.4", features = ["std"], optional = true }
+# The rest chunk's DN keys, stable across processes.
+sha2 = { version = "0.10", optional = true }
+# Remote Registry client (RustHound-CE's own dependency), for the CAs' flags.
+dcerpc = { version = "=0.2.11", optional = true }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "macros", "net", "sync"], optional = true }
+# Kerberos only: the first ticket (TGT) for a password sign-in, asked
+# of the domain controller in pure Rust, and the computers' service tickets
+# through RustHound-CE. The same versions RustHound-CE links.
+picky-krb = { version = "=0.11.1", optional = true }
+picky-asn1 = { version = "0.10", optional = true }
+picky-asn1-der = { version = "0.5", optional = true }
+rand = { version = "0.8", optional = true }
+# The SMB client of RustHound-CE and dcerpc, patched to require signing
+# (vendor/smb2-client).
+smb2-client = { version = "0.2.5", optional = true }
+# A trusted domain's domain controller by its SRV record, so its
+# LDAPS certificate's name matches. The version the vendored RustHound-CE
+# links (vendor/rusthound-ce).
+hickory-resolver = { version = "0.26.3", optional = true }
+
+# On Windows, ldap3's GSSAPI support is SSPI (via cross-krb5): Kerberos as the
+# current logon session, with no system libraries. On Linux it would need
+# libgssapi/krb5, so it is enabled for Windows only.
+[target.'cfg(windows)'.dependencies]
+ldap3 = { version = "0.12.1", default-features = false, features = ["gssapi"], optional = true }
+# File permissions in SYSVOL and NETLOGON, read as the current user.
+# Also the computers on a retest's path, read as the current user (NetAPI,
+# Remote Registry, LSA lookups).
+# Kerberos only as the current Windows user: a computer's cifs/
+# ticket is asked of SSPI before it is contacted.
+# SharpHound's Authenticode signature (WinVerifyTrust).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Security_Cryptography_Catalog", "Win32_Security_Cryptography_Sip", "Win32_Security_WinTrust","Win32_NetworkManagement_Dns", "Win32_NetworkManagement_NetManagement", "Win32_Networking_ActiveDirectory", "Win32_Storage_FileSystem", "Win32_System_Registry"] }
+
+[dev-dependencies]
+# ldap3's NTLM library, to test what the NTLM bind sends for a user name
+# (same version as ldap3's, so no second copy is built).
+sspi = { version = "0.16.1", default-features = false }
+# Task file hashes as Task Scheduler records them (the version the
+# workspace already uses).
+sha2 = "0.10"
+
+[features]
+default = ["builtin"]
+builtin = ["dep:rusthound-ce", "dep:sha2", "dep:ldap3", "dep:log", "dep:tokio", "dep:dcerpc", "dep:picky-krb", "dep:picky-asn1", "dep:picky-asn1-der", "dep:rand", "dep:smb2-client", "dep:hickory-resolver"]

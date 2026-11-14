@@ -1,0 +1,1066 @@
+{
+  "metadata": {
+    "source_kind": "MSSQL_Base"
+  },
+  "graph": {
+    "nodes": [
+      {
+        "id": "S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_Server"
+        ],
+        "properties": {
+          "name": "ws01.corp.local:1433",
+          "instanceName": "MSSQLSERVER",
+          "port": 1433,
+          "serviceAccount": "CORP\\svc_backup",
+          "extendedProtection": "Off",
+          "isMixedModeAuthEnabled": true,
+          "domainPrincipalsWithSysadmin": [
+            "CORP\\alice@S-1-5-21-3000-3000-3000-1002:1433",
+            "CORP\\carol@S-1-5-21-3000-3000-3000-1002:1433"
+          ]
+        }
+      },
+      {
+        "id": "CORP\\alice@S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_Login"
+        ],
+        "properties": {
+          "name": "CORP\\alice",
+          "type": "WINDOWS_LOGIN",
+          "disabled": false,
+          "isActiveDirectoryPrincipal": true,
+          "memberOfRoles": [
+            "sysadmin",
+            "public"
+          ],
+          "explicitPermissions": [
+            "CONNECT SQL"
+          ]
+        }
+      },
+      {
+        "id": "CORP\\dave@S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_Login"
+        ],
+        "properties": {
+          "name": "CORP\\dave",
+          "type": "WINDOWS_LOGIN",
+          "disabled": false,
+          "isActiveDirectoryPrincipal": true,
+          "memberOfRoles": [
+            "opsrole",
+            "public"
+          ],
+          "explicitPermissions": [
+            "CONNECT SQL",
+            "CONTROL SERVER"
+          ]
+        }
+      },
+      {
+        "id": "CORP\\carol@S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_Login"
+        ],
+        "properties": {
+          "name": "CORP\\carol",
+          "type": "WINDOWS_LOGIN",
+          "disabled": true,
+          "isActiveDirectoryPrincipal": true,
+          "memberOfRoles": [
+            "sysadmin",
+            "public"
+          ]
+        }
+      },
+      {
+        "id": "dbowner@S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_Login"
+        ],
+        "properties": {
+          "name": "dbowner",
+          "type": "SQL_LOGIN",
+          "disabled": false,
+          "memberOfRoles": [
+            "public"
+          ],
+          "explicitPermissions": [
+            "CONNECT SQL"
+          ]
+        }
+      },
+      {
+        "id": "sysadmin@S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_ServerRole"
+        ],
+        "properties": {
+          "name": "sysadmin",
+          "isFixedRole": true,
+          "explicitPermissions": [
+            "CONTROL SERVER"
+          ],
+          "members": [
+            "CORP\\alice",
+            "CORP\\carol"
+          ]
+        }
+      },
+      {
+        "id": "public@S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_ServerRole"
+        ],
+        "properties": {
+          "name": "public",
+          "isFixedRole": false
+        }
+      },
+      {
+        "id": "opsrole@S-1-5-21-3000-3000-3000-1002:1433",
+        "kinds": [
+          "MSSQL_ServerRole"
+        ],
+        "properties": {
+          "name": "opsrole",
+          "isFixedRole": false,
+          "explicitPermissions": [
+            "CONTROL SERVER"
+          ]
+        }
+      },
+      {
+        "id": "S-1-5-21-3000-3000-3000-1002:1433\\AppDB",
+        "kinds": [
+          "MSSQL_Database"
+        ],
+        "properties": {
+          "name": "AppDB",
+          "isTrustworthy": true,
+          "ownerLoginName": "dbowner",
+          "OwnerObjectIdentifier": "dbowner@S-1-5-21-3000-3000-3000-1002:1433"
+        }
+      },
+      {
+        "id": "S-1-5-21-3000-3000-3000-1002:1433\\OpsDB",
+        "kinds": [
+          "MSSQL_Database"
+        ],
+        "properties": {
+          "name": "OpsDB",
+          "isTrustworthy": true,
+          "ownerLoginName": "CORP\\alice",
+          "OwnerObjectIdentifier": "CORP\\alice@S-1-5-21-3000-3000-3000-1002:1433"
+        }
+      },
+      {
+        "id": "S-1-5-21-3000-3000-3000-1001:1433",
+        "kinds": [
+          "MSSQL_Server"
+        ],
+        "properties": {
+          "name": "app01.corp.local:1433",
+          "instanceName": "MSSQLSERVER",
+          "port": 1433
+        }
+      },
+      {
+        "id": "CORP\\bob@S-1-5-21-3000-3000-3000-1001:1433",
+        "kinds": [
+          "MSSQL_Login"
+        ],
+        "properties": {
+          "name": "CORP\\bob",
+          "type": "WINDOWS_LOGIN",
+          "disabled": false,
+          "isActiveDirectoryPrincipal": true,
+          "memberOfRoles": [
+            "public"
+          ]
+        }
+      },
+      {
+        "id": "CORP\\dave@S-1-5-21-3000-3000-3000-1001:1433",
+        "kinds": [
+          "MSSQL_Login"
+        ],
+        "properties": {
+          "name": "CORP\\dave",
+          "type": "WINDOWS_LOGIN",
+          "disabled": false,
+          "isActiveDirectoryPrincipal": true,
+          "memberOfRoles": [
+            "public"
+          ],
+          "explicitPermissions": [
+            "CONNECT SQL",
+            "IMPERSONATE ANY LOGIN"
+          ]
+        }
+      },
+      {
+        "id": "svc_app@S-1-5-21-3000-3000-3000-1001:1433",
+        "kinds": [
+          "MSSQL_Login"
+        ],
+        "properties": {
+          "name": "svc_app",
+          "type": "SQL_LOGIN",
+          "disabled": false,
+          "memberOfRoles": [
+            "sysadmin",
+            "public"
+          ]
+        }
+      },
+      {
+        "id": "sysadmin@S-1-5-21-3000-3000-3000-1001:1433",
+        "kinds": [
+          "MSSQL_ServerRole"
+        ],
+        "properties": {
+          "name": "sysadmin",
+          "isFixedRole": true
+        }
+      },
+      {
+        "id": "public@S-1-5-21-3000-3000-3000-1001:1433",
+        "kinds": [
+          "MSSQL_ServerRole"
+        ],
+        "properties": {
+          "name": "public",
+          "isFixedRole": false
+        }
+      },
+      {
+        "id": "S-1-5-21-3000-3000-3000-1001:1434",
+        "kinds": [
+          "MSSQL_Server"
+        ],
+        "properties": {
+          "name": "app01.corp.local:1434",
+          "instanceName": "REPORTS",
+          "port": 1434
+        }
+      },
+      {
+        "id": "CORP\\carol@S-1-5-21-3000-3000-3000-1001:1434",
+        "kinds": [
+          "MSSQL_Login"
+        ],
+        "properties": {
+          "name": "CORP\\carol",
+          "type": "WINDOWS_LOGIN",
+          "disabled": true,
+          "isActiveDirectoryPrincipal": true,
+          "memberOfRoles": [
+            "sysadmin"
+          ]
+        }
+      },
+      {
+        "id": "sysadmin@S-1-5-21-3000-3000-3000-1001:1434",
+        "kinds": [
+          "MSSQL_ServerRole"
+        ],
+        "properties": {
+          "name": "sysadmin",
+          "isFixedRole": true
+        }
+      },
+      {
+        "id": "S-1-5-21-3000-3000-3000-1201",
+        "kinds": [
+          "User",
+          "Base"
+        ],
+        "properties": {
+          "name": "svc_backup",
+          "SAMAccountName": "svc_backup",
+          "isEnabled": true
+        }
+      }
+    ],
+    "edges": [
+      {
+        "kind": "MSSQL_HasLogin",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1101",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\alice@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_HasLogin",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1104",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\dave@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_HasLogin",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1103",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\carol@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_MemberOf",
+        "start": {
+          "value": "CORP\\alice@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "sysadmin@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_MemberOf",
+        "start": {
+          "value": "CORP\\alice@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "public@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_MemberOf",
+        "start": {
+          "value": "CORP\\carol@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "sysadmin@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_MemberOf",
+        "start": {
+          "value": "CORP\\dave@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "opsrole@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ControlServer",
+        "start": {
+          "value": "sysadmin@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ControlServer",
+        "start": {
+          "value": "opsrole@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_Contains",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433\\AppDB",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_Contains",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433\\OpsDB",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_Owns",
+        "start": {
+          "value": "dbowner@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433\\AppDB",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_Owns",
+        "start": {
+          "value": "CORP\\alice@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433\\OpsDB",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ExecuteAsOwner",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433\\AppDB",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "database": "AppDB",
+          "databaseIsTrustworthy": true,
+          "ownerHasSysadmin": false,
+          "ownerHasControlServer": true,
+          "ownerLoginName": "dbowner"
+        }
+      },
+      {
+        "kind": "MSSQL_ExecuteAsOwner",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433\\OpsDB",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "database": "OpsDB",
+          "databaseIsTrustworthy": true,
+          "ownerHasSysadmin": true,
+          "ownerHasControlServer": true,
+          "ownerLoginName": "CORP\\alice"
+        }
+      },
+      {
+        "kind": "MSSQL_IsTrustedBy",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433\\AppDB",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_HostFor",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ExecuteOnHost",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ServiceAccountFor",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1201",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "This domain account runs the SQL Server service.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_GetAdminTGS",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1201",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_CoerceAndRelayToMSSQL",
+        "start": {
+          "value": "CORP.LOCAL-S-1-5-11",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\alice@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "HasSession",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1201",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_LinkedAsAdmin",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "remoteLogin": "linkadmin",
+          "remoteCurrentLogin": "linkadmin",
+          "usesImpersonation": false,
+          "path": "ws01 -> app01",
+          "dataAccess": true,
+          "rpcOut": true,
+          "provider": "SQLNCLI",
+          "product": "",
+          "localLogin": "All Logins",
+          "remoteIsSysadmin": true,
+          "remoteIsSecurityAdmin": false,
+          "remoteHasControlServer": true,
+          "remoteHasImpersonateAnyLogin": false,
+          "remoteIsMixedMode": true
+        }
+      },
+      {
+        "kind": "MSSQL_LinkedTo",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "remoteLogin": "linkadmin",
+          "remoteCurrentLogin": "linkadmin",
+          "usesImpersonation": false,
+          "dataAccess": true,
+          "rpcOut": true,
+          "provider": "SQLNCLI",
+          "product": "",
+          "localLogin": "All Logins",
+          "remoteIsSysadmin": true,
+          "remoteIsSecurityAdmin": false,
+          "remoteHasControlServer": true,
+          "remoteHasImpersonateAnyLogin": false,
+          "remoteIsMixedMode": true
+        }
+      },
+      {
+        "kind": "MSSQL_LinkedAsAdmin",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/",
+          "remoteLogin": "sa_link",
+          "remoteCurrentLogin": "CORP\\scanner",
+          "usesImpersonation": false,
+          "path": "app01 -> ws01",
+          "dataAccess": true,
+          "rpcOut": true,
+          "provider": "SQLNCLI",
+          "product": "",
+          "localLogin": "All Logins",
+          "remoteIsSysadmin": true,
+          "remoteIsSecurityAdmin": false,
+          "remoteHasControlServer": true,
+          "remoteHasImpersonateAnyLogin": false,
+          "remoteIsMixedMode": true
+        }
+      },
+      {
+        "kind": "MSSQL_HasLogin",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1102",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\bob@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_HasLogin",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1104",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\dave@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ExecuteAs",
+        "start": {
+          "value": "public@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "svc_app@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_Impersonate",
+        "start": {
+          "value": "public@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "svc_app@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": false,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_MemberOf",
+        "start": {
+          "value": "svc_app@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "sysadmin@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ControlServer",
+        "start": {
+          "value": "sysadmin@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ImpersonateAnyLogin",
+        "start": {
+          "value": "CORP\\dave@S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": false,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_RunsAs",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1001:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1201",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_HasLogin",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1103",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "CORP\\carol@S-1-5-21-3000-3000-3000-1001:1434",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_MemberOf",
+        "start": {
+          "value": "CORP\\carol@S-1-5-21-3000-3000-3000-1001:1434",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "sysadmin@S-1-5-21-3000-3000-3000-1001:1434",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ControlServer",
+        "start": {
+          "value": "sysadmin@S-1-5-21-3000-3000-3000-1001:1434",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1001:1434",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ServiceAccountFor",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1104",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1001:1434",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_GetAdminTGS",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1104",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1001:1434",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      }
+    ]
+  }
+}

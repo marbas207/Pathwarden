@@ -1,0 +1,286 @@
+{
+  "schema": "pathwarden.event.v1",
+  "run": {
+    "version": 1,
+    "run_id": "20261030T151735.223Z",
+    "started_at": 1793373455,
+    "finished_at": 1793373455,
+    "collected_at": null,
+    "pathwarden": "0.1.7",
+    "collector_files": 5,
+    "domains": [
+      "MGMT.LOCAL"
+    ],
+    "trusted_domains": [],
+    "objects": 23,
+    "changes": {
+      "new": 6,
+      "open": 0,
+      "regressed": 0,
+      "suppressed": 6,
+      "resolved": 0,
+      "held": 0,
+      "unchecked": 0
+    },
+    "sources_exact": true
+  },
+  "posture": {
+    "tier_zero": {
+      "zone": "Tier Zero",
+      "objects": 10,
+      "population": 8,
+      "relevant_population": 8,
+      "exposed": 3,
+      "exposure_percent": 37.5,
+      "exposure_grade": "High",
+      "grade_reason": "3 accounts outside Tier Zero can reach it",
+      "reason": {
+        "text": "3 accounts outside Tier Zero can reach it."
+      },
+      "objects_with_findings": 5,
+      "protection_score": 50.0
+    },
+    "zones": [
+      {
+        "zone": "Servers",
+        "objects": 1,
+        "population": 7,
+        "relevant_population": 7,
+        "exposed": 3,
+        "exposure_percent": 42.857142857142854,
+        "exposure_grade": "High",
+        "grade_reason": "3 accounts outside Servers can reach it",
+        "reason": {
+          "text": "3 accounts outside Servers can reach it."
+        },
+        "objects_with_findings": 0,
+        "protection_score": 100.0
+      }
+    ],
+    "findings": {
+      "attack_path": 5,
+      "hygiene": 1,
+      "suppressed": 6,
+      "critical": 0,
+      "high": 5,
+      "medium": 1,
+      "low": 0,
+      "info": 0
+    },
+    "completeness": [
+      {
+        "domain": "MGMT.LOCAL",
+        "computers": 8,
+        "member_computers": 7,
+        "enabled_member_computers": 7,
+        "active_only": false,
+        "sessions_collected": 8,
+        "local_groups_collected": 2,
+        "sessions_percent": 100.0,
+        "local_groups_percent": 28.571428571428573,
+        "gpo_local_groups": null
+      }
+    ],
+    "exposure_basis": 2,
+    "activity_days": 90,
+    "activity_unknown_domains": [
+      "MGMT.LOCAL"
+    ],
+    "plan": {
+      "steps": 3,
+      "exposed_after": 0
+    }
+  },
+  "findings": [
+    {
+      "change": "suppressed",
+      "first_seen": 1793373455,
+      "times_seen": 1,
+      "rule": "PW-028",
+      "category": "hygiene",
+      "severity": "medium",
+      "rule_severity": "medium",
+      "exposure": null,
+      "fingerprint": "PW-028-e473961668d3c695",
+      "title": "CM01.MGMT.LOCAL looks like an SCCM site server",
+      "domain": "MGMT.LOCAL",
+      "summary": "CM01.MGMT.LOCAL has Full Control of CN=SYSTEM MANAGEMENT,CN=SYSTEM,DC=MGMT,DC=LOCAL through SCCM SITE SERVERS@MGMT.LOCAL, which SCCM grants its site servers (inferred from directory structure). An SCCM site server, and every SCCM Full Administrator, can run code as SYSTEM on every SCCM client. The directory doesn't record which computers are SCCM clients, so Pathwarden can't tell whether domain controllers or CA servers are among them; that needs their registry (`HKLM\\SOFTWARE\\Microsoft\\CCM`), which collection doesn't read yet.",
+      "remediation": "Check whether CM01.MGMT.LOCAL manages domain controllers, CA servers or other Tier Zero systems (the guide lists what to look for). If it does, add it to `tier_zero` in pathwarden.toml: Pathwarden then reports who controls it. If it doesn't, accept this finding as a risk with that reason.",
+      "affected": [
+        {
+          "id": "S-1-5-21-7000-7000-7000-1102",
+          "name": "CM01.MGMT.LOCAL",
+          "kind": "Computer",
+          "detail": "has Full Control of CN=SYSTEM MANAGEMENT,CN=SYSTEM,DC=MGMT,DC=LOCAL through SCCM SITE SERVERS@MGMT.LOCAL, which SCCM grants its site servers"
+        }
+      ],
+      "path": null,
+      "references": [
+        "https://github.com/subat0mik/Misconfiguration-Manager",
+        "https://learn.microsoft.com/en-us/security/privileged-access-workstations/privileged-access-access-model"
+      ],
+      "suppressed": "Compat fixture: accepted for the test.",
+      "accepted": {
+        "whole_rule": true
+      }
+    },
+    {
+      "change": "new",
+      "first_seen": 1793373455,
+      "times_seen": 1,
+      "rule": "PW-003",
+      "category": "attack_path",
+      "severity": "high",
+      "rule_severity": "high",
+      "exposure": {
+        "scope": "MGMT.LOCAL",
+        "principals": 1,
+        "population": 8,
+        "percent": 12.5
+      },
+      "fingerprint": "PW-003-853c1911079ae284",
+      "title": "ALICE@MGMT.LOCAL has AdminTo on AADC01.MGMT.LOCAL",
+      "domain": "MGMT.LOCAL",
+      "summary": "ALICE@MGMT.LOCAL is outside Tier Zero but has AdminTo on Tier Zero object AADC01.MGMT.LOCAL (Management plane: Entra Connect server (holds the credentials of MSOL_1A2B3C4D5E6F@MGMT.LOCAL, which can DCSync)). Whoever controls ALICE@MGMT.LOCAL controls AADC01.MGMT.LOCAL.",
+      "remediation": "Remove ALICE@MGMT.LOCAL from the local Administrators group on AADC01.MGMT.LOCAL.",
+      "affected": [
+        {
+          "id": "S-1-5-21-7000-7000-7000-1110",
+          "name": "ALICE@MGMT.LOCAL",
+          "kind": "User"
+        },
+        {
+          "id": "S-1-5-21-7000-7000-7000-1101",
+          "name": "AADC01.MGMT.LOCAL",
+          "kind": "Computer"
+        }
+      ],
+      "path": {
+        "source": "ALICE@MGMT.LOCAL",
+        "target": "AADC01.MGMT.LOCAL",
+        "steps": [
+          {
+            "from": "ALICE@MGMT.LOCAL",
+            "from_kind": "User",
+            "edge": "AdminTo",
+            "to": "AADC01.MGMT.LOCAL",
+            "to_kind": "Computer"
+          }
+        ]
+      },
+      "references": [],
+      "suppressed": null
+    },
+    {
+      "change": "new",
+      "first_seen": 1793373455,
+      "times_seen": 1,
+      "rule": "PW-003",
+      "category": "attack_path",
+      "severity": "high",
+      "rule_severity": "high",
+      "exposure": {
+        "scope": "MGMT.LOCAL",
+        "principals": 1,
+        "population": 8,
+        "percent": 12.5
+      },
+      "fingerprint": "PW-003-f9efcdf2b79f2c7d",
+      "title": "BOB@MGMT.LOCAL has AdminTo on SCOM01.MGMT.LOCAL",
+      "domain": "MGMT.LOCAL",
+      "summary": "BOB@MGMT.LOCAL is outside Tier Zero but has AdminTo on Tier Zero object SCOM01.MGMT.LOCAL (Management plane: SCOM management server (management group MG1) for DC01.MGMT.LOCAL). Whoever controls BOB@MGMT.LOCAL controls SCOM01.MGMT.LOCAL.",
+      "remediation": "Remove BOB@MGMT.LOCAL from the local Administrators group on SCOM01.MGMT.LOCAL.",
+      "affected": [
+        {
+          "id": "S-1-5-21-7000-7000-7000-1111",
+          "name": "BOB@MGMT.LOCAL",
+          "kind": "User"
+        },
+        {
+          "id": "S-1-5-21-7000-7000-7000-1103",
+          "name": "SCOM01.MGMT.LOCAL",
+          "kind": "Computer"
+        }
+      ],
+      "path": {
+        "source": "BOB@MGMT.LOCAL",
+        "target": "SCOM01.MGMT.LOCAL",
+        "steps": [
+          {
+            "from": "BOB@MGMT.LOCAL",
+            "from_kind": "User",
+            "edge": "AdminTo",
+            "to": "SCOM01.MGMT.LOCAL",
+            "to_kind": "Computer"
+          }
+        ]
+      },
+      "references": [],
+      "suppressed": null
+    }
+  ],
+  "resolved": [],
+  "held": [],
+  "plan": {
+    "exposed_before": 3,
+    "exposed_after": 0,
+    "exposure_before": 37.5,
+    "exposure_after": 0.0,
+    "exposure_delta": 37.5,
+    "relevant_population": 8,
+    "relevant_population_after": 8,
+    "first_fix_exposure_after": 25.0,
+    "total_cost": 3,
+    "fixes": [
+      {
+        "from": "ALICE@MGMT.LOCAL",
+        "from_kind": "User",
+        "edges": [
+          "AdminTo"
+        ],
+        "to": "AADC01.MGMT.LOCAL",
+        "to_kind": "Computer",
+        "cost": 1,
+        "principals_through": 1,
+        "shortest_paths_through": 1,
+        "sdprop_copies": 0,
+        "inherited_by": 0,
+        "action": "Remove ALICE@MGMT.LOCAL from the local Administrators group on AADC01.MGMT.LOCAL."
+      },
+      {
+        "from": "BOB@MGMT.LOCAL",
+        "from_kind": "User",
+        "edges": [
+          "AdminTo"
+        ],
+        "to": "SCOM01.MGMT.LOCAL",
+        "to_kind": "Computer",
+        "cost": 1,
+        "principals_through": 1,
+        "shortest_paths_through": 1,
+        "sdprop_copies": 0,
+        "inherited_by": 0,
+        "action": "Remove BOB@MGMT.LOCAL from the local Administrators group on SCOM01.MGMT.LOCAL."
+      },
+      {
+        "from": "CAROL@MGMT.LOCAL",
+        "from_kind": "User",
+        "edges": [
+          "GenericAll"
+        ],
+        "to": "AZUREADSSOACC.MGMT.LOCAL",
+        "to_kind": "Computer",
+        "cost": 1,
+        "principals_through": 1,
+        "shortest_paths_through": 1,
+        "sdprop_copies": 0,
+        "inherited_by": 0,
+        "action": "Remove the GenericAll permission that CAROL@MGMT.LOCAL holds on AZUREADSSOACC.MGMT.LOCAL (set on the object itself, or inherited from a parent container)."
+      }
+    ]
+  },
+  "guides": {
+    "PW-003": "# PW-003: Non-Tier Zero principal controls a Tier Zero object",
+    "PW-028": "# PW-028: Possible management plane: review whether it manages Tier Zero"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-6000-6000-6000-500",
+      "PrimaryGroupSID": "S-1-5-21-6000-6000-6000-513",
+      "Properties": {
+        "name": "ADMINISTRATOR@SDP.LOCAL",
+        "domain": "SDP.LOCAL",
+        "domainsid": "S-1-5-21-6000-6000-6000",
+        "enabled": true,
+        "admincount": true
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-6000-6000-6000-1102",
+          "PrincipalType": "User",
+          "RightName": "GenericAll",
+          "IsInherited": false
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-6000-6000-6000-1101",
+      "PrimaryGroupSID": "S-1-5-21-6000-6000-6000-513",
+      "Properties": {
+        "name": "EVE@SDP.LOCAL",
+        "domain": "SDP.LOCAL",
+        "domainsid": "S-1-5-21-6000-6000-6000",
+        "enabled": true,
+        "admincount": true
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-6000-6000-6000-1102",
+          "PrincipalType": "User",
+          "RightName": "GenericAll",
+          "IsInherited": false
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-6000-6000-6000-1102",
+      "PrimaryGroupSID": "S-1-5-21-6000-6000-6000-513",
+      "Properties": {
+        "name": "MALLORY@SDP.LOCAL",
+        "domain": "SDP.LOCAL",
+        "domainsid": "S-1-5-21-6000-6000-6000",
+        "enabled": true
+      },
+      "Aces": []
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-6000-6000-6000-1103",
+      "PrimaryGroupSID": "S-1-5-21-6000-6000-6000-513",
+      "Properties": {
+        "name": "BOB@SDP.LOCAL",
+        "domain": "SDP.LOCAL",
+        "domainsid": "S-1-5-21-6000-6000-6000",
+        "enabled": true
+      },
+      "Aces": []
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "users",
+    "count": 4,
+    "version": 6
+  }
+}

@@ -1,0 +1,301 @@
+# MSSQLHound (https://github.com/SpecterOps/MSSQLHound): SQL Server logins,
+# roles, permissions and service accounts.
+#
+# Reviewed against MSSQLHound commit 92efaeb892cd3e43dbdd5b4308dbf55383db1453
+# (2026-06-29, v2.0.4): internal/bloodhound/{edges.go,schema.json,writer.go},
+# internal/collector/collector.go and sample_data/. Every kind the collector
+# writes (37, plus a native HasSession that Pathwarden drops) is listed below.
+# The PowerShell version's older output names its relay edge
+# `CoerceAndRelayToMSSQL` without the prefix: no pack maps it (context).
+#
+# UNTRUSTED until validated in a lab (docs/opengraph.md, "Validating a
+# pack"): every edge below is context only (shown in the explorer, never
+# part of a path, finding or plan), whatever `traversable` says.
+#
+# Where this mapping overrides MSSQLHound's own schema, and why:
+# - MSSQL_ImpersonateAnyLogin is a path (the schema says it isn't):
+#   impersonating any login includes sa, a full takeover.
+# - MSSQL_IsMappedTo is a path (missing from the schema): a login acts in a
+#   database as the user it is mapped to.
+# - MSSQL_LinkedAsAdmin is a path only when MSSQLHound measured the remote
+#   privileges under this mapping's own remote login (it attributes what
+#   it measured as itself to every mapping row) and the link doesn't pass
+#   the caller's identity through.
+# - Relay edges (coercion is never checked), "possible" credential edges,
+#   MSSQL_ExecuteOnHost (code runs as the service account, not SYSTEM) and
+#   permissions that don't give control are context only.
+# - The `mssql` correction (src/opengraph/mssql.rs) models DENY through
+#   roles, the implicit `public` membership, and re-checks ExecuteAsOwner and
+#   GetAdminTGS against the graph; it derives MSSQL_RunsAs (server to the
+#   domain account that runs it).
+#
+# The coverage unit is the whole source: MSSQLHound records no list of the
+# instances it reached, so a coverage sidecar has to vouch for the file.
+
+[pack]
+name = "mssqlhound"
+title = "MSSQLHound"
+version = 2
+# "MSSQL_Base" is what MSSQLHound writes; "MSSQL" is its schema's namespace,
+# and what ConfigManBearPig writes for the SCCM site databases.
+source_kinds = ["MSSQL_Base", "MSSQL", "MSSQLHound"]
+kind_prefix = "MSSQL_"
+trusted = false
+corrections = ["mssql"]
+description = "SQL Server logins, roles, permissions and service accounts."
+
+[[node]]
+kind = "MSSQL_Server"
+label = "SQL Server instance"
+icon = "database"
+color = "#DC2626"
+keep = ["instancename", "port", "extendedprotection", "ismixedmodeauthenabled", "serviceaccount"]
+
+[[node]]
+kind = "MSSQL_Login"
+label = "SQL login"
+icon = "user"
+color = "#F97316"
+keep = ["type", "disabled", "explicitpermissions", "isactivedirectoryprincipal"]
+
+[[node]]
+kind = "MSSQL_ServerRole"
+label = "SQL server role"
+icon = "users"
+color = "#F59E0B"
+keep = ["isfixedrole", "explicitpermissions"]
+
+[[node]]
+kind = "MSSQL_Database"
+label = "Database"
+icon = "database"
+color = "#B91C1C"
+keep = ["istrustworthy"]
+
+[[node]]
+kind = "MSSQL_DatabaseUser"
+label = "Database user"
+icon = "user"
+color = "#FB923C"
+keep = ["type"]
+
+[[node]]
+kind = "MSSQL_DatabaseRole"
+label = "Database role"
+icon = "users"
+color = "#FBBF24"
+keep = ["isfixedrole"]
+
+[[node]]
+kind = "MSSQL_ApplicationRole"
+label = "Application role"
+icon = "id-card"
+color = "#FCD34D"
+
+# ------------------------------------------------------------ paths (once trusted)
+
+[[edge]]
+kind = "MSSQL_HasLogin"
+traversable = true
+description = "The domain principal has this SQL login (directly, or as a member of a Windows group login)."
+fix = "Remove the SQL login {to} of {from} if it is not needed, or remove the rights it has on the instance."
+# A disabled login can't connect.
+unless = { "end.disabled" = true }
+
+[[edge]]
+kind = "MSSQL_MemberOf"
+traversable = true
+description = "Member of the SQL server or database role."
+fix = "Remove {from} from the SQL role {to} (ALTER SERVER ROLE / ALTER ROLE ... DROP MEMBER {from})."
+
+[[edge]]
+kind = "MSSQL_PublicMember"
+traversable = true
+derived = true
+cuttable = false
+description = "Every login is a member of the server's public role (every database user, of its database's public role): Pathwarden adds this, MSSQLHound leaves it implicit."
+fix = "{from} is a member of {to} like every login; it can't be removed. Revoke what is granted to {to} instead."
+
+[[edge]]
+kind = "MSSQL_ControlServer"
+traversable = true
+# Mostly the fixed sysadmin role: cut its members or the logins instead.
+cuttable = false
+description = "CONTROL SERVER: full control of the instance."
+fix = "Revoke CONTROL SERVER from {from} on {to}, or remove the members of {from} that don't need it."
+
+[[edge]]
+kind = "MSSQL_ImpersonateAnyLogin"
+traversable = true
+description = "IMPERSONATE ANY LOGIN: can act as sa or any sysadmin login, so full control of the instance. MSSQLHound's schema marks it non-traversable; that is wrong."
+fix = "Revoke IMPERSONATE ANY LOGIN from {from} on {to}."
+
+[[edge]]
+kind = "MSSQL_ExecuteAs"
+traversable = true
+description = "IMPERSONATE (or CONTROL) on the target login or user: EXECUTE AS gives its rights."
+fix = "Revoke IMPERSONATE on {to} from {from}."
+
+[[edge]]
+kind = "MSSQL_GrantAnyPermission"
+traversable = true
+cuttable = false
+description = "securityadmin: can grant any server permission, including CONTROL SERVER."
+fix = "Remove the members of {from} that don't need to manage logins on {to}."
+
+[[edge]]
+kind = "MSSQL_AddMember"
+traversable = true
+description = "Can add members to the role."
+fix = "Revoke ALTER on the role {to} from {from} (or remove {from} from the role that grants it)."
+
+[[edge]]
+kind = "MSSQL_ChangePassword"
+traversable = true
+description = "Can reset the SQL login's password (ALTER ANY LOGIN or ALTER on the login)."
+fix = "Revoke ALTER ANY LOGIN (or ALTER on {to}) from {from}."
+
+[[edge]]
+kind = "MSSQL_Owns"
+traversable = true
+description = "Owns the database, role or login."
+fix = "Change the owner of {to} to a principal that doesn't need to be distrusted (ALTER AUTHORIZATION ON ... TO sa)."
+
+[[edge]]
+kind = "MSSQL_ControlDB"
+traversable = true
+# Mostly the fixed db_owner role: cut its members instead.
+cuttable = false
+description = "CONTROL on the database (db_owner)."
+fix = "Remove the members of {from} that don't need to own {to}."
+
+[[edge]]
+kind = "MSSQL_GrantAnyDBPermission"
+traversable = true
+cuttable = false
+description = "db_securityadmin: can grant any permission in the database."
+fix = "Remove the members of {from} that don't need to manage permissions in {to}."
+
+[[edge]]
+kind = "MSSQL_ExecuteAsOwner"
+traversable = true
+description = "A TRUSTWORTHY database whose owner controls the server: whoever controls the database runs code as the owner on the whole instance. Kept only when the owner controls the server in this data (correction)."
+fix = "Set TRUSTWORTHY OFF on {from} (ALTER DATABASE ... SET TRUSTWORTHY OFF), or change its owner to a login without server-level rights."
+
+[[edge]]
+kind = "MSSQL_IsMappedTo"
+traversable = true
+description = "The login is this database user. Missing from MSSQLHound's schema; Pathwarden treats it as the path it is."
+fix = "Drop the database user {to} (mapped to {from}) if the login doesn't need the database."
+
+[[edge]]
+kind = "MSSQL_Contains"
+traversable = true
+cost = 5
+cuttable = false
+description = "The instance contains the database or principal: who controls the instance controls it."
+
+[[edge]]
+kind = "MSSQL_HostFor"
+traversable = true
+cuttable = false
+description = "The computer hosts the instance: its administrators control SQL Server."
+fix = "Manage the host {from} of {to} at the same tier as the SQL Server: its administrators control the instance."
+
+[[edge]]
+kind = "MSSQL_GetTGS"
+traversable = true
+cuttable = false
+description = "The service account's key lets its holder forge a service ticket to the instance as this domain login (silver ticket)."
+fix = "Protect the service account {from}: whoever has its password or key can sign in to the instance as {to}. Use a group managed service account."
+unless = { "end.disabled" = true }
+
+[[edge]]
+kind = "MSSQL_GetAdminTGS"
+traversable = true
+cuttable = false
+description = "The service account's key lets its holder forge a ticket as a domain administrator of the instance. Kept only when an enabled domain login controls the instance (correction)."
+fix = "Protect the service account {from}: whoever has its password or key controls {to}. Use a group managed service account."
+
+[[edge]]
+kind = "MSSQL_RunsAs"
+traversable = true
+derived = true
+cost = 2
+rule = "PW-034"
+description = "The instance runs as this domain account: whoever controls the instance (sysadmin, xp_cmdshell, SQL Agent) runs code as the account and can use it on the network. Derived by Pathwarden from MSSQL_ServiceAccountFor."
+fix = "Run {from} as a group managed service account or a virtual account (NT SERVICE\\MSSQLSERVER) instead of {to}, and give the service account no rights outside SQL Server. Then rotate {to}'s password."
+
+[[edge]]
+kind = "MSSQL_LinkedAsAdmin"
+traversable = true
+description = "A linked server whose login mapping signs in to the remote instance as an administrator. A path only when MSSQLHound measured the remote rights as that same remote login, and the link doesn't pass the caller's identity through."
+fix = "Remove the linked server login mapping from {from} to {to}, or map it to a remote login without administrative rights."
+when = { "edge.remotelogin" = { same_as = "edge.remotecurrentlogin" }, "edge.usesimpersonation" = false }
+
+# ------------------------------------------------------------ context only
+
+# Conditional: code runs as the service account (often a virtual account,
+# then the host's computer account), not as SYSTEM.
+[[edge]]
+kind = "MSSQL_ExecuteOnHost"
+
+# MSSQLHound calls it "possible"; MSSQL_RunsAs is derived from it.
+[[edge]]
+kind = "MSSQL_ServiceAccountFor"
+
+# Coercion and relay are never checked.
+[[edge]]
+kind = "MSSQL_CoerceAndRelayToMSSQL"
+
+# "Possible" credential edges: the stored credential may not be usable.
+[[edge]]
+kind = "MSSQL_HasMappedCred"
+
+[[edge]]
+kind = "MSSQL_HasProxyCred"
+
+[[edge]]
+kind = "MSSQL_HasDBScopedCred"
+
+# Linked servers without an administrative mapping, and TRUSTWORTHY alone.
+[[edge]]
+kind = "MSSQL_LinkedTo"
+
+[[edge]]
+kind = "MSSQL_IsTrustedBy"
+
+# Written next to MSSQL_ExecuteAs for the same grant.
+[[edge]]
+kind = "MSSQL_Impersonate"
+
+# Permissions that don't give control on their own.
+[[edge]]
+kind = "MSSQL_Alter"
+
+[[edge]]
+kind = "MSSQL_AlterAnyLogin"
+
+[[edge]]
+kind = "MSSQL_AlterAnyServerRole"
+
+[[edge]]
+kind = "MSSQL_AlterAnyDBRole"
+
+[[edge]]
+kind = "MSSQL_AlterAnyAppRole"
+
+[[edge]]
+kind = "MSSQL_Connect"
+
+[[edge]]
+kind = "MSSQL_ConnectAnyDatabase"
+
+[[edge]]
+kind = "MSSQL_Control"
+
+[[edge]]
+kind = "MSSQL_TakeOwnership"
+
+[[edge]]
+kind = "MSSQL_ChangeOwner"

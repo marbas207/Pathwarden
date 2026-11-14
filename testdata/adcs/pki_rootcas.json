@@ -1,0 +1,36 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "44444444-0000-0000-0000-000000000001",
+      "DomainSID": "S-1-5-21-5000-5000-5000",
+      "Properties": {
+        "name": "PKI-CA ROOT@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "certthumbprint": "AAAA",
+        "certchain": [
+          "AAAA"
+        ]
+      }
+    },
+    {
+      "ObjectIdentifier": "44444444-0000-0000-0000-000000000002",
+      "DomainSID": "S-1-5-21-5000-5000-5000",
+      "Properties": {
+        "name": "ROGUE ROOT@PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "certthumbprint": "BBBB",
+        "certchain": [
+          "BBBB"
+        ]
+      }
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "rootcas",
+    "count": 2,
+    "version": 6
+  }
+}

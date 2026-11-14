@@ -1,0 +1,8 @@
+# The pinned copy of the BloodHound Query Library: scripts\update-queries.ps1 writes this folder.
+library = "BloodHound Query Library"
+url = "https://github.com/SpecterOps/BloodHoundQueryLibrary"
+tag = "queries-2026-08-20"
+sha256 = "38c71c423b8cb083290e2f4338eea552d4d1a23caf55c70fd1c690bc81754837"
+shipped_sha256 = "b45b458351351185ce58b35ce5d0682a17828a4b95dfff2bcf5c803cd9a00552"
+copyright = "2025 SpecterOps"
+kept = "193 of 236 queries: those for Active Directory"

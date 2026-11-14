@@ -1,0 +1,45 @@
+{
+ "data": [
+  {
+   "ObjectIdentifier": "S-1-5-21-5000-5000-5000-500",
+   "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-513",
+   "Properties": {
+    "name": "ADMINISTRATOR@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-5000-5000-5000",
+    "enabled": true,
+    "admincount": true
+   },
+   "Aces": [],
+   "AllowedToDelegate": [],
+   "HasSIDHistory": [],
+   "SPNTargets": [],
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "ContainedBy": null
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1101",
+   "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-513",
+   "Properties": {
+    "name": "MARK@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-5000-5000-5000",
+    "enabled": true
+   },
+   "Aces": [],
+   "AllowedToDelegate": [],
+   "HasSIDHistory": [],
+   "SPNTargets": [],
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "ContainedBy": null
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "users",
+  "count": 2,
+  "version": 6
+ }
+}

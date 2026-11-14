@@ -1,0 +1,19 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it)",
+  "width": 1440, "height": 900, "settle": 3600,
+  "startAt": "a.rr-link", "startSettle": 2500,
+  "gif": ["--hold-end", "1800", "--fast", "1.2-2.4:3"],
+  "steps": [
+    {"do": "wait", "ms": 300},
+    {"do": "click", "sel": "a.btn.primary[href$=\"/explore\"]", "ms": 300},
+    {"do": "waitFor", "js": "!!document.getElementById('xp-cy')?._cyreg?.cy.nodes().length", "timeout": 20000, "ms": 1100},
+    {"do": "click", "sel": "#xp-next", "ms": 800},
+    {"do": "click", "sel": "#xp-prev", "ms": 700},
+    {"do": "type", "sel": "#xp-q", "text": "svc-00040", "ms": 200},
+    {"do": "waitFor", "sel": "#xp-r0 button", "timeout": 10000},
+    {"do": "click", "sel": "#xp-r0 button", "ms": 1000},
+    {"do": "node", "label": "SVC-00040", "ms": 250},
+    {"do": "click", "sel": "#xp-p-object .xp-actions button:nth-child(3)", "ms": 1400},
+    {"do": "node", "label": "SQL-ADMINS", "event": "dbltap", "ms": 1500}
+  ]
+}

@@ -1,0 +1,122 @@
+# Checks formatting and lints on every push; runs the test suites (full,
+# desktop and lean) on Linux and Windows only on demand. Every cargo command
+# uses Cargo.lock as committed.
+#
+# - Every push to main or lane/** and every pull request: formatting,
+#   cargo deny (deny.toml) and clippy (full and lean) on Linux. Quick, with
+#   a build cache. Rust is the version rust-toolchain.toml pins.
+# - On demand, before a release (Actions > CI > Run workflow, or
+#   `gh workflow run CI --ref <branch>`): the Linux and Windows test suites.
+# Developers run the full and lean suites on Windows before every merge.
+#
+# Third-party actions are pinned to a full commit SHA (the tag is in the
+# comment); update both together.
+name: CI
+
+on:
+  push:
+    # `lane/*`: work branches pushed so their tests run here rather than on
+    # the developer's machine (Linux on every push; Windows on demand).
+    branches: [main, "lane/**"]
+  pull_request:
+  workflow_dispatch:
+
+# Read the code, nothing else.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  # No debug info in CI builds: the test binaries with full debug info filled
+  # the runner and crashed the linker (signal 7). Panics still show the file
+  # and line.
+  CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+  CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
+
+jobs:
+  fmt:
+    name: Format and dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The version in rust-toolchain.toml, with rustfmt and clippy.
+      - name: Install Rust
+        run: rustup toolchain install
+      - run: cargo fmt --all -- --check
+      # Advisories, licenses and sources (deny.toml). No compile: a prebuilt,
+      # checksum-verified cargo-deny reads Cargo.lock and the RustSec database.
+      - uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        with:
+          tool: cargo-deny@0.20.2
+      - name: cargo deny
+        run: cargo deny --locked check
+
+  linux:
+    name: Lint and test (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          # Pull requests read the cache that main writes; they don't add their own.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Clippy (full)
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test (full)
+        if: github.event_name == 'workflow_dispatch'
+        run: cargo test --locked --workspace
+
+      # The lean build: no built-in collector (pathwarden-collect without
+      # `builtin`). Selecting only these packages keeps the feature off.
+      - name: Clippy (lean)
+        run: cargo clippy --locked -p pathwarden -p pathwarden-ui --no-default-features --all-targets -- -D warnings
+      - name: Test (lean, CLI and UI)
+        if: github.event_name == 'workflow_dispatch'
+        run: cargo test --locked -p pathwarden -p pathwarden-ui --no-default-features
+
+  windows:
+    name: Lint and test (Windows)
+    # On demand only.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Clippy (full)
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test (full)
+        run: cargo test --locked --workspace
+
+      # The desktop window (`desktop`), as the Windows release builds it. The
+      # end-to-end window test is skipped here (it needs PATHWARDEN_E2E_DESKTOP).
+      - name: Clippy (desktop)
+        run: cargo clippy --locked --workspace --all-targets --features pathwarden/desktop -- -D warnings
+      - name: Test (desktop)
+        run: cargo test --locked --workspace --features pathwarden/desktop
+
+      - name: Clippy (lean)
+        run: cargo clippy --locked -p pathwarden -p pathwarden-ui --no-default-features --all-targets -- -D warnings
+      - name: Test (lean, CLI and UI)
+        run: cargo test --locked -p pathwarden -p pathwarden-ui --no-default-features
+      - name: Build (lean, release)
+        run: cargo build --locked --release -p pathwarden --no-default-features --target-dir target/lean

@@ -1,0 +1,14 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it)",
+  "width": 1440, "height": 900, "settle": 3600,
+  "gif": ["--hold-end", "2000"],
+  "steps": [
+    {"do": "wait", "ms": 300},
+    {"do": "click", "sel": "a[href=\"/explore\"]", "ms": 300},
+    {"do": "waitFor", "js": "!!document.getElementById('xp-cy')?._cyreg?.cy.nodes().length", "timeout": 20000, "ms": 1500},
+    {"do": "node", "label": "SQL-ADMINS", "event": "dbltap", "ms": 1600},
+    {"do": "node", "label": "DA-ADMIN21", "ms": 900},
+    {"do": "click", "sel": "#xp-p-object .xp-actions button >> Who can reach this", "ms": 2000},
+    {"do": "click", "sel": "#xt-zones", "ms": 2200}
+  ]
+}

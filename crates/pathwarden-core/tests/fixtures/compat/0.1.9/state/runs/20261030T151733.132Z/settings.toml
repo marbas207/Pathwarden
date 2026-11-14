@@ -1,0 +1,10 @@
+# The shared settings this run was analysed with (a snapshot; never applied).
+tier_zero = ["VEEAM01.MGMT.LOCAL"]
+
+[[suppress]]
+rule = "PW-028"
+reason = "Compat fixture: accepted for the test."
+
+[[zone]]
+name = "Servers"
+members = ["WS01.MGMT.LOCAL"]

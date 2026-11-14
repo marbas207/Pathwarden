@@ -1,0 +1,44 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000",
+      "Properties": {
+        "name": "MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "distinguishedname": "DC=MGMT,DC=LOCAL",
+        "functionallevel": "2016"
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-7000-7000-7000-1105",
+          "PrincipalType": "User",
+          "RightName": "GetChanges",
+          "IsInherited": false
+        },
+        {
+          "PrincipalSID": "S-1-5-21-7000-7000-7000-1105",
+          "PrincipalType": "User",
+          "RightName": "GetChangesAll",
+          "IsInherited": false
+        },
+        {
+          "PrincipalSID": "S-1-5-21-7000-7000-7000-512",
+          "PrincipalType": "Group",
+          "RightName": "GenericAll",
+          "IsInherited": false
+        }
+      ],
+      "Links": [],
+      "ChildObjects": [],
+      "Trusts": [],
+      "IsDeleted": false
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "domains",
+    "count": 1,
+    "version": 6
+  }
+}

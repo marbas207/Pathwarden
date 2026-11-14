@@ -1,0 +1,16 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 500,
+  "gif": ["--hold-end", "1600"],
+  "steps": [
+    {"do": "wait", "ms": 400},
+    {"do": "click", "sel": "#env-switch > summary", "ms": 1000},
+    {"do": "click", "sel": "#env-switch a.es-manage", "ms": 1000},
+    {"do": "scroll", "sel": "form.env-form:has(input[name=\"origin\"])", "block": "end", "ms": 800},
+    {"do": "click", "sel": "form.env-form:has(input[name=\"origin\"]) label.option >> Start here", "ms": 600},
+    {"do": "type", "sel": "form.env-form:has(input[name=\"origin\"]) input[name=\"name\"]", "text": "Lab", "delay": 60},
+    {"do": "type", "sel": "form.env-form:has(input[name=\"origin\"]) textarea[name=\"domains\"]", "text": "lab.scale.local", "delay": 35},
+    {"do": "hover", "sel": "form.env-form:has(input[name=\"origin\"]) select[name=\"copy\"]", "ms": 700},
+    {"do": "click", "sel": "form.env-form:has(input[name=\"origin\"]) button.btn.primary", "ms": 2200}
+  ]
+}

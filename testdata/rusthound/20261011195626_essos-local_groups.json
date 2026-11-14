@@ -1,0 +1,184 @@
+{
+ "data": [
+  {
+   "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-519",
+   "IsDeleted": false,
+   "IsACLProtected": true,
+   "Properties": {
+    "domain": "ESSOS.LOCAL",
+    "name": "ENTERPRISE ADMINS@ESSOS.LOCAL",
+    "distinguishedname": "CN=ENTERPRISE ADMINS,CN=USERS,DC=ESSOS,DC=LOCAL",
+    "domainsid": "S-1-5-21-907917752-839331996-494631781",
+    "objectguid": "B0AC3E37-CD51-4306-9424-EE280BC15E5C",
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "isaclprotected": true,
+    "highvalue": true,
+    "samaccountname": "Enterprise Admins",
+    "description": "Designated administrators of the enterprise",
+    "whencreated": 1791732926,
+    "admincount": true,
+    "adminsdholderprotected": true,
+    "groupscope": "Universal",
+    "sidhistory": []
+   },
+   "Members": [
+    {
+     "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-500",
+     "ObjectType": "User"
+    }
+   ],
+   "HasSIDHistory": [],
+   "Aces": [],
+   "ContainedBy": {
+    "ObjectIdentifier": "55ED2F9E-C7BF-4592-92F8-A3A0ED19DC9F",
+    "ObjectType": "Container"
+   }
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-512",
+   "IsDeleted": false,
+   "IsACLProtected": true,
+   "Properties": {
+    "domain": "ESSOS.LOCAL",
+    "name": "DOMAIN ADMINS@ESSOS.LOCAL",
+    "distinguishedname": "CN=DOMAIN ADMINS,CN=USERS,DC=ESSOS,DC=LOCAL",
+    "domainsid": "S-1-5-21-907917752-839331996-494631781",
+    "objectguid": "4655DB24-BFDE-4B5D-9385-9F7C76E4C69B",
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "isaclprotected": true,
+    "highvalue": true,
+    "samaccountname": "Domain Admins",
+    "description": "Designated administrators of the domain",
+    "whencreated": 1791732926,
+    "admincount": true,
+    "adminsdholderprotected": true,
+    "groupscope": "Global",
+    "sidhistory": []
+   },
+   "Members": [
+    {
+     "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-1113",
+     "ObjectType": "User"
+    },
+    {
+     "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-1110",
+     "ObjectType": "Group"
+    },
+    {
+     "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-500",
+     "ObjectType": "User"
+    }
+   ],
+   "HasSIDHistory": [],
+   "Aces": [],
+   "ContainedBy": {
+    "ObjectIdentifier": "55ED2F9E-C7BF-4592-92F8-A3A0ED19DC9F",
+    "ObjectType": "Container"
+   }
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-513",
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "Properties": {
+    "domain": "ESSOS.LOCAL",
+    "name": "DOMAIN USERS@ESSOS.LOCAL",
+    "distinguishedname": "CN=DOMAIN USERS,CN=USERS,DC=ESSOS,DC=LOCAL",
+    "domainsid": "S-1-5-21-907917752-839331996-494631781",
+    "objectguid": "1E9DC5D3-EC11-4AF2-A1F2-6CB250A95FC7",
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "isaclprotected": false,
+    "highvalue": false,
+    "samaccountname": "Domain Users",
+    "description": "All domain users",
+    "whencreated": 1791732926,
+    "admincount": false,
+    "adminsdholderprotected": false,
+    "groupscope": "Global",
+    "sidhistory": []
+   },
+   "Members": [],
+   "HasSIDHistory": [],
+   "Aces": [],
+   "ContainedBy": {
+    "ObjectIdentifier": "55ED2F9E-C7BF-4592-92F8-A3A0ED19DC9F",
+    "ObjectType": "Container"
+   }
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-1106",
+   "IsDeleted": false,
+   "IsACLProtected": true,
+   "Properties": {
+    "domain": "ESSOS.LOCAL",
+    "name": "GREATMASTER@ESSOS.LOCAL",
+    "distinguishedname": "CN=GREATMASTER,CN=USERS,DC=ESSOS,DC=LOCAL",
+    "domainsid": "S-1-5-21-907917752-839331996-494631781",
+    "objectguid": "9894426F-B24B-4DD5-AA19-34B6813E0230",
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "isaclprotected": true,
+    "highvalue": false,
+    "samaccountname": "greatmaster",
+    "description": null,
+    "whencreated": 1791737010,
+    "admincount": true,
+    "adminsdholderprotected": true,
+    "groupscope": "Universal",
+    "sidhistory": []
+   },
+   "Members": [],
+   "HasSIDHistory": [],
+   "Aces": [],
+   "ContainedBy": {
+    "ObjectIdentifier": "55ED2F9E-C7BF-4592-92F8-A3A0ED19DC9F",
+    "ObjectType": "Container"
+   }
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-907917752-839331996-494631781-1112",
+   "IsDeleted": false,
+   "IsACLProtected": false,
+   "Properties": {
+    "domain": "ESSOS.LOCAL",
+    "name": "SPYS@ESSOS.LOCAL",
+    "distinguishedname": "CN=SPYS,CN=USERS,DC=ESSOS,DC=LOCAL",
+    "domainsid": "S-1-5-21-907917752-839331996-494631781",
+    "objectguid": "C110D35D-2F49-4D2C-A601-8D94FE432DD3",
+    "doesanyacegrantownerrights": false,
+    "doesanyinheritedacegrantownerrights": false,
+    "isaclprotected": false,
+    "highvalue": false,
+    "samaccountname": "Spys",
+    "description": null,
+    "whencreated": 1791737019,
+    "admincount": false,
+    "adminsdholderprotected": false,
+    "groupscope": "DomainLocal",
+    "sidhistory": []
+   },
+   "Members": [
+    {
+     "ObjectIdentifier": "01E855D1-AC5A-4545-8939-DB9F76963D22",
+     "ObjectType": "Group"
+    }
+   ],
+   "HasSIDHistory": [],
+   "Aces": [],
+   "ContainedBy": {
+    "ObjectIdentifier": "55ED2F9E-C7BF-4592-92F8-A3A0ED19DC9F",
+    "ObjectType": "Container"
+   }
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "groups",
+  "count": 5,
+  "version": 6,
+  "collectorversion": "RustHound-CE v2.5.23"
+ }
+}

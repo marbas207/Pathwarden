@@ -1,0 +1,377 @@
+# Changelog
+
+## 2.5.30 - 2026-10-29
+
+### Fixed
+
+Foreign principals from a trusted forest were emitted with `ObjectType: "Group"`, so once both forests were ingested some foreign users rendered as Group nodes in BloodHound CE ([#107](https://github.com/g0h4n/RustHound-CE/issues/107)). `Fsp::parse` guessed the type from the SID, labelling `User` only when the name split on `-` had 17+ parts and `Group` otherwise; a domain SID has ~8 parts, so the `User` branch never fired and every foreign member fell to `Group`. The checker's unresolved-SID fallbacks (`replace_sid_members`, `add_type_for_ace`, `add_contained_by_for`) hardcoded `Group` as well. Since User, Group and Computer can't be told apart from a domain SID alone (shared RID space), a new `guess_object_type_from_str` in `enums::sid` now labels the well-known SIDs and returns `Base` otherwise, the same convention the SAMR collector already uses, and those four fallbacks default to `Base`. Known principals still resolve to their real type through `sid_type`; only genuinely unknown SIDs become `Base`, which BloodHound reconciles at merge time. Well-known group SIDs keep their `Group` label and `MemberOf` edges are unchanged. `add_type_for_allowtedtoact` still defaults to `Computer` (RBCD). Thanks to [@Zhaokix](https://github.com/Zhaokix) for the detailed report, building on the FSP identifier fix from [#87](https://github.com/g0h4n/RustHound-CE/issues/87).
+
+## 2.5.29 - 2026-10-27
+
+### Changed
+
+Shrink the ChildObjects automaton by reversing DNs so shared suffixes become shared prefixes ([#105](https://github.com/g0h4n/RustHound-CE/issues/105)). The Aho-Corasick automaton from 2.5.28 is built over the objects' DNs, which share long suffixes (`...,OU=DEPT001,DC=CORP,DC=EXAMPLE,DC=COM`) a trie can't fold. Reversing the bytes of the DNs and of each upper-cased `dn_sid` entry turns those suffixes into prefixes: on a container-heavy 801k-object domain the build's heap peak drops from 1,012 MB to 281 MB and `add_childobjects_members` from 5.10 s to 3.53 s. Output is unchanged, element for element and in the same order, UTF-8 names included; the gPLink automaton is untouched.
+
+### Fixed
+
+Skip the WINREG (`RegistrySessions`) read when there is no password or NT hash, instead of failing with a misleading reason ([#102](https://github.com/g0h4n/RustHound-CE/issues/102)). The MS-RRP `\winreg` bind uses NTLM with the command-line secret, so under `-k` without `-p`/`-H` it failed on every host and `RegistrySessions` came back `Collected: false` with `(RemoteRegistry stopped?)`. The read now follows the CA registry rule (shared check and reason), is decided before any host is contacted, and is logged once; `-k -p` and `-k -H` behave as before. A real Kerberos bind needs changes inside the `dcerpc` dependency and is tracked separately.
+
+Thanks a lot to [marbas207](https://github.com/marbas207) for these two clean and well-tested contributions! More information directly from the pull requests [#106](https://github.com/g0h4n/RustHound-CE/pull/106) and [#104](https://github.com/g0h4n/RustHound-CE/pull/104)
+
+## 2.5.28 - 2026-10-22
+
+Make the `ChildObjects` and `gPLink` resolution checker passes linear instead of quadratic ([#101](https://github.com/g0h4n/RustHound-CE/issues/101)). `add_childobjects_members` and `replace_guid_gplink` in `src/json/checker/common.rs` compared every OU, domain and container (resp. every gPLink GUID) against every `dn_sid` entry. Both now match with a single **Aho-Corasickù** automaton in one pass, **on a generated 203k-object domain they drop from 71.5s to 0.52s**, and scale linearly from there. Output is identical, element for element and in the same order. Adds `aho-corasick` as a direct dependency (already in the tree via `regex`). Thanks a lot to [marbas207](https://github.com/marbas207) for this clean and well-tested contribution! More information directly from the pull request [#103](https://github.com/g0h4n/RustHound-CE/pull/103)
+
+## 2.5.27 - 2026-10-19
+
+### Added
+- CA registry collection over MS-RRP for ESC6 / ESC6a ([#97](https://github.com/g0h4n/RustHound-CE/issues/97)). A new `src/modules/registry/` module reads two HKLM values per Enterprise CA over `\winreg` and fills the existing `CARegistryData` fields: `IsUserSpecifiesSanEnabled` (`EditFlags & EDITF_ATTRIBUTESUBJECTALTNAME2`, `0x40000`) for ESC6, and `RoleSeparationEnabled` (`== 1`) for ESC6a, matching SharpHoundCommon v4.9.0 `CertAbuseProcessor`. New `-c CARegistry` collection method (also runs under `All`, like `LocalGroup` / `WebClient`, not `RegistryOnly`), gated `!cert_auth`. Per CA: a 445 reachability pre-check, a sealed `\winreg` bind reusing the session module's `RegistryClient`, two reads under a per-CA timeout with bounded concurrency, and one retry on `STATUS_PIPE_NOT_AVAILABLE` (`0xc00000ac`) when Remote Registry is still trigger-starting. Password or NT-hash auth only (MS-RRP has no Kerberos bind); a run with neither records the values as not collected with the reason. A value absent on an opened key is a successful read of `false` (collected), as SharpHound does; a key-open or connection failure is `Collected: false` with a `FailureReason`. Thanks to [@marbas207](https://github.com/marbas207) ([#98](https://github.com/g0h4n/RustHound-CE/pull/98)).
+
+### Fixed
+- `CARegistryData` sub-structs (`IsUserSpecifiesSanEnabled`, `RoleSeparationEnabled`, `EnrollmentAgentRestrictions`) defaulted to `Collected: true` / `Value: false` and were never read, so a CA with the SAN flag set looked safe ([#97](https://github.com/g0h4n/RustHound-CE/issues/97)). Following the `WebClientRunning` / `Session` precedent, the three defaults flip to `Collected: false`, and the new collector writes `Collected: true` only on a successful read, keeping the nested struct and the flat `isuserspecifiessanenabledcollected` / `roleseparationenabledcollected` properties in sync. No graph change: BloodHound-CE only evaluates ESC6 when `isuserspecifiessanenabledcollected` is true. Thanks to [@marbas207](https://github.com/marbas207) ([#98](https://github.com/g0h4n/RustHound-CE/pull/98)).
+- Standalone sMSAs (`msDS-ManagedServiceAccount`) were typed as Computer instead of User, diverging from SharpHound ([#99](https://github.com/g0h4n/RustHound-CE/issues/99)). Because an sMSA derives from `computer`, `get_type()` matched it on the `computer` arm; only the gMSA had a User arm ahead of it. The gMSA arm now also matches `msDS-ManagedServiceAccount` and returns `Type::User`, so sMSAs appear as `SMSA$@DOMAIN` in the users output (with User ACE parsing, excluded from SMB collection) rather than as computers. The user parser now also sets `msa` / `gmsa` from `objectClass` (gMSAs previously lacked the `gmsa` property). `Computer.DumpSMSAPassword` is left for a later change. Thanks to [@marbas207](https://github.com/marbas207) ([#100](https://github.com/g0h4n/RustHound-CE/pull/100)).
+
+## 2.5.26 - 2026-10-17
+
+### Added
+- ESC13 support: certificate template policies and issuance policy group links ([#95](https://github.com/g0h4n/RustHound-CE/issues/95)). CertTemplate now emits `certificatepolicy` (`msPKI-Certificate-Policy`, an array, empty when absent), and IssuancePolicy resolves `msDS-OIDToGroupLink` into `oidgrouplink` and `GroupLink` (`ObjectIdentifier` = the group SID, `ObjectType` = `Group`), resolved from the collected data in the checker. Together these let BloodHound-CE form the `ExtendedByPolicy` and `OIDGroupLink` edges that the ESC13 path walks. Both attributes already come back in the existing Configuration NC read, so no extra search or rights are needed; an unresolved link stays at the default and `oidgrouplink` is omitted, matching SharpHound. Thanks to [@marbas207](https://github.com/marbas207) ([#96](https://github.com/g0h4n/RustHound-CE/pull/96)).
+
+### Fixed
+- `-c RegistryOnly` ran no session module, so no registry sessions were collected since v2.5.20 ([#89](https://github.com/g0h4n/RustHound-CE/issues/89)). `does_session()` matched only `All | Session` while `registry()` included `RegistryOnly`, so the module guard skipped it; it's now derived from `srvsvc() || wkssvc() || registry()` so the checks can't drift apart. Thanks to [@marbas207](https://github.com/marbas207) ([#90](https://github.com/g0h4n/RustHound-CE/pull/90)).
+- Computer session lists (`Sessions`, `PrivilegedSessions`, `RegistrySessions`) were written `Collected: true` even when the calls failed or the host was never contacted ([#91](https://github.com/g0h4n/RustHound-CE/issues/91)). Following the `WebClientRunning` pattern, `Session` now defaults to `Collected: false`, each list is `Collected: true` only when its own call succeeded, otherwise `Collected: false` with a `FailureReason`; return codes other than 0 and `ERROR_MORE_DATA` (234) are failures, and a per-host timeout keeps results from calls that already finished. This changes the output for DCOnly collections and any host whose sessions weren't read; BloodHound-CE only reads `Results` when `Collected` is true, so the graph is unchanged. Thanks to [@marbas207](https://github.com/marbas207) ([#92](https://github.com/g0h4n/RustHound-CE/pull/92)).
+- SMB modules (sessions and the Remote Registry bind, local groups, WebClient, SYSVOL) signed in to `--domain` instead of the account's own domain from `-u`, so an account from another domain failed with `STATUS_LOGON_FAILURE` while LDAP worked ([#93](https://github.com/g0h4n/RustHound-CE/issues/93)). `smb_user()` becomes `smb_identity()`, which returns the domain named in `-u` (`DOMAIN\user` => `DOMAIN`, `user@domain` => `domain`) and falls back to `--domain` when there is none; the collected domain stays separate for the DC check, group SIDs, `apply_findings` and the SYSVOL root. Only affects runs where `-u` names a domain other than `--domain`. Thanks to [@marbas207](https://github.com/marbas207) ([#94](https://github.com/g0h4n/RustHound-CE/pull/94)).
+
+### Changed
+- `ROADMAP.md`: ESC13 fields ticked. Coverage: CertTemplate 45/47, IssuancePolicies 24/27, total 508/587.
+
+## 2.5.25 - 2026-10-14
+
+### Fixed
+- Enterprise CA published templates were resolved by substring, so on a default CA `User` resolved to `ExchangeUser`, `UserSignature` to `ExchangeUserSignature`, and `CA` to `Administrator` in a `.local` domain ([#85](https://github.com/g0h4n/RustHound-CE/issues/85)). `templates_enabled_change_displayname_to_sid` keyed its map by the full `NAME@DOMAIN` and kept every key that *contained* the published name, taking the smallest. Templates are now keyed by their bare name (the RDN, which is what `certificateTemplates` holds) and looked up exactly, ignoring case, so each name matches at most one template and the CA's `EnabledCertTemplates` (and the `PublishedTo` edges ADCS attack paths start from) are correct. The result stays deterministic ([#44](https://github.com/g0h4n/RustHound-CE/pull/44)). Thanks to [@marbas207](https://github.com/marbas207) ([#86](https://github.com/g0h4n/RustHound-CE/pull/86)).
+- Foreign security principals were identified by their `objectGUID` instead of their SID ([#87](https://github.com/g0h4n/RustHound-CE/issues/87)), a regression introduced in v2.5.14. `Fsp::parse` read `objectSid` only from the text attributes, where a domain SID (not valid UTF-8) never lands, while the binary-attribute loop set `object_identifier` to `objectGUID` and overwrote any well-known SID already read. Members from trusted forests and well-known SIDs (Authenticated Users `S-1-5-11`, Interactive `S-1-5-4`, ...) keyed a nameless GUID node that never merged with the real SID-keyed principal, breaking `MemberOf` edges. `objectSid` is now read from the binary attributes as `Group::parse` does, and `objectGUID` is kept as a property only. Thanks to [@marbas207](https://github.com/marbas207).
+
+## 2.5.24 - 2026-10-10
+
+Fix false-positive ACEs on Certificate Templates. The `ObjectIdentifier` was left unset on `certtemplates` objects, causing all certificate-related ACEs to be merged onto a single node and producing false positives in BloodHound CE. The `ObjectIdentifier` is now set per Certificate Template, so ACEs are correctly mapped to their own template node.
+
+Thanks a lot to [rtpt-romankarwacik](https://github.com/rtpt-romankarwacik) for your contribution! More information directly from the pull request [#84](https://github.com/g0h4n/RustHound-CE/pull/84)
+
+## 2.5.23 - 2026-10-07
+
+### Fixed
+- `HasSIDHistory` is now emitted as typed principals (`{ObjectIdentifier, ObjectType}`) for users, groups and computers ([#79](https://github.com/g0h4n/RustHound-CE/issues/79)), instead of a raw SID string list that recent BloodHound CE rejected at ingestion (`cannot unmarshal string ... into ein.TypedPrincipal`). ObjectType is resolved in the checker via the global `sid_type` map (`Base` fallback).
+- LDAP range retrieval: groups with more than 1499 members no longer return an empty `Members` array ([#76](https://github.com/g0h4n/RustHound-CE/issues/76)). Ranged attribute requests (`member;range=0-*`) are now paged until the server returns all entries, restoring `MemberOf` relationships on large groups.
+- Floating point exception during the session collection phase ([#77](https://github.com/g0h4n/RustHound-CE/issues/77)): guard against a division by zero when computing progress over an empty active-target set.
+
+### Added
+- WriteProperty ACE mapping on an object's RDN ([#78](https://github.com/g0h4n/RustHound-CE/issues/78)): WriteProperty rights applied directly to the Relative Distinguished Name are now detected and emitted as the corresponding edge, matching bloodyAD. `WriteRDN`
+
+## 2.5.22 - 2026-10-04
+
+### Added
+- WebClient/WebDAV service probe (`IsWebClientRunning`, issue #72): for each active computer, opens the `\PIPE\DAV RPC SERVICE` named pipe over SMB and fills `Computer:IsWebClientRunning` (`{ Result, Collected, FailureReason }`), flagging ESC8 / coercion relay candidates. New `-c WebClient` collection method (also runs under `All`). Detection technique by [@tifkin_](https://x.com/tifkin_/status/1419806476353298442); ported from [IsWebClientRunning-rs](https://github.com/g0h4n/IsWebClientRunning-rs).
+
+### Changed
+- Shared `transport::smb::is_reachable()` and `Computer::is_active()` across the sessions, local-group and webclient modules (removed the duplicated private copies in `session`).
+- `ROADMAP.md`: `IsWebClientRunning` marked implemented; new planned `Arguments` section (shared SMB/RPC `--workers` / `--throttle` / `--jitter` / timeouts / `--opsec`).
+
+## 2.5.21 - 2026-10-03
+
+### Added
+- ESC8 now probes Certificate Enrollment Web Service (CES) endpoints in addition to classic `/certsrv/` web enrollment ([#73](https://github.com/g0h4n/RustHound-CE/issues/73)): `<CAName>_CES_Kerberos` and `<CAName>_CES_NTLM` (`/service.svc/CES`) are each probed over HTTP and HTTPS, reusing the existing TCP pre-check and NTLM Type 1/Type 2 EPA (Channel Binding) detection. Results are emitted in `HttpEnrollmentEndpoints` with `Type: CertificateEnrollmentWebService`; the two `/certsrv/` endpoints are still always reported. CES is a second NTLM-relay surface to AD CS. Ref: [ADHDMurky](https://adhdmurky.github.io/posts/post4/).
+- `EnterpriseCA::caname()` getter, used to build the CES virtual-directory path; the CA short name is threaded from `run_modules` down to `check_esc8`.
+
+## 2.5.20 - 2026-09-30
+
+### Added
+- `Computer`:`LocalGroups` is now collected live over MS-SAMR ([#69](https://github.com/g0h4n/RustHound-CE/issues/69)): each host's BUILTIN aliases (`SamrOpenAlias` / `SamrGetMembersInAlias`) feed the `AdminTo` (544), `CanRDP` (555), `ExecuteDCOM` (562) and `CanPSRemote` (580) edges. Reuses the SMB transport, so it works over password, pass-the-hash and Kerberos. Prototyped in [LocalGroups-rs](https://github.com/g0h4n/LocalGroups-rs).
+- New collection method `-c LocalGroup` (LDAP + SAMR); also runs under `All`. Member `ObjectType` is resolved from the LDAP `sid_type` map (User / Group / Computer) instead of a generic fallback.
+- `SeRemoteInteractiveLogonRight` is synthesized on every host ({Administrators, Remote Desktop Users}), as SharpHound does, so `CanRDP` resolves on domain controllers.
+
+### Fixed
+- Well-known SIDs (`S-1-5-32-*`, `S-1-5-9`, `S-1-5-11`, …) in GPO-resolved principals are emitted as `<DOMAIN>-<SID>`, matching SharpHound's `GetWellKnownPrincipalObjectIdentifier`, so their edges attach to the graph node instead of dangling.
+
+### Changed
+- Bumped `dcerpc` to `0.2.11` (public SMB pipe required by the SAMR path) and added `windows-sddl`.
+- `ROADMAP.md` updated: `Computer` 62.2% => 68.9%, overall coverage 84.3% => 85.7% (503 / 587).
+
+## 2.5.14 - 2026-09-17
+
+### Fixed
+- ESC8 web enrollment probe always returned an empty `HttpEnrollmentEndpoints` array ([#67](https://github.com/g0h4n/RustHound-CE/issues/67)). Both endpoints are now reported, and a closed port is distinguished from a failed request.
+- `adminCount` is read as an integer instead of being compared to `"1"`.
+- `lockedout` and `passwordexpired` are read from `msDS-User-Account-Control-Computed`, where the bits actually live.
+
+### Added
+- `objectguid` on every object type
+- OWNER RIGHTS (`S-1-3-4`) detection: `doesanyacegrantownerrights`, `doesanyinheritedacegrantownerrights` and the two matching per-ACE flags
+- Computer: `useraccountcontrol`, `isdc`, `isreadonlydc`, `admincount`, `adminsdholderprotected`, `lockedout`, `passwordexpired`, `usedeskeyonly`, `encryptedtextpwdallowed`, `logonscriptenabled`, `email`
+- User: `adminsdholderprotected`, `lockedout`, `passwordexpired`, `smartcardrequired`, `usedeskeyonly`, `encryptedtextpwdallowed`, `logonscriptenabled`
+- Group: `groupscope`, `sidhistory`, `HasSIDHistory`, `adminsdholderprotected`
+
+### Changed
+- `ROADMAP.md` rewritten with a per-object compatibility table against SharpHound `v2.16.0.0`. Coverage: 84.3% (495 / 587).
+
+## 2.5.13 - 2026-09-10
+
+Expose RustHound-CE as a reusable Rust library. `ldap_search` is split into two composable entry points: `ldap_auth(options)` authenticates (simple bind, pass-the-hash, Kerberos, or certificate) and returns a ready `ldap3::Ldap` session, and `run_collection(ldap, options)` runs the full workflow (collect, parse, modules, JSON/zip) over that session and returns the output path. Both return `Err` instead of calling `process::exit`, and `run_collection` never unbinds the session, so a caller can bring its own authenticated connection. The CLI behaviour is unchanged. See [INTEGRATION.md](INTEGRATION.md).
+
+## 2.5.12 - 2026-09-10
+
+### Added
+
+Add certificate authentication for the LDAP collection ([#31](https://github.com/g0h4n/RustHound-CE/issues/31)): authenticate over LDAP with a client certificate (`--pfx` / `--pfx-pass`, or `--crt` / `--key`) instead of a password, NT hash, or Kerberos ticket. The DC maps the certificate at the TLS layer (Schannel), so no bind is needed. StartTLS on 389 by default, or LDAPS 636 with `--ldaps`; TLS 1.2 enforced. SMB-based modules (sessions, GPO/SYSVOL) are skipped under certificate auth. Prototyped in [PassTheCert-rs](https://github.com/g0h4n/PassTheCert-rs), ported from [AlmondOffSec/PassTheCert](https://github.com/AlmondOffSec/PassTheCert).
+ 
+### Fixed
+ 
+Thanks to [@dmarsoev](https://github.com/dmarsoev) ([#66](https://github.com/g0h4n/RustHound-CE/pull/66)):
+ 
+- SMB auth with a UPN username (`-u user@domain.local`) failed with `STATUS_LOGON_FAILURE`; a new `smb_user()` helper normalizes the SMB identity (LDAP untouched).
+- The ESC8 probe could panic and abort the run (`rayon` + `reqwest::blocking` inside async); now uses `spawn_blocking` and logs-and-skips task failures.
+- ESC8 false negatives: the anonymous NTLM Type 1 blob set `NEGOTIATE_VERSION` without the Version block, so IIS never returned a Type 2 challenge; the flag is dropped and web-enrollment-without-EPA is detected again (matches Certipy).
+
+## 2.5.11 - 2026-09-08
+
+Add Kerberos (pass-the-ticket) authentication to the SMB transport ([#61](https://github.com/g0h4n/RustHound-CE/issues/61)). With `--kerberos`, RustHound-CE reads a TGT from `KRB5CCNAME`, gets a `cifs/<host>` service ticket and builds a SPNEGO AP-REQ for `SmbClient::login_kerberos`, so the sessions and GPO SYSVOL collections work over Kerberos next to password and pass-the-hash. Pure Rust (self-contained ccache v4 parser + `picky-krb`, no system GSSAPI, no external ccache crate). TGS/AP-REQ and GSS helpers ported from [icedracon/adhammer](https://github.com/icedracon/adhammer).
+
+## 2.5.10 - 2026-09-07
+
+Fix GPO collection to honor the computer configuration status. The SYSVOL collector now consults `groupPolicyContainer.flags` before parsing a GPO: per MS-GPOL, `flags=0` and `flags=1` are processed while `flags=2` and `flags=3` (computer policy disabled) are skipped. Previously every GPO folder was parsed, so a computer-disabled policy could still inject phantom LocalAdmins, RemoteDesktopUsers, DcomUsers, PSRemoteUsers or UserRights into the output. `Gpo::parse` now keeps the LDAP `flags` value as `gpostatus` (matching the SharpHound contract), missing or malformed flags fail closed with a warning, and a flags 0/1/2/3 test matrix covers Restricted Groups, Groups.xml and Privilege Rights. Thanks to [@devdudumuniz](https://github.com/devdudumuniz) for reporting and fixing this ([#62](https://github.com/g0h4n/RustHound-CE/issues/62), [#63](https://github.com/g0h4n/RustHound-CE/pull/63)).
+
+Also fixes gPLink GUID resolution to be case-insensitive. `replace_guid_gplink` compared the link GUID against the `dn_sid` keys with a case-sensitive `contains`, so a GPO whose gPLink GUID was stored in a different case than its distinguishedName was left unresolved (its link kept the raw GUID instead of the GPO SID). This affected OU and Domain links in general, and in particular caused such GPOs to be skipped by the SYSVOL GPO mapper, leaving their GPOChanges and UserRights empty. The comparison is now done in uppercase on both sides.
+
+## 2.5.9 - 2026-09-04
+
+GPO-based collection from SYSVOL, populating two BloodHound-CE outputs that were previously empty: GPOChanges on OU and Domain objects ([#56](https://github.com/g0h4n/RustHound-CE/issues/56)) and UserRights on Computer objects ([#47](https://github.com/g0h4n/RustHound-CE/issues/47)). Both are derived by reading each GPO's template files off the DC SYSVOL share, with no per-machine RPC.
+
+### Added
+
+- New SMB transport (`transport::smb`): authenticates once (password or pass the hash) and tree-connects the share it needs, IPC$ for the sessions module or SYSVOL for GPO files. Every SMB and RPC step is logged (trace/debug/warn/error).
+- SYSVOL collection (`modules::gpo::sysvol`): walks the Policies directory, reads `GptTmpl.inf` and `Groups.xml`, and feeds the existing parsers. Absent template files are skipped quietly. Thanks to [devdudumuniz](https://github.com/devdudumuniz)!
+- GPO mapping (`modules::gpo::local_group`): mirrors SharpHound GPOLocalGroupProcessor. Fills GPOChanges (LocalAdmins / RemoteDesktopUsers / DcomUsers / PSRemoteUsers) on OU and Domain, and UserRights (SeXxx privileges) on the affected computers.
+- New `LdapOnly` collection method (LDAP only, contacts no machine and does not read SYSVOL), and a `does_gpo()` predicate so GPO collection runs in `All` and `DCOnly`.
+
+### Changed
+
+- `run_modules` now takes `&mut ADResults` instead of individual collections.
+- `ldapfqdn` is now an `Option<String>`; the `"not set"` sentinel is removed and propagated through `ldap_search`.
+- `modules` moved into the library crate.
+- The GPO mapper reuses the checker's work instead of recomputing it: AffectedComputers is left as set by `add_affected_computers*`, and links are correlated by GPO SID via `dn_sid` (after `replace_guid_gplink`). Only the four local-group vectors and the computers' UserRights are filled.
+
+## 2.5.8 - 2026-09-03
+
+Groundwork for GPO-based collection requested in [#47](https://github.com/g0h4n/RustHound-CE/issues/47) (Privileges / User Rights Assignment) and [#56](https://github.com/g0h4n/RustHound-CE/issues/56) (LocalGroup / Restricted Groups). No new edges yet, this release only prepares the SMB transport so a later version can read GPO files off SYSVOL.
+
+- New `src/transport/` module. `src/ldap.rs` moves to `src/transport/ldap.rs` (re-exported, so `crate::ldap` and `rusthound_ce::ldap_search` keep working), and the SMB code that was inlined in the sessions module moves to `src/transport/smb.rs`.
+- `transport::smb` now returns an authenticated `SmbClient` that is share-agnostic: `connect_authenticated` does only the TCP 445 connection and the NTLM SESSION_SETUP (password or pass-the-hash), then the caller tree-connects the share it needs. `connect_ipc` binds IPC$ for the MS-RPC pipes (SRVSVC / WKSSVC / WINREG), and the new `connect_sysvol` binds SYSVOL for future GPO file reads (`GptTmpl.inf`, `Groups.xml`). A single client keeps one active tree, so `tree_connect` can switch between shares.
+- Every SMB and RPC step is logged (trace / debug on progress, warn on RPC pipe issues, error on connect or auth failure) to make authentication failures diagnosable with `RUST_LOG=trace`.
+- The sessions module (`#46`) is refactored onto this transport; behavior is unchanged.
+
+## 2.5.7 - 2026-08-29
+
+Fix macOS cross-compilation failure introduced in v2.5.6.
+
+The `curl` dependency pulled `openssl-sys` which could not find an OpenSSL installation during cross-compilation (`aarch64 => x86_64`) on macOS GitHub Actions runners. Replaced `curl` with `reqwest 0.12` (blocking, `rustls-tls` backend) for the ESC8 web enrollment probe. `reqwest` with rustls is pure Rust and requires no system TLS library, consistent with the rest of the project (`ldap3/tls-rustls-ring`). No behavior change.
+
+## 2.5.6 - 2026-08-29
+
+Issue [#48](https://github.com/g0h4n/RustHound-CE/issues/48), add active ESC8 web enrollment detection.
+
+RustHound-CE now probes each Enterprise CA's `/certsrv/certfnsh.asp` endpoint after LDAP collection, in parallel, and skips the probe automatically when `--collectionmethod DCOnly` is set.
+
+- HTTP probe: flags `401 + WWW-Authenticate: NTLM` on plain HTTP as relay-able (no channel binding possible).
+- HTTPS probe: sends a minimal NTLM Type 1 Negotiate token, parses the server's Type 2 Challenge `TargetInfo` AvPairs to detect [MsvAvChannelBindings](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nlmp/34a9417d-7cc0-43b0-b61c-1f19740df66f) (AvId `0x000A`). Absent or zero-length => EPA disabled => relay possible. Non-zero => EPA enforced => protected.
+- Add `src/utils/b64.rs`: standalone RFC 4648 base64 encode/decode, no external dependency.
+
+## 2.5.5 - 2026-08-26
+
+Implements the session-collection feature requested in [#46](https://github.com/g0h4n/RustHound-CE/issues/46). A new `src/modules/sessions/mod.rs` module runs after the LDAP phase and enumerates active sessions over three native RPC paths, correlating them into the BloodHound CE computer schema:
+
+- **SRVSVC** / `NetrSessionEnum` (opnum 12, level 10) -> `Sessions` (any authenticated user pre-2021; local admin after the `SrvsvcSessionInfo` hardening, else rc=5)
+- **WKSSVC** / `NetrWkstaUserEnum` (opnum 2, level 1) -> `PrivilegedSessions` (local admin required)
+- **WINREG** / `HKEY_USERS` (`OpenHKU` + `BaseRegEnumKey`) -> `RegistrySessions` (Remote Registry service running and the caller permitted by the `winreg` service ACL; local admin on hardened defaults, but not intrinsically required since `HKU` grants Read to Everyone)
+
+The `--collectionmethod` flag is extended with `Session` (all three RPC paths) and `RegistryOnly` (WINREG only); `DCOnly` skips the module entirely. The collector follows SharpHound conventions: a 445 reachability pre-check with a hard timeout, an active-host filter based on `pwdLastSet` age and the `enabled` flag, bounded concurrency with a per-host budget, and principal names resolved to SIDs from the already-collected LDAP data (unresolved principals are logged rather than dropped).
+
+## 2.5.4 - 2026-08-23
+
+Pull Requests [#43](https://github.com/g0h4n/RustHound-CE/pull/43) and [#44](https://github.com/g0h4n/RustHound-CE/pull/44) make RustHound-CE scale on large domains: parallel parsing, checker and output with rayon, streamed ZIP64 JSON writing that fixes the crash on very large domains (800k+ objects), a mimalloc allocator, and deterministic resolution of computer names, ContainedBy and ADCS certificate templates so identical input produces identical output. Thanks to [@luckystars0612](https://github.com/luckystars0612) for these clean and useful contributions!
+
+## 2.5.3 - 2026-08-23
+
+Batch of contributions from [devdudumuniz](https://github.com/devdudumuniz): sIDHistory is now propagated to the top-level `HasSIDHistory` field on User ([#50](https://github.com/g0h4n/RustHound-CE/pull/50)) and Computer ([#51](https://github.com/g0h4n/RustHound-CE/pull/51)) objects, the domain `dSHeuristics` attribute is now collected ([#53](https://github.com/g0h4n/RustHound-CE/pull/53)), unit tests were added for the SID and GUID conversion helpers ([#52](https://github.com/g0h4n/RustHound-CE/pull/52)), and a `CONTRIBUTING.md` development guide was added ([#54](https://github.com/g0h4n/RustHound-CE/pull/54)). Thanks to [@devdudumuniz](https://github.com/devdudumuniz) for this clean and useful batch of contributions!
+
+## 2.5.2 - 2026-08-17
+
+Pull Request [#45](https://github.com/g0h4n/RustHound-CE/pull/45) fixes ACL parsing so IsACLProtected is now derived from each object's own nTSecurityDescriptor, with embedded gMSA and RBCD security descriptors parsed separately. Thanks to [@karanabe](https://github.com/karanabe) for this clean and useful contribution!
+
+## 2.5.1 - 2026-08-12
+
+Issue [#39](https://github.com/g0h4n/RustHound-CE/issues/39) reported by [@halilkirazkaya](https://github.com/halilkirazkaya), RustHound-CE did not collect deleted objects (tombstones).
+
+Deleted objects are now collected by attaching the `LDAP_SERVER_SHOW_DELETED_OID` control (`1.2.840.113556.1.4.417`) to the LDAP search and querying the `CN=Deleted Objects` container. This surfaces tombstoned AD objects in BloodHound CE.
+
+## 2.5.0 - 2026-08-12
+
+This version implements one PR ([#41](https://github.com/g0h4n/RustHound-CE/pull/41)) with the following changes:
+
+- Add NTLM pass-the-hash (PtH) authentication support. An NT hash can now be supplied instead of a password, encoded into a credential string that triggers pass-the-hash in the `sspi` crate's NTLM implementation. Thanks [@AlexLinov](https://github.com/AlexLinov)!
+- Accept NT hashes in plain (`NTHASH`), empty-LM (`:NTHASH`), and full (`LMHASH:NTHASH`) formats, matching the conventions used by tools like impacket and netexec
+- Validate that the NT hash is exactly 32 hexadecimal characters before use
+
+## 2.4.92 - 2026-08-03
+
+This version implements two PRs ([#37](https://github.com/g0h4n/RustHound-CE/pull/37), [#38](https://github.com/g0h4n/RustHound-CE/pull/38)) with the following changes:
+
+- Collect the AD `profilePath` attribute for user objects, emitted as `Properties.profilepath` in `users.json`. This surfaces roaming profile and profile share paths in BloodHound CE user details, without changing CLI or LDAP collection behavior. Thanks [@karanabe](https://github.com/karanabe)!
+- Map all supported `msPKI-Certificate-Name-Flag` subject-name bits to their corresponding BloodHound properties, improving ADCS certificate template coverage. Thanks [@karanabe](https://github.com/karanabe)!
+- Correct the UPN subject-name default to `false` for `msPKI-Certificate-Name-Flag` mapping.
+- Add parser tests for `profilePath` covering both populated and absent values.
+- Add unit tests covering each `msPKI-Certificate-Name-Flag` bit independently; lab imports confirm all six properties are emitted correctly.
+
+## 2.4.91 - 2026-06-24
+
+Issue [#36](https://github.com/g0h4n/RustHound-CE/issues/36), fix `domainsid` being set to the literal string `"DOMAIN_SID"` in ADCS-related objects (`ntauthstores`,`certtemplates`, `issuancepolicies`, `containers`, `enterprisecas`).
+
+1. Naming contexts were not processed in the correct order, so `CN=Configuration`, (which contains ADCS objects) was parsed before the principal domain naming context. Fixed by ensuring Schema is processed first, then the principal domain, then `CN=Configuration`.
+
+2. `DC=DomainDnsZones` and `DC=ForestDnsZones` are parsed as `Type::Domain` but have no valid `objectSid`, causing them to overwrite the already correctly set `domain_sid` with the literal `"DOMAIN_SID"`. Fixed by only updating `domain_sid` when the returned value is valid.
+
+## 2.4.9 - 2026-06-24
+
+Issue [#35](https://github.com/g0h4n/RustHound-CE/issues/35), `ReadLAPSPassword` ACE now correctly detected on Computer objects.
+
+Two root causes were identified and fixed:
+
+1. `parse_ntsecuritydescriptor` was called with a fresh `Computer::new()` instead of `self`, so `haslaps` was always `false` during ACL parsing regardless of the actual LAPS state of the object.
+
+2. The GUID of `ms-mcs-admpwd` was previously hardcoded, but this attribute is defined when the LAPS extension is installed into the AD schema and its GUID varies between environments. It is now collected dynamically from `attributeSchema` objects alongside all other schema GUIDs.
+
+## 2.4.8 - 2026-06-22
+
+Fix issue [#33](https://github.com/g0h4n/RustHound-CE/issues/33) regarding false-positive `GenericAll` edges on Exchange-enabled objects. [acl.rs](https://github.com/g0h4n/RustHound-CE/blob/main/src/enums/acl.rs)
+
+`ACCESS_ALLOWED_OBJECT_ACE` entries scoped to specific attribute GUIDs (e.g. Exchange-related properties) were incorrectly promoted to `GenericAll` on the whole object. The fix adds an `ace_applies()` check on `ACE_OBJECT_TYPE_PRESENT` to ensure object-scoped ACEs are not over-classified.
+
+Groundwork for issue [#35](https://github.com/g0h4n/RustHound-CE/issues/35): added dynamic schema GUID collection by parsing `attributeSchema` objects from the `CN=Schema` naming context (cf [schema.rs](https://github.com/g0h4n/RustHound-CE/blob/main/src/objects/schema.rs)). The collected `name:schemaIDGUID` mappings are stored in a `schema_guid_map` and will replace the static `OBJECTTYPE_GUID_HASHMAP` for ACE resolution in a future release.
+
+## 2.4.7 - 2026-01-09
+
+Add [obfstr](https://docs.rs/obfstr/latest/obfstr/) for string obfuscation support, required by other projects.
+
+## 2.4.6 - 2026-01-09
+
+Update Zip Compression Method. Currently the zip is in stored format, opting to change to deflated to save disk space.
+Special thanks to [Spyr0](https://github.com/spyr0-sec) for pull request [#28](https://github.com/g0h4n/RustHound-CE/commit/0b33a16eb77044c8f68b6643c542c70b1e455afc).
+
+## 2.4.5 - 2025-12-01
+
+Testing the GitHub Workflow Action for Rust compilation. Special thanks to [@aancw](https://github.com/aancw) for providing the GitHub workflow action.
+
+## 2.4.4 - 2025-11-18
+
+Fix issues where group imports contained members with null ObjectIdentifiers, and improve shortest-path resolution from users to Domain Admins involving accounts such as `ADCSESC1`, `ADCSESC4`, etc. 
+
+## 2.4.3 - 2025-11-04
+
+Fix issue [#15](https://github.com/g0h4n/RustHound-CE/issues/15) by removing object with no Object Identifier.
+Thanks a lot for [IppSec](https://github.com/IppSec) for your contribution! More information about the fix directly from the pull request [#20](https://github.com/g0h4n/RustHound-CE/pull/20)
+
+## 2.4.2 - 2025-10-30
+
+Fix issue [#18](https://github.com/g0h4n/RustHound-CE/issues/18) regarding ACL issues. [acl.rs](https://github.com/g0h4n/RustHound-CE/blob/main/src/enums/acl.rs) 
+Thanks a lot for [0xdf223](https://github.com/0xdf223) for your contribution! More information about ACL fixing directly from the pull request [#19](https://github.com/g0h4n/RustHound-CE/pull/19)
+
+Issues Fixed:
+
+- `AddMember` rights on groups were not being detected;
+- `ForceChangePassword` rights were missing for inherited ACEs;
+- `WriteSPN` and other property-specific write rights were not captured;
+- Any ACEs with property GUIDs when inherited object type filtering was present.
+
+## 2.4.1 - 2025-10-21
+
+Fix issue [#16](https://github.com/g0h4n/RustHound-CE/issues/16) the [users.rs](https://github.com/g0h4n/RustHound-CE/blob/main/src/objects/user.rs#L186) code panic when trying to split on "/" if not present.
+Now fix in version 2.4.1 in main branch.
+
+**Rollback to version 2.4.0** and push PTH version into specific branch: [feat/ntlm-support](https://github.com/g0h4n/RustHound-CE/tree/feat/ntlm-support) I can't validate the pull request in the main branch because I can't publish it on [crates.io](crates.io) if ldap3 don't implement the feature ntlm create by [z-jxy](https://github.com/z-jxy).
+
+The branch [feat/ntlm-support](https://github.com/g0h4n/RustHound-CE/tree/feat/ntlm-support) introduces the new `-H`,`--ldapntlmhash` options, enabling NTLM authentication using NT hash for pass the hash.
+All information regarding the code changes can be found in the original pull request: [#17](https://github.com/g0h4n/RustHound-CE/pull/17)
+Big thanks to [z-jxy](https://github.com/z-jxy) for the excellent work and for implementing this much-needed feature, as requested in issue [#5](https://github.com/g0h4n/RustHound-CE/issues/5)
+
+## 2.4.0 - 2025-06-27
+
+This release introduces the new `--cache`,`--cache-buffer`,`--resume` features, allowing LDAP dump results to be store and load from disk instead of in memory, making it possible to handle much larger datasets with significantly lower RAM usage (saving approximately 70% of memory at peak usage). More informations how to use disk intead of memory in the help section here: [Using disk instead of memory](https://github.com/g0h4n/RustHound-CE/blob/main/HELP.md#using-disk-instead-of-memory)
+
+All information regarding the code changes can be found in the original pull request: [#14](https://github.com/g0h4n/RustHound-CE/pull/14)
+
+Big thanks to [z-jxy](https://github.com/z-jxy) for the excellent work and for implementing this much-needed feature, as requested in issue #[7](https://github.com/g0h4n/RustHound-CE/issues/7)
+
+## 2.3.7 - 2025-06-24
+
+Issue #[13](https://github.com/g0h4n/RustHound-CE/issues/13) fixed.
+"Group members are no longer collected correctly."
+Fixed a logic error: used `if value.is_empty()` instead of `if !value.is_empty()`
+
+## 2.3.6 - 2025-06-23
+
+This version includes a complete code review to apply improvements suggested by [Clippy](https://doc.rust-lang.org/clippy/usage.html) and contributions from [z-jxy](https://github.com/z-jxy). It addresses potential logic issues, removes dead code, and resolves an infinite recursion bug in the Debug implementation.
+
+## 2.3.5 - 2025-06-19
+
+Issue #[10](https://github.com/g0h4n/RustHound-CE/issues/10) fixed.
+
+The problem was caused by the ACEs from `msDS-GroupMSAMembership` overwriting those from `nTSecurityDescriptor`, due to a reassignment of `self.aces` instead of appending to it on gMSA users.
+
+The fix ensures that ACEs from both attributes are now properly merged. As a result, users and groups with `ReadGMSAPassword` permissions on gMSA accounts are correctly captured and included in the final output. Thanks to [0xdf223](https://github.com/0xdf223) for reporting.
+
+## 2.3.4 - 2025-02-13
+
+Merge pull request #[8](https://github.com/g0h4n/RustHound-CE/pull/8) to add a couple more computer node attributes. Thanks [spyr0](https://github.com/spyr0-sec)
+
+## 2.3.3 - 2025-01-28
+
+Merge pull request #[6](https://github.com/g0h4n/RustHound-CE/pull/6) to add argument `--ldap-filter` to change the ldap-filter to use instead of the default `(objectClass=*)`. Thanks [Mayfly277](https://github.com/Mayfly277)
+
+## 2.3.2 - 2025-01-14
+
+The issue where a group had `ActiveDirectoryRights:Self` with a SID mapped to it, theoretically allowing a user to add themselves to the group, has been fixed. Thanks to @shyam0904a for identifying and fixing this issue! https://github.com/g0h4n/RustHound-CE/pull/4
+
+## 2.3.1 - 2025-01-05
+
+This version fixes the issue of the lack of [WriteGPLink](https://support.bloodhoundenterprise.io/hc/en-us/articles/29117665141915-WriteGPLink) for Organization Units and [WriteSPN](https://support.bloodhoundenterprise.io/hc/en-us/articles/17222775975195-WriteSPN) for Computers.
+
+## 2.3.0 -  2024-12-28
+
+The latest update introduces enhanced functionality and optimizations for handling Active Directory objects. It includes support for [IssuancePolicies](https://support.bloodhoundenterprise.io/hc/en-us/articles/26194070577691-IssuancePolicy). Fixing unconstrained delegation issues where FQDNs were replaced with SIDs to ensure compatibility with BloodHound CE. GUIDs are now properly parsed in the Windows Active Directory format, adhering to the little-endian structure, this allow to fixe all issues related to ACEs permissions. Password policy attributes from Active Directory are retrieved and associated with the domain object in domain.json. Additionally, Kerberos service ticket encryption algorithms are now extracted via the `msDS-SupportedEncryptionTypes` attribute. Finally, the code has been optimized to improve object type verification and streamline offline value replacements in `src/json/checker/common.rs`, enhancing performance and maintainability.
+
+### Examples
+
+*The tests were conducted on Mayfly's GOAD lab environment.*
+
+> Shortest paths to systems trusted for unconstrained delegation
+
+```cypher
+MATCH p=shortestPath((n)-[:Owns|GenericAll|GenericWrite|WriteOwner|WriteDacl|MemberOf|ForceChangePassword|AllExtendedRights|AddMember|HasSession|Contains|GPLink|AllowedToDelegate|TrustedBy|AllowedToAct|AdminTo|CanPSRemote|CanRDP|ExecuteDCOM|HasSIDHistory|AddSelf|DCSync|ReadLAPSPassword|ReadGMSAPassword|DumpSMSAPassword|SQLAdmin|AddAllowedToAct|WriteSPN|AddKeyCredentialLink|SyncLAPSPassword|WriteAccountRestrictions|WriteGPLink|GoldenCert|ADCSESC1|ADCSESC3|ADCSESC4|ADCSESC5|ADCSESC6a|ADCSESC6b|ADCSESC7|ADCSESC9a|ADCSESC9b|ADCSESC10a|ADCSESC10b|ADCSESC13|DCFor|SyncedToEntraUser*1..]->(m:Computer))
+WHERE m.unconstraineddelegation = true AND n<>m
+RETURN p
+LIMIT 1000
+```
+
+#### RustHound-CE - v2.3.0
+
+```bash
+rusthound-ce.exe -c All -d ESSOS.local -u vagrant -p vagrant -z
+```
+
+![rusthound-ce-shortest-path-example](./img/demo/RUSTHOUND_ESSOS_LOCAL_SHORTEST_PATH_EXAMPLE_24122024.png)
+
+#### SharpHound - v2.5.9.0
+
+```bash
+SharpHound.exe -c All -d ESSOS.local --ldapusername vagrant --ldappassword vagrant
+```
+
+![sharphound-shortest-path-example](./img/demo/SHARPHOUND_ESSOS_LOCAL_SHORTEST_PATH_EXAMPLE_24122024.png)
+

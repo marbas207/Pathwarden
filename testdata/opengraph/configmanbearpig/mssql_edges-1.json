@@ -1,0 +1,67 @@
+{
+  "graph": {
+    "nodes": [],
+    "edges": [
+      {
+        "kind": "MSSQL_MemberOf",
+        "start": {
+          "value": "CORP\\CAROL@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "sysadmin@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_ControlServer",
+        "start": {
+          "value": "sysadmin@S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      },
+      {
+        "kind": "MSSQL_Contains",
+        "start": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433",
+          "match_by": "id"
+        },
+        "end": {
+          "value": "S-1-5-21-3000-3000-3000-1002:1433\\CM_PS1",
+          "match_by": "id"
+        },
+        "properties": {
+          "traversable": true,
+          "general": "Help text as the collector writes it.",
+          "windowsAbuse": "...",
+          "linuxAbuse": "...",
+          "opsec": "...",
+          "references": "https://example.invalid/"
+        }
+      }
+    ]
+  },
+  "metadata": {
+    "source_kind": "MSSQL"
+  }
+}

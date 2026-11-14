@@ -1,0 +1,15 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 460,
+  "startAt": "a.rr-link", "startSettle": 3000,
+  "gif": ["--hold-end", "2000"],
+  "steps": [
+    {"do": "wait", "ms": 300},
+    {"do": "click", "sel": "details.dl-menu > summary", "ms": 700},
+    {"do": "click", "sel": "[data-ff-open]", "ms": 300},
+    {"do": "waitFor", "js": "document.getElementById('ff-file').textContent.length > 0", "timeout": 20000, "ms": 1100},
+    {"do": "click", "sel": "#ff-dialog label.option >> DefectDojo", "ms": 1400},
+    {"do": "click", "sel": "#ff-dialog label.option >> SARIF", "ms": 900},
+    {"do": "click", "sel": "#ff-download", "ms": 1500}
+  ]
+}

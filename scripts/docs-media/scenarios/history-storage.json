@@ -1,0 +1,14 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it, on a drive P:)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 520,
+  "gif": ["--hold-end", "2000"],
+  "steps": [
+    {"do": "wait", "ms": 400},
+    {"do": "click", "sel": "nav a[href=\"/automate/history\"]", "ms": 1200},
+    {"do": "click", "sel": "main label.option >> Start a new shared history", "ms": 1000},
+    {"do": "click", "sel": "main label.option >> A folder", "ms": 600},
+    {"do": "type", "sel": "#state-path", "text": "P:\\Shared\\pathwarden-history", "delay": 35, "ms": 400},
+    {"do": "click", "sel": "main label.option >> Numbers with names", "ms": 700},
+    {"do": "click", "sel": "main button.btn.primary >> Save", "ms": 2600}
+  ]
+}

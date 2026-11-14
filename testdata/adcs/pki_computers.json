@@ -1,0 +1,51 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1000",
+      "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-516",
+      "IsDC": true,
+      "Properties": {
+        "name": "DC01.PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "enabled": true
+      },
+      "DCRegistryData": {
+        "CertificateMappingMethods": {
+          "Value": 24,
+          "Collected": true
+        },
+        "StrongCertificateBindingEnforcement": {
+          "Value": 1,
+          "Collected": true
+        }
+      }
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1001",
+      "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-515",
+      "Properties": {
+        "name": "CA01.PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "enabled": true
+      }
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1002",
+      "PrimaryGroupSID": "S-1-5-21-5000-5000-5000-515",
+      "Properties": {
+        "name": "CA02.PKI.LOCAL",
+        "domain": "PKI.LOCAL",
+        "domainsid": "S-1-5-21-5000-5000-5000",
+        "enabled": true
+      }
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "computers",
+    "count": 3,
+    "version": 6
+  }
+}

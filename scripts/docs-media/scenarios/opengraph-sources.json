@@ -1,0 +1,24 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (an empty workspace, on a drive P:)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 400,
+  "gif": ["--hold-end", "1200", "--fast", "0.3-2.6:2"],
+  "steps": [
+    {"do": "wait", "ms": 300},
+    {"do": "click", "sel": "nav a[href=\"/collect\"]", "ms": 700},
+    {"do": "click", "sel": "a.src-choice[href=\"/analyze\"]", "ms": 700},
+    {"do": "hover", "sel": "#dropzone .link", "ms": 200},
+    {"do": "upload", "sel": "#files", "files": ["demo/20261001020000_PathwardenDemo.zip", "scripts/docs-media/fixtures/taskhound_opengraph.json"], "ms": 300},
+    {"do": "waitFor", "js": "!document.getElementById('og-panel').hidden", "timeout": 15000},
+    {"do": "scroll", "sel": "#og-panel", "block": "center", "ms": 700},
+    {"do": "hover", "sel": "#og-panel", "ms": 1000},
+    {"do": "click", "sel": "details.og-declare > summary", "ms": 700},
+    {"do": "scroll", "sel": "details.og-declare .og-enable", "block": "center", "ms": 600},
+    {"do": "type", "sel": "details.og-declare textarea.og-ok", "text": "R00S00-SRV0000.SCALE.LOCAL", "delay": 25, "ms": 300},
+    {"do": "click", "sel": "details.og-declare .og-enable", "ms": 700},
+    {"do": "scroll", "sel": "#start", "block": "center", "ms": 500},
+    {"do": "waitFor", "js": "!document.getElementById('start').disabled", "timeout": 30000},
+    {"do": "click", "sel": "#start", "ms": 1600},
+    {"do": "click", "sel": "nav a[href=\"/mappings\"]", "ms": 700},
+    {"do": "hover", "sel": "button[data-og-trust]", "ms": 600}
+  ]
+}

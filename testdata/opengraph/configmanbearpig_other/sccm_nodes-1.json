@@ -1,0 +1,72 @@
+{
+  "graph": {
+    "nodes": [
+      {
+        "id": "PS1",
+        "kinds": [
+          "SCCM_Site"
+        ],
+        "properties": {
+          "name": "Site PS1",
+          "displayname": "Site PS1",
+          "environmentid": "PS1",
+          "collectionSource": [],
+          "siteCode": "PS1",
+          "parentSiteCode": "",
+          "rootSiteCode": "PS1",
+          "siteType": "Primary Site",
+          "siteServerName": "ps1.other.corp.local",
+          "siteServerFQDN": "ps1.other.corp.local",
+          "SQLServerName": "ps1.other.corp.local",
+          "SQLDatabaseName": "CM_PS1",
+          "version": "5.00.9106.1000"
+        }
+      },
+      {
+        "id": "SMS00001@PS1",
+        "kinds": [
+          "SCCM_Collection"
+        ],
+        "properties": {
+          "name": "All Systems",
+          "collectionID": "SMS00001",
+          "rootSiteCode": "PS1",
+          "sourceSiteCode": "PS1",
+          "members": [
+            "GUID:0E0E0001-0000-0000-0000-000000000004"
+          ]
+        }
+      },
+      {
+        "id": "CORP\\DAVE@PS1",
+        "kinds": [
+          "SCCM_AdminUser"
+        ],
+        "properties": {
+          "name": "corp\\dave",
+          "adminSid": "S-1-5-21-3000-3000-3000-1104",
+          "isGroup": false,
+          "rootSiteCode": "PS1",
+          "roles": [
+            "FullAdministrator"
+          ]
+        }
+      },
+      {
+        "id": "GUID:0E0E0001-0000-0000-0000-000000000004",
+        "kinds": [
+          "SCCM_ClientDevice"
+        ],
+        "properties": {
+          "name": "GUID:0E0E0001-0000-0000-0000-000000000004",
+          "siteCode": "PS1",
+          "ADDomainSID": "S-1-5-21-3000-3000-3000"
+        }
+      }
+    ],
+    "edges": []
+  },
+  "metadata": {
+    "source_kind": "SCCM"
+  }
+}

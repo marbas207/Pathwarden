@@ -1,0 +1,3 @@
+# Byte for byte as the releases wrote them: full runs carry each file's
+# SHA-256, and a checkout must not change a line ending.
+* -text

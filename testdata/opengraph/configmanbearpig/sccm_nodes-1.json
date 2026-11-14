@@ -1,0 +1,113 @@
+{
+  "graph": {
+    "nodes": [
+      {
+        "id": "PS1",
+        "kinds": [
+          "SCCM_Site"
+        ],
+        "properties": {
+          "name": "Site PS1",
+          "displayname": "Site PS1",
+          "environmentid": "PS1",
+          "collectionSource": [],
+          "siteCode": "PS1",
+          "parentSiteCode": "",
+          "rootSiteCode": "PS1",
+          "siteType": "Primary Site",
+          "siteServerName": "ps1-pss.corp.local",
+          "siteServerFQDN": "ps1-pss.corp.local",
+          "SQLServerName": "ps1-pss.corp.local",
+          "SQLDatabaseName": "CM_PS1",
+          "version": "5.00.9106.1000"
+        }
+      },
+      {
+        "id": "SMS00001@PS1",
+        "kinds": [
+          "SCCM_Collection"
+        ],
+        "properties": {
+          "name": "All Systems",
+          "collectionID": "SMS00001",
+          "rootSiteCode": "PS1",
+          "sourceSiteCode": "PS1",
+          "members": [
+            "GUID:0D0C0001-0000-0000-0000-000000000001",
+            "GUID:0A0B0001-0000-0000-0000-000000000002"
+          ]
+        }
+      },
+      {
+        "id": "CORP\\ALICE@PS1",
+        "kinds": [
+          "SCCM_AdminUser"
+        ],
+        "properties": {
+          "name": "corp\\alice",
+          "adminSid": "S-1-5-21-3000-3000-3000-1101",
+          "isGroup": false,
+          "rootSiteCode": "PS1",
+          "roles": [
+            "FullAdministrator"
+          ]
+        }
+      },
+      {
+        "id": "CORP\\BOB@PS1",
+        "kinds": [
+          "SCCM_AdminUser"
+        ],
+        "properties": {
+          "name": "corp\\bob",
+          "adminSid": "S-1-5-21-3000-3000-3000-1102",
+          "isGroup": false,
+          "rootSiteCode": "PS1",
+          "roles": [
+            "AllPermissions"
+          ]
+        }
+      },
+      {
+        "id": "GUID:0D0C0001-0000-0000-0000-000000000001",
+        "kinds": [
+          "SCCM_ClientDevice"
+        ],
+        "properties": {
+          "name": "GUID:0D0C0001-0000-0000-0000-000000000001",
+          "siteCode": "PS1",
+          "ADDomainSID": "S-1-5-21-3000-3000-3000"
+        }
+      },
+      {
+        "id": "GUID:0A0B0001-0000-0000-0000-000000000002",
+        "kinds": [
+          "SCCM_ClientDevice"
+        ],
+        "properties": {
+          "name": "GUID:0A0B0001-0000-0000-0000-000000000002",
+          "siteCode": "PS1",
+          "ADDomainSID": "S-1-5-21-3000-3000-3000"
+        }
+      },
+      {
+        "id": "GUID:0FFF0001-0000-0000-0000-000000000003",
+        "kinds": [
+          "SCCM_ClientDevice"
+        ],
+        "properties": {
+          "name": "DC01.CORP.LOCAL",
+          "siteCode": "PS1",
+          "isPossibleClient": true,
+          "collectionSource": [
+            "LDAP-CmRcService"
+          ]
+        }
+      }
+    ],
+    "edges": []
+  },
+  "metadata": {
+    "source_kind": "SCCM"
+  }
+}

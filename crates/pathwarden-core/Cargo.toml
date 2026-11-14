@@ -1,0 +1,50 @@
+[package]
+name = "pathwarden-core"
+description = "Attack path analysis, findings and remediation planning for Active Directory, from BloodHound collector data"
+repository.workspace = true
+homepage.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+# The diagnostics bundle's name search (src/diagnostics.rs): every name of a
+# domain in one pass.
+aho-corasick = "1.1"
+# Encrypting the history with a passphrase (src/crypt.rs).
+age = { version = "0.12", default-features = false }
+anyhow.workspace = true
+# Evidence packs (src/evidence): Ed25519 signatures in minisign's format.
+base64 = "0.22"
+ed25519-dalek = { version = "2", default-features = false, features = ["std", "zeroize"] }
+getrandom = "0.2"
+# The graph's ID index and edge set (src/graph.rs): several times faster
+# than the standard hasher, and seeded per process like it.
+foldhash = "0.2"
+# Reading an earlier run's graph from its full run in the history
+# (src/exposed.rs); zip already builds it.
+flate2 = "1"
+petgraph.workspace = true
+pulldown-cmark.workspace = true
+# PingCastle health-check reports (src/pingcastle.rs); no DTD support by default.
+roxmltree = "0.20"
+serde.workspace = true
+serde_json.workspace = true
+# Git blob IDs, to tell a history file the remote has from a local write
+# (src/store.rs `on_remote`).
+sha1 = "0.10"
+sha2 = "0.10"
+zeroize = "1"
+thiserror.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
+zip.workspace = true
+
+# Stopping a plugin's whole process tree (see src/proc_tree.rs), and
+# owner-only folder and file permissions (src/perms.rs).
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Cryptography","Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_Time", "Win32_UI_Shell"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

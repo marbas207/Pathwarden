@@ -1,0 +1,7 @@
+           o
+  o       / \       o
+   \     /   \     /     Pathwarden
+    \   /     \   /      Defend every path to privilege.
+     \_/       \_/
+    ===============      v0.1.0 - attack path management for Active Directory
+

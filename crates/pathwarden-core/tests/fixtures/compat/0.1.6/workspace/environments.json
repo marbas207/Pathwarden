@@ -1,0 +1,11 @@
+{
+  "environments": [
+    {
+      "id": "default",
+      "name": "Compat",
+      "domains": [
+        "MGMT.LOCAL"
+      ]
+    }
+  ]
+}

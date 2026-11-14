@@ -1,0 +1,159 @@
+# pathwarden configuration. Copy to pathwarden.toml and pass with -c.
+
+# Systems and accounts your organization treats as Tier Zero in addition to the
+# built-in ones (domain controllers, Domain Admins, ...). Typical additions:
+# Entra Connect servers and accounts, PAM / vault servers, backup servers that
+# back up DCs, and hypervisors that host DCs. Object IDs or names.
+tier_zero = [
+  # "AADCONNECT01.CONTOSO.LOCAL",
+  # "MSOL_1A2B3C4D5E6F@CONTOSO.LOCAL",
+]
+# Shared folders where your domain controllers and CAs save their Tier Zero
+# settings files (Get-PathwardenTierZeroSettings.ps1). Every analysis, scheduled
+# run and retest reads them. Full paths or shares only.
+# settings_folders = ['\\fs01\pathwarden-t0']
+# Pathwarden finds some of these itself (Entra Connect sync accounts and their
+# server, AZUREADSSOACC, SCOM servers whose agents include DCs) and treats them
+# as Tier Zero (PW-025). List any it got wrong here; they then stay outside
+# Tier Zero.
+# [management_planes]
+# not_tier_zero = ["OLDSYNC01.CONTOSO.LOCAL"]
+
+[rules]
+# Rules to skip entirely (see `pathwarden rules`).
+disabled = []
+# Tier Zero accounts with no logon for this many days are reported as stale.
+stale_days = 90
+# Tier Zero passwords older than this are reported.
+password_age_days = 365
+# krbtgt passwords older than this are reported.
+krbtgt_age_days = 180
+# The Seamless SSO key (AZUREADSSOACC) older than this is reported (PW-037).
+sso_key_age_days = 30
+# Attack path severity: "exposure" rates attack paths by the share of users and
+# computers that can abuse them, like BloodHound Enterprise; "static" keeps each
+# rule's own severity. A severity set for a rule in [rules.severities] (critical,
+# high, medium or low) rates every finding of that rule instead, whatever its
+# exposure; Settings and `pathwarden config rules set --severity PW-011=low` set
+# it and record who set it and when.
+severity = "exposure"
+
+# Privilege Zones: other sets of systems to protect besides Tier Zero. Each gets
+# its own exposure, protected objects, remediation plan (`plan --zone NAME`) and
+# PW-022 findings for principals outside the zone that control zone objects.
+# A zone is built from explicit objects, groups (with nested members) and OUs
+# (with everything below them and the GPOs linked to them).
+# Full guide: docs/privilege-zones.md
+#
+# [[zone]]
+# name = "Tier 1 servers"
+# groups = ["TIER1 SERVERS@CONTOSO.LOCAL"]
+# ous = ["OU=SERVERS,DC=CONTOSO,DC=LOCAL"]
+#
+# [[zone]]
+# name = "Finance"
+# members = ["FINSQL01.CONTOSO.LOCAL", "SVC_FINAPP@CONTOSO.LOCAL"]
+
+# Where `pathwarden run` keeps state between runs. "local" is a folder; "git"
+# pulls from and pushes to a private repository. State holds IDs, rules,
+# severities and dates, plus each finding's title (which names the accounts,
+# groups and computers it is about) and its domain.
+# keep = "full" also shares these settings and accepted risks through a git
+# history. Full guide: docs/running.md
+[state]
+backend = "local"
+path = "pathwarden-state"
+# backend = "git"
+# remote = "https://github.com/you/pathwarden-state.git"
+# branch = "main"
+# Git: how often the app pulls while it is open, in minutes (1 to 1440).
+# Kept on this computer only.
+# refresh = 5
+# The history is encrypted with a passphrase: a plain one here is refused.
+# `pathwarden history storage set --encrypt` writes it; --no-encrypt removes it.
+# encrypted = true
+# keep = "full"
+
+# Output plugins: `pathwarden run` sends each run's event document to them
+# (ServiceNow tickets, Teams/Slack alerts, your own scripts). Secrets come
+# from environment variables, never this file. Full guide: docs/plugins.md
+#
+# [[output]]
+# plugin = "servicenow"
+# instance = "https://contoso.service-now.com"
+# table = "incident"            # or "sc_req_item" (RITM)
+# min_severity = "medium"
+# fields = { assignment_group = "Identity Security" }
+#
+# [[output]]
+# plugin = "jira"                # not yet validated against a live Jira
+# instance = "https://contoso.atlassian.net"
+# project = "SEC"
+# created_by = "5b10a2844c20165700ede21g"   # the integration account's ID
+#
+# [[output]]
+# plugin = "teams"
+# command = ['powershell', '-NoProfile', '-File', 'C:\Pathwarden\plugins\teams.ps1']
+# webhook_env = "PATHWARDEN_TEAMS_WEBHOOK"
+
+# Accepted risks. Match one finding by fingerprint (the `id:` line in the
+# findings output) or a whole rule. Suppressed findings stay visible with
+# --show-suppressed, and come back automatically after `expires`. The app
+# and `pathwarden config risk` also record who accepted each one, on which
+# computer and when (accepted_by, accepted_on, accepted_at), its last change,
+# and later notes ([[suppress.notes]]); see docs/running.md.
+#
+# [[suppress]]
+# fingerprint = "PW-004-13b0863341b2e306"
+# reason = "Break-glass account, reviewed quarterly (CHG0012345)"
+# expires = "2027-01-31"
+#
+# [[suppress]]
+# rule = "PW-011"
+# reason = "LAPS rollout tracked in PRJ0042"
+# expires = "2026-12-31"
+
+# Limits on reading collector data, against hostile or broken input. The
+# defaults suit very large collections; raise them only for a file you trust.
+# An object over max_object_mib is skipped with a warning, and `run` then
+# resolves no findings. A .zip over the other limits is refused.
+#
+# [ingest]
+# max_zip_entries = 4096
+# max_archive_gib = 64
+# max_object_mib = 128
+
+# What the built-in collector reads. all_attributes: ask for every attribute,
+# as RustHound-CE does, instead of only those it reads, and never LAPS
+# passwords (for comparing the two; docs/collect.md, "What is asked for").
+# service_reads: in a Full collection, the account each service runs as on
+# the computers, for the credentials they store (PW-033; never the
+# password); on unless set to false here or turned off with
+# `pathwarden collect --no-service-reads`. task_reads: likewise the
+# scheduled tasks, read from each computer's C$ (only the account and logon
+# type of each task; Windows logs the share access); off with
+# `--no-task-reads`. read_streams: connections that
+# read the directory at once, 1 to 8 (4 when not set; fewer are used when the
+# domain controller slows down; docs/collect.md, "Reading in parallel").
+#
+# [collect]
+# all_attributes = true
+# service_reads = false
+# task_reads = false
+# read_streams = 2
+
+# Limits on OpenGraph files (TaskHound, MSSQLHound, ...; see
+# docs/opengraph.md). Past one, that source is read no further and marked
+# incomplete: its findings can open but are never marked resolved.
+#
+# [opengraph]
+# max_nodes = 2000000    # node records per source
+# max_edges = 10000000   # edge records per source
+# max_kinds = 512        # distinct kind names per analysis
+# trust = ["mssqlhound"] # mapping packs you reviewed and trust (Mappings page)
+
+# Your own mapping packs for OpenGraph collectors: TOML data, validated like
+# the built-in ones and never run. Paths are relative to this file's folder.
+#
+# [[mapping]]
+# path = "packs/acme-sccm.toml"

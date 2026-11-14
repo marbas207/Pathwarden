@@ -1,0 +1,19 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it, on a drive P:)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 480,
+  "gif": ["--hold-end", "1500"],
+  "steps": [
+    {"do": "wait", "ms": 400},
+    {"do": "click", "sel": "nav a[href=\"/automate/ticketing\"]", "ms": 1000},
+    {"do": "click", "sel": "main a[href=\"/plugins/new?kind=servicenow\"]", "ms": 800},
+    {"do": "type", "sel": "#sn-instance", "text": "https://example.service-now.com", "delay": 30, "ms": 300},
+    {"do": "hover", "sel": "#sn-table", "ms": 300},
+    {"do": "select", "sel": "#sn-min", "value": "high", "ms": 500},
+    {"do": "scroll", "sel": "#sn-pass-env", "block": "center", "ms": 600},
+    {"do": "hover", "sel": "#sn-user-env", "ms": 200},
+    {"do": "hover", "sel": "#sn-pass-env", "ms": 400},
+    {"do": "scroll", "sel": "main button[type=\"submit\"] >> Save plugin", "block": "center", "ms": 600},
+    {"do": "click", "sel": "main button[type=\"submit\"] >> Save plugin", "ms": 1300},
+    {"do": "hover", "sel": "main button >> Test", "ms": 900}
+  ]
+}

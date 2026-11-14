@@ -1,0 +1,309 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1000",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-516",
+      "Properties": {
+        "name": "DC01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": true,
+        "serviceprincipalnames": []
+      },
+      "IsDC": true,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1101",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "AADC01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": []
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1101-544",
+          "Name": "ADMINISTRATORS@AADC01.MGMT.LOCAL",
+          "Results": [
+            {
+              "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1110",
+              "ObjectType": "User"
+            },
+            {
+              "ObjectIdentifier": "S-1-5-21-7000-7000-7000-512",
+              "ObjectType": "Group"
+            }
+          ],
+          "LocalNames": [],
+          "Collected": true,
+          "FailureReason": null
+        }
+      ],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1102",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "CM01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": []
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1103",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "SCOM01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": [
+          "MSOMSdkSvc/scom01.mgmt.local"
+        ]
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1103-544",
+          "Name": "ADMINISTRATORS@SCOM01.MGMT.LOCAL",
+          "Results": [
+            {
+              "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1111",
+              "ObjectType": "User"
+            }
+          ],
+          "LocalNames": [],
+          "Collected": true,
+          "FailureReason": null
+        }
+      ],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1104",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "AZUREADSSOACC.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": [
+          "HTTP/autologon.microsoftazuread-sso.com"
+        ],
+        "pwdlastset": 1788739200
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-7000-7000-7000-1112",
+          "PrincipalType": "User",
+          "RightName": "GenericAll",
+          "IsInherited": false
+        }
+      ],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1106",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "VEEAM01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": []
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1107",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "WS01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": []
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1108",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "VMM01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": [
+          "SCVMM/vmm01.mgmt.local"
+        ]
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1130",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "HV01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": [
+          "Microsoft Virtual System Migration Service/HV01",
+          "Microsoft Virtual System Migration Service/hv01.mgmt.local",
+          "Microsoft Virtual Console Service/HV01",
+          "Microsoft Virtual Console Service/hv01.mgmt.local",
+          "MSServerClusterMgmtAPI/HV01",
+          "HOST/hv01.mgmt.local"
+        ]
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1131",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "MON01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": [
+          "MSOMHSvc/MON01",
+          "MSOMHSvc/mon01.mgmt.local"
+        ]
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1132",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-515",
+      "Properties": {
+        "name": "ESX01.MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "isdc": false,
+        "serviceprincipalnames": [],
+        "operatingsystem": "VMware ESXi 8.0.2"
+      },
+      "IsDC": false,
+      "DomainSID": "S-1-5-21-7000-7000-7000",
+      "LocalGroups": [],
+      "Sessions": {
+        "Results": [],
+        "Collected": true,
+        "FailureReason": null
+      },
+      "Aces": [],
+      "IsDeleted": false
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "computers",
+    "count": 11,
+    "version": 6
+  }
+}

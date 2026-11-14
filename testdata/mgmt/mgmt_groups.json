@@ -1,0 +1,122 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-512",
+      "Properties": {
+        "name": "DOMAIN ADMINS@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-500",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "DOMAIN USERS@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000"
+      },
+      "Members": [],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-516",
+      "Properties": {
+        "name": "DOMAIN CONTROLLERS@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1000",
+          "ObjectType": "Computer"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1120",
+      "Properties": {
+        "name": "MG1_SCOM01_PRIMARYSG_412345@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "distinguishedname": "CN=MG1_SCOM01_PRIMARYSG_412345,CN=MG1,CN=OPERATIONSMANAGER,DC=MGMT,DC=LOCAL"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1000",
+          "ObjectType": "Computer"
+        },
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1107",
+          "ObjectType": "Computer"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1121",
+      "Properties": {
+        "name": "SCCM SITE SERVERS@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1102",
+          "ObjectType": "Computer"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1122",
+      "Properties": {
+        "name": "ESX ADMINS@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1111",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1135",
+      "Properties": {
+        "name": "ADSYNCADMINS@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000"
+      },
+      "Members": [
+        {
+          "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1134",
+          "ObjectType": "User"
+        }
+      ],
+      "Aces": [],
+      "IsDeleted": false
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "groups",
+    "count": 7,
+    "version": 6
+  }
+}

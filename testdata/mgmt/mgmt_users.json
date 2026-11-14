@@ -1,0 +1,128 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-500",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "ADMINISTRATOR@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "admincount": true
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1105",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "MSOL_1A2B3C4D5E6F@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "description": "Account created by Microsoft Azure Active Directory Connect with installation identifier 1a2b3c4d5e6f47a8b9c0d1e2f3a4b5c6 running on computer AADC01 configured to synchronize to tenant mgmt.onmicrosoft.com. This account must have directory replication permissions in the local Active Directory and write permission on certain attributes to enable Hybrid Deployment."
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1110",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "ALICE@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1111",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "BOB@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1112",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "CAROL@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1113",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "SVC_WSUS@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1114",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "MSOL_0B5D1E7E0000@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true
+      },
+      "Aces": [],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1133",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "ADSYNCMSA1A2B3$@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true,
+        "description": "Managed service account for the Azure AD Connect sync service."
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-7000-7000-7000-1101",
+          "PrincipalType": "Computer",
+          "RightName": "ReadGMSAPassword",
+          "IsInherited": false
+        }
+      ],
+      "IsDeleted": false
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-7000-7000-7000-1134",
+      "PrimaryGroupSID": "S-1-5-21-7000-7000-7000-513",
+      "Properties": {
+        "name": "DAVE@MGMT.LOCAL",
+        "domain": "MGMT.LOCAL",
+        "domainsid": "S-1-5-21-7000-7000-7000",
+        "enabled": true
+      },
+      "Aces": [],
+      "IsDeleted": false
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "users",
+    "count": 9,
+    "version": 6
+  }
+}

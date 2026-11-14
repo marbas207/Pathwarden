@@ -1,0 +1,30 @@
+# The built-in finding each prepared query overlaps, by the query's GUID: a
+# query's page links to the run's first instance of that finding. Kept by
+# hand; the prepared-queries test checks every GUID and rule exists.
+
+"977bec40-565c-40b8-90c8-e3e122c291cd" = "PW-001"  # Paths from Domain Users to Tier Zero / High Value targets
+"469dc0f3-71b8-41b0-a03b-b4af7874665d" = "PW-001"  # Shortest paths from Domain Users to Tier Zero / High Value targets
+"6e9beb8a-ad14-43de-bda1-644d174a5906" = "PW-002"  # Principals with DCSync privileges
+"4c1e0137-5b7f-48d8-bd09-9db7674bca61" = "PW-003"  # Non-Tier Zero principals with control of AdminSDHolder
+"37854ce4-5ae3-4005-a2a7-40a729b316cf" = "PW-003"  # Principals with control of Domain Controllers
+"ef2eae0c-20e2-4c29-998f-faab9eb03b41" = "PW-003"  # Principals with control of KRBTGT accounts
+"99d29ded-223a-442b-a0e0-f8b5694c6441" = "PW-003"  # Tier Zero principals not owned by Tier Zero
+"e2f3fd0a-1df2-4089-b0a4-272ad6e369a9" = "PW-004"  # Domain Admins logons to non-Domain Controllers
+"e7e9a927-3f34-42c7-b921-d8bcf626011e" = "PW-005"  # Non-Tier Zero account with unconstrained delegation
+"14ab4eaa-b73b-49c4-b2d1-1e020757c995" = "PW-006"  # All Kerberoastable users
+"e6da7800-ae06-41cb-80a6-d5421ab2143a" = "PW-006"  # Kerberoastable members of Tier Zero / High Value groups
+"bd163361-1e05-47c7-908b-962aef251535" = "PW-006"  # Shortest paths to Domain Admins from Kerberoastable users
+"6d51e4dc-e1ad-477a-b6c6-324f18f03120" = "PW-007"  # AS-REP Roastable Tier Zero users (DontReqPreAuth)
+"2570e359-dec1-419d-b0dc-a204bd64ee42" = "PW-007"  # AS-REP Roastable users (DontReqPreAuth)
+"4316eaf1-6af0-4879-8f55-ac2633a711c3" = "PW-008"  # Tier Zero accounts that can be delegated
+"543eb01d-9fa3-4b8f-a936-b46bbfdaa2ae" = "PW-008"  # Tier Zero users not member of Protected Users
+"72550bcb-3c4f-463d-8973-91a49163dc5a" = "PW-009"  # Enabled Tier Zero / High Value principals inactive for 60 days
+"5e0d69b1-37d1-43ae-ac5d-f297f312fab5" = "PW-010"  # Tier Zero users with passwords not rotated in over 1 year
+"7c50f724-c467-4005-8e3f-9a6ce1461db0" = "PW-011"  # Computers without Windows LAPS
+"23bdc2ad-6739-4b2b-85d3-258e3f424eb2" = "PW-013"  # Users which do not require password to authenticate
+"1b3ae310-ffa7-4ce5-a37f-6111aef600c8" = "PW-014"  # KRBTGT accounts with passwords not rotated in over 1 year
+"2af855bc-f48f-4b22-9839-627d8231e425" = "PW-015"  # Enrollment rights on published ESC1 certificate templates
+"60881923-296c-4702-adf7-a4f059dc9bb8" = "PW-019"  # ESC8-vulnerable Enterprise CAs
+"a2444d99-10b5-412d-8fea-4b063cfddd2c" = "PW-020"  # Domain controllers with weak certificate binding enabled
+"140a68eb-d21c-4b75-971f-309225fb2d75" = "PW-021"  # Enrollment rights on CertTemplates with OIDGroupLink
+"1867abf8-08e3-4ea8-8f65-8366079d35c4" = "PW-037"  # Entra ID SSO accounts not rolling Kerberos decryption key

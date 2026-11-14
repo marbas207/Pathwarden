@@ -1,0 +1,146 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-500",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "ADMINISTRATOR@HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true,
+        "admincount": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1101",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "ALICE@HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1102",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "BOB@HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1103",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "DA_EVE@HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true,
+        "admincount": true
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-4000-4000-4000-1105",
+          "PrincipalType": "User",
+          "RightName": "ForceChangePassword",
+          "IsInherited": false
+        }
+      ],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1104",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "CAROL@HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-4000-4000-4000-1105",
+          "PrincipalType": "User",
+          "RightName": "ForceChangePassword",
+          "IsInherited": false
+        }
+      ],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1105",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "MSOL_1A2B3C4D5E6F@HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true,
+        "description": "Account created by Microsoft Azure Active Directory Connect with installation identifier 1a2b3c4d5e6f47a8b9c0d1e2f3a4b5c6 running on computer AADC01 configured to synchronize to tenant hybrid.onmicrosoft.com. This account must have directory replication permissions in the local Active Directory and write permission on certain attributes to enable Hybrid Deployment."
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-4000-4000-4000-1106",
+      "PrimaryGroupSID": "S-1-5-21-4000-4000-4000-513",
+      "Properties": {
+        "name": "DAVE@HYBRID.LOCAL",
+        "domain": "HYBRID.LOCAL",
+        "domainsid": "S-1-5-21-4000-4000-4000",
+        "enabled": true
+      },
+      "Aces": [],
+      "AllowedToDelegate": [],
+      "HasSIDHistory": [],
+      "SPNTargets": [],
+      "IsDeleted": false,
+      "IsACLProtected": false,
+      "ContainedBy": null
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "users",
+    "count": 7,
+    "version": 6
+  }
+}

@@ -1,0 +1,110 @@
+# Library queries Pathwarden doesn't offer yet, by GUID, with why.
+# The prepared-queries test (cargo test -p pathwarden-ui --test prepared)
+# checks this list against what the build runs; with
+# PATHWARDEN_WRITE_PREPARED=1 it rewrites it.
+
+# Pathwarden's Cypher refuses them, with this message.
+[cypher]
+"23bdc2ad-6739-4b2b-85d3-258e3f424eb2" = "Unexpected character '%'."  # Users which do not require password to authenticate
+"93890f88-df2c-4167-a945-a53961d08d00" = "Relationship variable 'r' can't be used in WHERE yet; leave it out, as in -[:Type]->."  # Users with non-default Primary Group membership
+"8bd6fcf2-3f3c-414c-857a-4caf28e49def" = "IN is not supported yet."  # Accounts with weak password storage encryption
+"4dabcb63-f521-47ae-ab19-63c728e3d0ec" = "A second MATCH is not supported yet."  # Map domain trusts and forest roots
+"5e0d69b1-37d1-43ae-ac5d-f297f312fab5" = "WITH is not supported yet."  # Tier Zero users with passwords not rotated in over 1 year
+"5862dc4e-6f6f-4321-9474-d838968495ed" = "OPTIONAL MATCH is not supported yet."  # Computers with non-default Primary Group membership
+"0768e810-1e1e-4319-a216-76d9c2058644" = "WITH is not supported yet."  # Enabled computers inactive for 180 days
+"ca329573-2157-41da-ab17-4d122c54b11d" = "IN is not supported yet."  # Principals with weak supported Kerberos encryption types
+"4316eaf1-6af0-4879-8f55-ac2633a711c3" = "OPTIONAL MATCH is not supported yet."  # Tier Zero accounts that can be delegated
+"05e2a94b-5ee6-47ec-b715-3982f30af01b" = "Regular expressions (=~) are not supported yet."  # Domains with List Object mode enabled
+"c8dd3479-8063-450a-9456-557bc5f39e10" = "The function datetime() is not supported yet."  # Collection health of CA Registry Data
+"97fb1310-d15d-4d63-82a2-8788056250f1" = "WITH is not supported yet."  # Microsoft Entra Connect accounts with passwords not rotated in over 90 days
+"a87b558c-5746-4a90-9f83-c86e7b924a52" = "Regular expressions (=~) are not supported yet."  # Tier Zero computers with unsupported operating systems
+"f906e689-7d04-4051-b726-4ef45213d82c" = "WITH is not supported yet."  # No break-glass test using built-in domain Administrator account in the last year
+"2710401a-c4c2-4d2c-9edb-d7625045f2e8" = "WITH is not supported yet."  # Accounts with SID History to a non-existent domain
+"3f0fa2f3-fbdf-42c0-9e7d-97e689009161" = "The function datetime() is not supported yet."  # Collection health of DC Registry Data
+"093a8e04-4f79-4264-a64b-4e52a630cd0d" = "A second MATCH is not supported yet."  # Computers with local administrator permissions over other computers
+"9907b208-494c-4ba6-846d-485e6de14e17" = "A second MATCH is not supported yet."  # Kerberoastable users with most admin privileges
+"eeed0434-28e3-4d84-9dfb-9108d5997589" = "The function datetime() is not supported yet."  # Objects created in the past 10 days
+"2aeefd57-cbe7-4f0e-907f-86a97d7b723c" = "A second MATCH is not supported yet."  # Non-Tier Zero Principals with ExecuteDCOM privileges on Domain Controllers
+"944cecfe-519b-4318-b226-e8520161b454" = "WITH is not supported yet."  # Non-Tier Zero principal with excessive control
+"f046e95a-5f84-4e83-bcda-6e83f3d8e21a" = "WITH is not supported yet."  # Domains with more than 50 Tier Zero accounts
+"018c2b45-e30f-47d8-a751-22419c3d0736" = "Name a relationship type, like -[:MemberOf]-> (untyped relationships are not supported yet)."  # Uncommon permission on containers
+"4e8429f9-cba2-41e9-bac6-0c42f96b2c57" = "Name a relationship type, like -[:MemberOf]-> (untyped relationships are not supported yet)."  # Unresolved SID with outbound control
+"dde133d2-b4d2-4de9-a656-905f3bf066f3" = "Regular expressions (=~) are not supported yet."  # Large default group added to computer-local group
+"1b3ae310-ffa7-4ce5-a37f-6111aef600c8" = "The function datetime() is not supported yet."  # KRBTGT accounts with passwords not rotated in over 1 year
+"d06d3b14-0318-4fa9-9639-4b79ccaf3c2c" = "Regular expressions (=~) are not supported yet."  # Computers with unsupported operating systems
+"71972f3c-b32d-4023-a841-5cc8cc1c1867" = "WITH is not supported yet."  # Enabled users inactive for 180 days
+"86b0e862-88d6-4202-9fc1-009746d313f7" = "OPTIONAL MATCH is not supported yet."  # Domains without Group Managed Service Accounts
+"8c3e0811-a31b-45b4-a29d-1dce80fa2c5f" = "OPTIONAL MATCH is not supported yet."  # Domains without Protected Users group
+"3da9d14a-f1cb-4df7-b3da-8d73ff5c401b" = "The function toString() is not supported yet."  # Domains with functional level not the latest version
+"ebc79aa4-e816-4be8-93fe-a0b30dbc771d" = "Regular expressions (=~) are not supported yet."  # Domains allowing unauthenticated rootDSE searches and binds
+"be70d1bd-b7eb-40b0-971c-eefc50eca032" = "WITH is not supported yet."  # Users with passwords not rotated in over 1 year
+"8483bf5b-89f1-4723-abb2-c48295f6393e" = "IN is not supported yet."  # Enrollment rights on published enrollment agent certificate templates
+"38a9c4c9-3d70-453f-a017-cbfd35ed9917" = "WITH is not supported yet."  # Principal with SPN keyword
+"f5f2455e-afdc-4708-9a34-98f539ce52d8" = "Regular expressions (=~) are not supported yet."  # Potential GPO 'Apply' misconfiguration
+"e9613406-e346-410b-a033-690a6cf0c708" = "WITH is not supported yet."  # Tier Zero accounts not members of Denied RODC Password Replication Group
+"9b8b9c18-f8c6-4c54-a20f-de0f7a7edbe0" = "Relationship variable 'r' can't be used in WHERE yet; leave it out, as in -[:Type]->."  # Dangerous privileges for Domain Users groups
+"5993208e-6189-40e6-be03-c23c872d0ca4" = "Regular expressions (=~) are not supported yet."  # Accounts related to AAD Entra Connect
+"79f8d8f9-8291-4bf7-a13a-15989018075f" = "Regular expressions (=~) are not supported yet."  # Domains exempting privileged groups from AdminSDHolder protections
+"e1ec8c3d-14c4-425a-b6fb-d401633b915d" = "WITH is not supported yet."  # Managed Service Accounts with passwords older than the default maximum password age
+"5ee2f40e-a55c-4140-ab8a-91746ba3752b" = "Regular expressions (=~) are not supported yet."  # AdminSDHolder protected Accounts and Groups
+"7e56f2e7-79c3-4f0d-aa3e-14cf3de7ab73" = "The function datetime() is not supported yet."  # Smart card accounts with passwords not rotated in over 1 year
+"c902d3b4-1a75-4335-acd7-28246dab746d" = "Name a relationship type, like -[:MemberOf]-> (untyped relationships are not supported yet)."  # ACEs across trusts
+"e7f703b3-5dba-4aef-8346-4d589be2c828" = "OPTIONAL MATCH is not supported yet."  # Non-Tier Zero account with 'Admin Count' flag
+"799ea3ce-572b-4594-98c4-041aa2ae6176" = "IN is not supported yet."  # Domain controllers with UPN certificate mapping enabled
+"10d0ee8e-17ec-4f6c-9b94-8dffe548f9d4" = "A second MATCH is not supported yet."  # Non-Tier Zero principals with access to enabled gMSA passwords
+"35b1206f-871b-44aa-a601-c5258060dfcf" = "The function datetime() is not supported yet."  # Usage of built-in domain Administrator account
+"543eb01d-9fa3-4b8f-a936-b46bbfdaa2ae" = "OPTIONAL MATCH is not supported yet."  # Tier Zero users not member of Protected Users
+"ebc77984-1ceb-4ed2-a395-ce1067847941" = "Lists ([...]) are not supported yet."  # Enrollment rights on published ESC2 certificate templates
+"9c7c2b1d-6ffb-46ee-8b92-89237f7c7ef3" = "The function datetime() is not supported yet."  # Tier Zero objects created in the past 10 days
+"310b3626-f8e6-4ab0-832c-72df6048597f" = "Name a relationship type, like -[:MemberOf]-> (untyped relationships are not supported yet)."  # Large default groups with outbound control of OUs
+"d263e621-7f1b-4efb-ad25-098fc7d4fb72" = "WITH is not supported yet."  # Enabled computers inactive for 180 days - MSSQL Failover Cluster
+"5cf1f354-80d4-420e-bc4b-424fabc21a56" = "Patterns in WHERE are not supported yet."  # Cross-forest trusts with abusable configuration
+"e2f3fd0a-1df2-4089-b0a4-272ad6e369a9" = "WITH is not supported yet."  # Domain Admins logons to non-Domain Controllers
+"008792c0-4458-46a1-a10d-50cdaf95af1e" = "Name a relationship type, like -[:MemberOf]-> (untyped relationships are not supported yet)."  # Non-default delegation on MicrosoftDNS container
+"72550bcb-3c4f-463d-8973-91a49163dc5a" = "WITH is not supported yet."  # Enabled Tier Zero / High Value principals inactive for 60 days
+"b6d6d0bf-130e-4719-996b-adc29bba36e9" = "The function datetime() is not supported yet."  # Tier Zero computers with passwords older than the default maximum password age
+"cb8cf96e-21c9-422b-9439-390a13446ca6" = "The function ANY() is not supported yet."  # Kerberos-enabled service accounts permitting RC4 encryption
+"185c5010-8d4f-4f9b-b24e-831707dddfca" = "WITH is not supported yet."  # Computers with passwords older than the default maximum password age
+"a950fdab-5934-4c69-a88b-e2e0e3da9d52" = "Regular expressions (=~) are not supported yet."  # Domains allowing unauthenticated NSPI RPC binds
+"3359a295-7cfd-491f-976b-c5a68647431c" = "WITH is not supported yet."  # Domains with a single-point-of-failure Domain Controller
+"1867abf8-08e3-4ea8-8f65-8366079d35c4" = "The function datetime() is not supported yet."  # Entra ID SSO accounts not rolling Kerberos decryption key
+"02202726-d86d-46c2-891c-9770c635f76f" = "Regular expressions (=~) are not supported yet."  # Domains not mitigating CVE-2021-42291
+"74daaebe-6040-4f7a-9c9a-416faf73dcc3" = "A second MATCH is not supported yet."  # Non-Tier Zero principals with BadSuccessor rights (with prerequisites check)
+"f9b440b5-732c-4ed3-b6d2-83857db17e1a" = "OPTIONAL MATCH is not supported yet."  # Domains without Microsoft LAPS computers
+"cb0b1591-5c3e-45f1-afb7-984e5ad865d0" = "Regular expressions (=~) are not supported yet."  # Domains not verifying UPN and SPN uniqueness
+"7c50f724-c467-4005-8e3f-9a6ce1461db0" = "Regular expressions (=~) are not supported yet."  # Computers without Windows LAPS
+
+# They read fields saved runs don't keep, so the app would answer
+# otherwise than `pathwarden query -i`.
+[fields]
+"6b1fcfb6-b010-41a2-9d31-f9872fe994ff" = ["smbsigning"]  # Computers not requiring inbound SMB signing
+"421921fa-bc0f-4659-9680-b7481adcb132" = ["collected", "machineaccountquota"]  # Domains where any user can join a computer to the domain
+"14ab4eaa-b73b-49c4-b2d1-1e020757c995" = ["gmsa", "msa"]  # All Kerberoastable users
+"1c1435b1-bad0-49f2-ba7d-932e047c0af4" = ["hasvulnerableendpoint"]  # Enrollment rights on certificate templates published to Enterprise CA with vulnerable HTTP(S) endpoint (ESC8)
+"867f9f17-c149-4c4b-ad84-9a807622ff8c" = ["smartcardrequired"]  # Tier Zero / High Value enabled users not requiring smart card authentication
+"27a6f917-8ed4-4e2e-9b38-41a4b6de1b14" = ["webclientrunning"]  # Tier Zero computers with the WebClient running
+"d03ea1ef-70f0-439b-b1ef-d7f94ceb2af3" = ["usedeskeyonly"]  # Principals with DES-only Kerberos authentication
+"92aa81d6-b08e-4abb-ae39-ecbe5735a74c" = ["ownersid"]  # Computer owners who can obtain LAPS passwords
+"2af855bc-f48f-4b22-9839-627d8231e425" = ["authenticationenabled", "authorizedsignatures", "enrolleesuppliessubject", "requiresmanagerapproval", "schemaversion"]  # Enrollment rights on published ESC1 certificate templates
+"0677b70c-4e04-4e89-a6a2-f5764604a6a7" = ["nosecurityextension"]  # Enrollment rights on published certificate templates with no security extension
+"3f87e0b0-fc06-4986-a94c-e08781253dc8" = ["ldapavailable", "ldapsavailable", "ldapsepa", "ldapsigning"]  # DCs vulnerable to NTLM relay to LDAP attacks
+"bba7985e-f32a-4c62-b1b0-0365bf1455e6" = ["expirepasswordsonsmartcardonlyaccounts", "smartcardrequired"]  # Accounts with smart card required in domains where smart account passwords do not expire
+"a2444d99-10b5-412d-8fea-4b063cfddd2c" = ["strongcertificatebindingenforcementraw"]  # Domain controllers with weak certificate binding enabled
+"ab900835-b2b8-4674-87b4-8b5141e80439" = ["encryptedtextpwdallowed"]  # Principals with passwords stored using reversible encryption
+"97e05e67-5961-4aba-a8e7-fe5f92334035" = ["expirepasswordsonsmartcardonlyaccounts", "smartcardrequired"]  # Domains with smart card accounts where smart account passwords do not expire
+"96e70597-2d74-4503-a624-f1e30b642894" = ["isuserspecifiessanenabled"]  # Enrollment rights on certificate templates published to Enterprise CA with User Specified SAN enabled (ESC6)
+"9654c0d4-f1e8-4393-a2d1-53a5554a9de8" = ["email"]  # Tier Zero users with email
+"e303498f-e3d4-489d-8a34-b68e187bc4e7" = ["msSFU30Password", "unicodepwd", "unixpassword", "userpassword"]  # Accounts with clear-text password attributes
+"13485477-f026-4b1f-906d-4f2e37364ba4" = ["smbsigning"]  # Tier Zero computers not requiring inbound SMB signing
+"fd32470e-a57e-4056-9383-7a0e2802194f" = ["isaclprotected"]  # AdminSDHolder with ACL inheritance enabled
+"e6da7800-ae06-41cb-80a6-d5421ab2143a" = ["gmsa", "msa"]  # Kerberoastable members of Tier Zero / High Value groups
+"82ce5e2e-415b-489d-b891-304e8bb25998" = ["adminsdholderprotected"]  # Tier Zero principals without AdminSDHolder protection
+"7d258d2d-a43d-4a90-85d7-71c946ae5fd7" = ["minpwdlength"]  # Domains with a minimum default password policy length less than 15 characters
+"bd163361-1e05-47c7-908b-962aef251535" = ["gmsa", "msa"]  # Shortest paths to Domain Admins from Kerberoastable users
+"51107ad1-f0bc-43d3-a561-5cee471ca196" = ["webclientrunning"]  # Computers with the WebClient running
+"60881923-296c-4702-adf7-a4f059dc9bb8" = ["hasvulnerableendpoint"]  # ESC8-vulnerable Enterprise CAs
+"0fc16935-14b7-4859-9a2a-a191daa4c081" = ["gmsa"]  # All enabled Group Managed Service Accounts (gMSAs)
+"a9ddca74-feeb-4dbf-8b0f-de08b3cfa8a6" = ["restrictoutboundntlm"]  # Computers with the outgoing NTLM setting set to Deny all
+"4b42513c-f89d-47ff-8d98-908af49d2b48" = ["lmcompatibilitylevel"]  # Domain Controllers allowing NTLMv1 or LM authentication
+"78d59fe1-e1a0-4813-adc9-c3c96ac08b66" = ["authenticationenabled", "enrolleesuppliessubject", "requiresmanagerapproval", "schemaversion"]  # Enrollment rights on published ESC15 certificate templates
+"3408ccaf-1f42-4c10-b09a-e986661f84d7" = ["adminsdholderprotected"]  # Location of AdminSDHolder Protected objects

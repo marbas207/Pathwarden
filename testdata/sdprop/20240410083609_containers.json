@@ -1,0 +1,27 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "77777777-0000-0000-0000-000000000001",
+      "Properties": {
+        "name": "ADMINSDHOLDER@SDP.LOCAL",
+        "domain": "SDP.LOCAL",
+        "domainsid": "S-1-5-21-6000-6000-6000",
+        "distinguishedname": "CN=ADMINSDHOLDER,CN=SYSTEM,DC=SDP,DC=LOCAL"
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-6000-6000-6000-1102",
+          "PrincipalType": "User",
+          "RightName": "GenericAll",
+          "IsInherited": false
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "methods": 0,
+    "type": "containers",
+    "count": 1,
+    "version": 6
+  }
+}

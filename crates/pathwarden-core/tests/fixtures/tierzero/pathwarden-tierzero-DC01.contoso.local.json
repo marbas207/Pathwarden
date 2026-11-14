@@ -1,0 +1,118 @@
+{
+    "schema":  "pathwarden.tierzero.v2",
+    "tool":  "Get-PathwardenTierZeroSettings.ps1",
+    "domain":  "contoso.local",
+    "dc":  {
+               "hostname":  "DC01",
+               "dns_name":  "dc01.contoso.local",
+               "object_sid":  "S-1-5-21-1-2-3-1000",
+               "distinguished_name":  null,
+               "os_build":  "20348.4171"
+           },
+    "read_at":  "2026-11-03T00:22:39Z",
+    "values":  [
+                   {
+                       "name":  "StrongCertificateBindingEnforcement",
+                       "path":  "HKLM\\SYSTEM\\CurrentControlSet\\Services\\Kdc",
+                       "present":  true,
+                       "value":  2,
+                       "error":  null
+                   },
+                   {
+                       "name":  "CertificateMappingMethods",
+                       "path":  "HKLM\\SYSTEM\\CurrentControlSet\\Control\\SecurityProviders\\Schannel",
+                       "present":  false,
+                       "value":  null,
+                       "error":  null
+                   },
+                   {
+                       "name":  "LDAPServerIntegrity",
+                       "path":  "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters",
+                       "present":  false,
+                       "value":  null,
+                       "error":  null
+                   },
+                   {
+                       "name":  "LdapEnforceChannelBinding",
+                       "path":  "HKLM\\SYSTEM\\CurrentControlSet\\Services\\NTDS\\Parameters",
+                       "present":  false,
+                       "value":  null,
+                       "error":  null
+                   },
+                   {
+                       "name":  "LmCompatibilityLevel",
+                       "path":  "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa",
+                       "present":  false,
+                       "value":  null,
+                       "error":  null
+                   }
+               ],
+    "agents":  {
+                   "sccm":  {
+                                "present":  true,
+                                "site_code":  "P01",
+                                "error":  null
+                            },
+                   "scom":  {
+                                "present":  true,
+                                "management_groups":  [
+                                                          {
+                                                              "name":  "MG1",
+                                                              "servers":  [
+                                                                              "scom01.contoso.local",
+                                                                              "scom02.contoso.local"
+                                                                          ]
+                                                          },
+                                                          {
+                                                              "name":  "MG2",
+                                                              "servers":  [
+                                                                              "gw01.contoso.local"
+                                                                          ]
+                                                          }
+                                                      ],
+                                "error":  null
+                            },
+                   "wsus":  {
+                                "present":  true,
+                                "server":  "http://wsus01.contoso.local:8530",
+                                "status_server":  "http://wsus01.contoso.local:8530",
+                                "use_wu_server":  1,
+                                "error":  null
+                            },
+                   "hyperv":  {
+                                  "present":  true,
+                                  "host":  "hv01.contoso.local",
+                                  "error":  null
+                              },
+                   "vmware":  {
+                                  "present":  true,
+                                  "error":  null
+                              },
+                   "sshd":  {
+                                "present":  true,
+                                "start":  2,
+                                "error":  null
+                            },
+                   "backup":  {
+                                  "present":  true,
+                                  "agents":  [
+                                                 {
+                                                     "product":  "DPM",
+                                                     "service":  "DPMRA",
+                                                     "start":  4
+                                                 },
+                                                 {
+                                                     "product":  "Veeam",
+                                                     "service":  "VeeamTransportSvc",
+                                                     "start":  2
+                                                 },
+                                                 {
+                                                     "product":  "Commvault",
+                                                     "service":  "GxCVD(Instance001)",
+                                                     "start":  2
+                                                 }
+                                             ],
+                                  "error":  null
+                              }
+               }
+}

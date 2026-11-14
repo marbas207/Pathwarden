@@ -1,0 +1,14 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (a workspace with the demo run in it)",
+  "width": 1440, "height": 900, "settle": 3600,
+  "gif": ["--hold-end", "2000"],
+  "steps": [
+    {"do": "wait", "ms": 400},
+    {"do": "click", "sel": "nav a[href=\"/settings\"]", "ms": 900},
+    {"do": "click", "sel": "main a[href=\"#rules\"]", "ms": 900},
+    {"do": "click", "sel": "details.rules-box > summary", "ms": 900},
+    {"do": "select", "sel": "select.sev-pick[data-rule=\"PW-002\"]", "value": "critical", "ms": 1200},
+    {"do": "scroll", "sel": "main button.btn.primary >> Save rules", "block": "center", "ms": 900},
+    {"do": "click", "sel": "main button.btn.primary >> Save rules", "ms": 2200}
+  ]
+}

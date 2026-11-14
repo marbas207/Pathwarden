@@ -1,0 +1,78 @@
+# TaskHound (https://github.com/1r0BIT/TaskHound): scheduled tasks and
+# services that store a domain account's password on a host.
+#
+# A task with LogonType=Password keeps the account's password in the host's
+# DPAPI-protected credential store; a service keeps its account's password in
+# the LSA secrets. Anyone with administrator rights on the host can read both.
+# So "admin on the host" leads to "the account the task or service runs as".
+#
+# Reviewed against TaskHound commit 1f713746e0f13df381a7962d3ab62797f4f66da6
+# (2026-08-29, v1.2.0): docs/opengraph-nodes-and-edges.md and
+# docs/bloodhound-integration.md. The kinds and directions below are all it
+# writes. The password property TaskHound can add (and passwordanalysis) is
+# never kept: secret-looking properties are dropped at ingest.
+#
+# A stopgap until native stored-credential detection. Trusted
+# since OpenGraph packs; lab validation (docs/opengraph.md, "Validating a pack")
+# is still open. A Tier Zero account whose password a task or service
+# stores is reported by PW-033, one finding per account.
+
+[pack]
+name = "taskhound"
+title = "TaskHound"
+version = 2
+source_kinds = ["TaskHound"]
+kind_prefix = "TH_"
+trusted = true
+description = "Scheduled tasks and services that store domain credentials."
+
+[[node]]
+kind = "TH_ScheduledTask"
+label = "Scheduled task"
+icon = "clock"
+color = "#8B5CF6"
+keep = ["hostname", "runas", "logontype", "credentialsstored", "enabled", "tasktype"]
+
+[[node]]
+kind = "TH_WindowsService"
+label = "Windows service"
+icon = "gears"
+color = "#0EA5E9"
+keep = ["hostname", "servicename", "startname", "isgmsa", "starttype", "state"]
+
+[[edge]]
+kind = "TH_HasTaskWithStoredCreds"
+traversable = true
+cost = 2
+unit = "start"
+description = "The host stores the password of the account this task runs as; its administrators can read it."
+fix = "Stop storing a password in the scheduled task {to} on {from}: run it as a group managed service account (gMSA), or as SYSTEM if it needs no network identity. Then rotate the password of the account it ran as: any administrator of {from} could read it."
+
+[[edge]]
+kind = "TH_HasServiceWithStoredCreds"
+traversable = true
+cost = 2
+unit = "start"
+description = "The host stores the password of the account this service runs as in its LSA secrets."
+fix = "Run the service {to} on {from} as a group managed service account (gMSA) or a virtual account instead of a domain account with a stored password. Then rotate that account's password: any administrator of {from} could read it."
+# A gMSA's password is not a stored credential an admin can reuse elsewhere.
+unless = { "end.isgmsa" = true }
+
+[[edge]]
+kind = "TH_RunsAs"
+traversable = true
+# A Tier Zero run-as account is PW-033 (one finding per account), not PW-030.
+rule = "PW-033"
+# Fix the stored credential (the step that stores it), not this fact.
+cuttable = false
+unit = "start.via:TH_HasTaskWithStoredCreds|TH_HasServiceWithStoredCreds|TH_HasTask"
+description = "The task or service runs as this account."
+fix = "{from} runs as {to}. Remove the stored credential on the host that runs {from} (see the step that stores it); this goes away with it."
+unless = { "start.isgmsa" = true }
+
+[[edge]]
+kind = "TH_HasTask"
+# No stored credential: context only.
+traversable = false
+unit = "start"
+description = "The host has this scheduled task (no stored password)."

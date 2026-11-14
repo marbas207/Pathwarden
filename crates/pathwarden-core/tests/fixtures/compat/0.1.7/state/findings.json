@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "findings": {
+    "PW-003-8145d967e57db1ff": {
+      "rule": "PW-003",
+      "severity": "high",
+      "category": "attack_path",
+      "status": "open",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "CAROL@MGMT.LOCAL has GenericAll on AZUREADSSOACC.MGMT.LOCAL",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 aa4cd93987b857f2 b37778398d0e0eb3"
+    },
+    "PW-003-853c1911079ae284": {
+      "rule": "PW-003",
+      "severity": "high",
+      "category": "attack_path",
+      "status": "open",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "ALICE@MGMT.LOCAL has AdminTo on AADC01.MGMT.LOCAL",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 aa5dd73987c6c7bf b370ac398d084861"
+    },
+    "PW-003-f9efcdf2b79f2c7d": {
+      "rule": "PW-003",
+      "severity": "high",
+      "category": "attack_path",
+      "status": "open",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "BOB@MGMT.LOCAL has AdminTo on SCOM01.MGMT.LOCAL",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 aa570b3987c1016d b36d46398d056538"
+    },
+    "PW-008-750dcc5c1d833a5d": {
+      "rule": "PW-008",
+      "severity": "medium",
+      "category": "hygiene",
+      "status": "open",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "2 Tier Zero accounts in MGMT.LOCAL can be delegated",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 3bb2ac02babb4dc9 aa503f3987bb3b1b"
+    },
+    "PW-025-0e41b4f7a3592e09": {
+      "rule": "PW-025",
+      "severity": "high",
+      "category": "attack_path",
+      "status": "open",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "SCOM01.MGMT.LOCAL (SCOM server) controls Tier Zero",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 5f847d427af97687 aa570b3987c1016d"
+    },
+    "PW-025-a03ac29feb3cc6ae": {
+      "rule": "PW-025",
+      "severity": "high",
+      "category": "attack_path",
+      "status": "open",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "AADC01.MGMT.LOCAL (Entra Connect server) controls Tier Zero",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 aa503f3987bb3b1b aa5dd73987c6c7bf"
+    },
+    "PW-028-0a1e79ad5f0c2b3c": {
+      "rule": "PW-028",
+      "severity": "low",
+      "category": "hygiene",
+      "status": "suppressed",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "Possible virtualization systems in MGMT.LOCAL, by name",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 9834c7397d40e352"
+    },
+    "PW-028-1752d6120cfe7c10": {
+      "rule": "PW-028",
+      "severity": "low",
+      "category": "hygiene",
+      "status": "suppressed",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "Possible Entra Connect systems in MGMT.LOCAL, by name",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 b37e44398d13d505"
+    },
+    "PW-028-5f4b9b993fe1b427": {
+      "rule": "PW-028",
+      "severity": "low",
+      "category": "hygiene",
+      "status": "suppressed",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "Possible SCCM systems in MGMT.LOCAL, by name",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 983161397d3e0029"
+    },
+    "PW-028-d0681b17896d8487": {
+      "rule": "PW-028",
+      "severity": "low",
+      "category": "hygiene",
+      "status": "suppressed",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "Possible WSUS systems in MGMT.LOCAL, by name",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 b37412398d0b2b8a"
+    },
+    "PW-028-d87c68ebbe8e2fe0": {
+      "rule": "PW-028",
+      "severity": "medium",
+      "category": "hygiene",
+      "status": "suppressed",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "VMM01.MGMT.LOCAL looks like a Virtual Machine Manager server or account",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 aa75a13987dafdde"
+    },
+    "PW-028-e473961668d3c695": {
+      "rule": "PW-028",
+      "severity": "medium",
+      "category": "hygiene",
+      "status": "suppressed",
+      "first_seen": 1793373455,
+      "last_seen": 1793373455,
+      "times_seen": 2,
+      "title": "CM01.MGMT.LOCAL looks like an SCCM site server",
+      "domain": "MGMT.LOCAL",
+      "scope": "scope-c31e23e69c196d2b",
+      "objects": "1793373455 aa53a53987be1e44"
+    }
+  },
+  "tracked_since": 1793373455,
+  "paths": {
+    "envs": {
+      "23ea3dd605670819": {
+        "at": 1793373455,
+        "objects": 23,
+        "zones": {
+          "Servers": {
+            "since": 1793373455,
+            "members": {
+              "since": 1793373455,
+              "open": {
+                "1793373455": "aa49733987b574c9"
+              }
+            }
+          },
+          "Tier Zero": {
+            "since": 1793373455,
+            "open": {
+              "1793373455": "10d76c5d561196f1 a1907d1f785c310b aabeac17075080ca"
+            },
+            "members": {
+              "since": 1793373455,
+              "open": {
+                "1793373455": "1c3b618a29fe4f2b 32f4cd02b5c1fc28 33026502b5cd88cc 3bb2ac02babb4dc9 5f847d427af97687 aa460d3987b291a0 aa4cd93987b857f2 aa503f3987bb3b1b aa570b3987c1016d aa5dd73987c6c7bf"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

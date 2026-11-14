@@ -1,0 +1,17 @@
+{
+  "url": "http://127.0.0.1:PORT/?token=ONE-TIME-LINK-FROM-pathwarden-ui (an empty workspace, on a drive P:; started with USERDNSDOMAIN=SCALE.LOCAL USERDOMAIN=SCALE USERNAME=analyst LOGONSERVER=\\\\DC01, so the wizard fills in the demo's domain. It stops before Check, which would contact the domain controller)",
+  "width": 1440, "height": 900, "settle": 3600, "move": 480,
+  "gif": ["--hold-end", "2000"],
+  "steps": [
+    {"do": "wait", "ms": 400},
+    {"do": "click", "sel": "nav a[href=\"/collect\"]", "ms": 1000},
+    {"do": "hover", "sel": "#domain", "ms": 500},
+    {"do": "hover", "sel": "main input[name=\"dcmode\"][value=\"detected\"]", "ms": 700},
+    {"do": "click", "sel": "#wiz-next", "ms": 900},
+    {"do": "click", "sel": "#auth-current", "ms": 900},
+    {"do": "click", "sel": "#wiz-next", "ms": 900},
+    {"do": "click", "sel": "#depth-quick", "ms": 600},
+    {"do": "click", "sel": "#collector-builtin", "ms": 800},
+    {"do": "hover", "sel": "#wiz-next", "ms": 900}
+  ]
+}

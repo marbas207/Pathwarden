@@ -1,0 +1,36 @@
+[package]
+name = "pathwarden-desktop"
+description = "Pathwarden's UI in a native window with no listening port (wry + WebView2)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+pathwarden-ui = { path = "../pathwarden-ui" }
+
+# The window is Windows-only for now (WebView2). Elsewhere this crate builds
+# to a stub that says so, so `cargo build --workspace` needs no webkit2gtk
+# on Linux. To try macOS or Linux, move these to [dependencies] (Linux also
+# needs the webkit2gtk-4.1 and GTK 3 development packages).
+[target.'cfg(windows)'.dependencies]
+axum = { version = "0.8", default-features = false }
+http-body-util = "0.1"
+rfd = "0.17"
+serde_json.workspace = true
+tao = "0.37"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "signal", "sync", "time"] }
+tower = { version = "0.5", default-features = false, features = ["util"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Console",
+    "Win32_System_StationsAndDesktops",
+    "Win32_System_SystemInformation",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+wry = "0.57"

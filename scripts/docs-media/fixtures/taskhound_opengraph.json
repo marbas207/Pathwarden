@@ -1,0 +1,21 @@
+{
+  "metadata": { "source_kind": "TaskHound" },
+  "graph": {
+    "nodes": [
+      { "id": "S-1-5-21-1111-2222-3333-21007", "kinds": ["Computer", "Base"],
+        "properties": { "name": "r00s00-srv0000.scale.local" } },
+      { "id": "TH-R00S00-SRV0000-NIGHTLYSYNC", "kinds": ["TH_ScheduledTask", "Base", "TaskHound"],
+        "properties": { "name": "\\NightlySync", "hostname": "R00S00-SRV0000.SCALE.LOCAL",
+          "runas": "SCALE\\svc-00000", "logontype": "Password", "credentialsstored": true, "enabled": true,
+          "command": "C:\\Tools\\sync.exe" } }
+    ],
+    "edges": [
+      { "kind": "TH_HasTaskWithStoredCreds",
+        "start": { "value": "S-1-5-21-1111-2222-3333-21007", "match_by": "id" },
+        "end": { "value": "TH-R00S00-SRV0000-NIGHTLYSYNC", "match_by": "id" }, "properties": {} },
+      { "kind": "TH_RunsAs",
+        "start": { "value": "TH-R00S00-SRV0000-NIGHTLYSYNC", "match_by": "id" },
+        "end": { "value": "S-1-5-21-1111-2222-3333-5983", "match_by": "id" }, "properties": {} }
+    ]
+  }
+}

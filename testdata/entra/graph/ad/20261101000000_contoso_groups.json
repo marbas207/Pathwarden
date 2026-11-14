@@ -1,0 +1,56 @@
+{
+ "data": [
+  {
+   "ObjectIdentifier": "S-1-5-21-5000-5000-5000-512",
+   "Properties": {
+    "name": "DOMAIN ADMINS@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-5000-5000-5000",
+    "admincount": true
+   },
+   "Members": [
+    {
+     "ObjectIdentifier": "S-1-5-21-5000-5000-5000-500",
+     "ObjectType": "User"
+    }
+   ],
+   "Aces": [],
+   "IsDeleted": false
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-5000-5000-5000-513",
+   "Properties": {
+    "name": "DOMAIN USERS@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-5000-5000-5000"
+   },
+   "Members": [],
+   "Aces": [],
+   "IsDeleted": false
+  },
+  {
+   "ObjectIdentifier": "S-1-5-21-5000-5000-5000-1201",
+   "Properties": {
+    "name": "CLOUD-OPS@CONTOSO.LOCAL",
+    "domain": "CONTOSO.LOCAL",
+    "domainsid": "S-1-5-21-5000-5000-5000"
+   },
+   "Members": [],
+   "Aces": [
+    {
+     "PrincipalSID": "S-1-5-21-5000-5000-5000-1101",
+     "PrincipalType": "User",
+     "RightName": "AddMember",
+     "IsInherited": false
+    }
+   ],
+   "IsDeleted": false
+  }
+ ],
+ "meta": {
+  "methods": 0,
+  "type": "groups",
+  "count": 3,
+  "version": 6
+ }
+}
