@@ -44,10 +44,10 @@ files and PingCastle reports, or collects the data itself
 
 ## Quick start
 
-Download the Windows or Linux release from the
+Download the Windows release from the
 [releases page](https://github.com/marbas207/Pathwarden/releases). On Linux,
-`pathwarden ui` opens the app in your browser; the desktop window is Windows
-only.
+[build it from source](docs/dev/building.md) for now; Linux releases come
+with 1.0.0-rc.2. There, `pathwarden ui` opens the app in your browser.
 
 ### In the app
 
