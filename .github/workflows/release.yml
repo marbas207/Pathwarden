@@ -52,6 +52,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
+        # A real axis, so `exclude` can match it (it can't match keys that
+        # only `include` adds).
+        name: [windows-x64, linux-x64, linux-x64-musl]
         include:
           - name: windows-x64
             os: windows-2022
