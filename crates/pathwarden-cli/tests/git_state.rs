@@ -138,6 +138,19 @@ fn remote_json(remote: &Path, path: &str) -> serde_json::Value {
     serde_json::from_str(&git(remote, &["show", &format!("main:{path}")])).unwrap()
 }
 
+/// Waits until the clock is past Unix second `at`.
+fn wait_past(at: i64) {
+    let now = || {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+    };
+    while now() <= at {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
 /// Every saved run's summary under `dir`, a line each: what a failure
 /// shows.
 fn summaries(dir: &Path) -> String {
@@ -262,7 +275,15 @@ fn every_way_of_recording_commits_and_pushes() {
     .unwrap();
     let checkout = PathBuf::from(show["dir"].as_str().unwrap());
     let lock = checkout.join(".pathwarden.lock");
-    std::thread::sleep(std::time::Duration::from_millis(1100));
+    // Analyzed after the history's latest run, or the import takes it for
+    // an older one. That run may be dated up to a few seconds ahead: runs
+    // within a second of each other each start a second after the one
+    // before (record::start_after), as on a fast machine here.
+    wait_past(
+        remote_json(&remote, "last-run.json")["started_at"]
+            .as_i64()
+            .unwrap(),
+    );
     std::fs::write(&lock, "host test pid 1 token x\n").unwrap();
     let locked = ok(pathwarden(
         &dir,
