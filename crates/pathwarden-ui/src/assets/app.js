@@ -100,6 +100,8 @@
   function frameSrc(theme) {
     if (!frame) return;
     var base = frame.getAttribute("data-src");
+    // Only this app's own report pages, never another address.
+    if (!/^\/runs\/[A-Za-z0-9_-]+\/report\?/.test(base || "")) return;
     var want = theme === "light" ? base + "&theme=light" : base;
     // The report's place, which run.js keeps in this page's address: the
     // report opens there (a reload, Back, a shared link, a theme switch).

@@ -282,8 +282,9 @@
     var info = null;
     var ffUpdate = function () {
       var fmt = ff.querySelector('input[name="ff-fmt"]:checked').value;
+      if (fmt !== "sarif" && fmt !== "defectdojo") return;
       var a = $("ff-download");
-      a.href = "/runs/" + encodeURIComponent(ffRun) + "/findings-file?format=" + fmt;
+      a.href = "/runs/" + encodeURIComponent(ffRun) + "/findings-file?format=" + encodeURIComponent(fmt);
       if (!info) return;
       $("ff-file").textContent = info[fmt];
       a.download = info[fmt];

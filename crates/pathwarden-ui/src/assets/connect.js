@@ -81,7 +81,10 @@
   // "Change": back to step 1, filled in from this look (by its token); the
   // page removes its clone.
   document.querySelectorAll("[data-cx-change]").forEach(function (b) {
-    b.addEventListener("click", function () { location.href = b.getAttribute("data-cx-change"); });
+    var to = b.getAttribute("data-cx-change") || "";
+    // Only back to step 1 of this page, never another address.
+    if (!/^\/environments\/connect\?from=[A-Za-z0-9_-]+$/.test(to)) return;
+    b.addEventListener("click", function () { location.href = to; });
   });
 
   // ------------------------------------------------ Step 2: the passphrase
