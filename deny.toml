@@ -30,6 +30,7 @@ ignore = [
     # the lean build has none of these.
     { id = "RUSTSEC-2023-0071", reason = "rsa 0.9 via picky (rusthound-ce, and sspi under ldap3): only PKINIT and certificate auth make RSA private-key operations; Pathwarden sets no certificate (pfx: None) and kerberos: false, and holds no RSA private key. rsa 0.10.0 has the fix, but no picky release takes it (the newest, 7.0.0-rc.29, pins 0.10.0-rc.18)." },
     { id = "RUSTSEC-2025-0141", reason = "bincode 2 unmaintained, via rusthound-ce (its cache files): no security impact." },
+    { id = "RUSTSEC-2026-0543", reason = "chrono unmaintained (no fixed version exists), via rusthound-ce, which uses it to format and parse LDAP timestamps: no security impact. Removed if rusthound-ce moves to jiff or time." },
     { id = "RUSTSEC-2025-0119", reason = "number_prefix unmaintained, via indicatif in rusthound-ce (progress bars): no security impact." },
     # --- Shared.
     { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile unmaintained, via rusthound-ce and via ureq 2's rustls-native-certs 0.7 (ServiceNow and Jira plugins): no security impact; moving the plugins to ureq 3 removes that path." },
