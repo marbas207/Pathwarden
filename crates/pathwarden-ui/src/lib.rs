@@ -658,7 +658,17 @@ mod tests {
         std::fs::create_dir_all(&ws).unwrap();
         std::fs::write(ws.join("a.txt"), "x").unwrap();
         if cfg!(windows) {
-            // The temp folder's own permissions: not private to this account.
+            // Readable by Users: not private to this account. (The temp
+            // folder's own permissions may be private already, as for an
+            // elevated process, whose folders Administrators own.)
+            let granted = pathwarden_core::spawn::quiet("icacls")
+                .arg(&ws)
+                .args(["/grant", "*S-1-5-32-545:(OI)(CI)R"])
+                .stdout(std::process::Stdio::null())
+                .status()
+                .unwrap()
+                .success();
+            assert!(granted);
             assert!(!perms::is_private_dir(&ws));
         }
         secure_workspace(&ws, true).unwrap();

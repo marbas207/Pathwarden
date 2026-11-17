@@ -1598,6 +1598,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("task").join("reports")).unwrap();
         std::fs::create_dir_all(dir.join("task").join("bin")).unwrap();
+        // Its full path, as PowerShell prints it: the temp folder may be
+        // named with 8.3 short names (C:\Users\RUNNER~1\...).
+        let dir = pathwarden_core::keystore::full_path(&dir);
         std::fs::write(dir.join("task").join("bin").join("x.dll"), b"x").unwrap();
         let s = summary_of(
             info("builtin", "dc-only"),
@@ -1781,6 +1784,8 @@ Lock "$dir\good" ($admins + @(, @($me, 'FullControl', 'None')))
         let dir = std::env::temp_dir().join(format!("pw-guard-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
+        // Its full path, as PowerShell prints it ([`pathwarden_core::keystore::full_path`]).
+        let dir = pathwarden_core::keystore::full_path(&dir);
         std::fs::write(dir.join("guard.ps1"), ACL_GUARD_PS).unwrap();
         let d = dir.display().to_string();
         std::fs::write(dir.join("test.ps1"), SCRIPT.replace("{DIR}", &d)).unwrap();
