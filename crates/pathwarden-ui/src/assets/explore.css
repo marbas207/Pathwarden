@@ -195,14 +195,26 @@ main.explore { padding-top: 24px; padding-bottom: 24px; }
 .xp-tname .xp-kic { width: 22px; height: 22px; padding: 4px; border-radius: 6px; }
 .xp-tname .tag { margin-left: 6px; }
 
-@media (max-width: 1180px) {
-  .xp-body { grid-template-columns: minmax(0, 1fr) 340px; }
+/* The page's own width, not the window's, sets the layout: the rail takes a
+   share of it, and high display scaling or zoom shrinks it. The side panel
+   is 450 px wide where there's room, so its tabs and More fit on one row;
+   a little narrower they wrap; on a narrow page the panel goes under the
+   graph. */
+main:has(.xp-body) { container: xp / inline-size; }
+.xp-side { container: xpside / inline-size; }
+@container xp (min-width: 880px) {
+  .xp-body { grid-template-columns: minmax(0, 1fr) 450px; }
 }
-@media (max-width: 900px) {
-  .xp-body { grid-template-columns: 1fr; }
+@container xpside (max-width: 440px) {
+  .xp-tabs { flex-wrap: wrap; row-gap: 0; }
+}
+@container xp (max-width: 820px) {
+  .xp-body { grid-template-columns: minmax(0, 1fr); }
   .xp-stage { height: 62vh; min-height: 380px; }
   .xp-side { height: auto; max-height: none; }
   .xp-panel { max-height: 70vh; }
+}
+@media (max-width: 900px) {
   .xp-search { width: 100%; }
 }
 @media (max-width: 640px) {

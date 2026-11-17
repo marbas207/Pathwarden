@@ -207,7 +207,7 @@ svg.trend { display: block; width: 100%; height: auto; overflow: visible; }
 svg.trend .grid { stroke: var(--line); }
 svg.trend text { font-size: 14px; fill: var(--muted); }
 /* Three facts under the count, spread evenly. */
-.hero-facts { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 14px 24px; align-self: stretch; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.hero-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 14px 24px; align-self: stretch; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
 .hero-facts > div { display: flex; flex-direction: column; min-width: 0; }
 .hf-num { display: flex; align-items: center; gap: 6px; min-height: 2rem; font: 600 1.6rem/1.1 var(--display); font-variant-numeric: tabular-nums; }
 .hf-num .grade-badge { font-size: 0.8rem; }
@@ -255,6 +255,9 @@ svg.trend .dot { fill: var(--accent); }
 .wc-table tr.worse .mark { color: var(--critical); }
 .wc-table tr.better .mark { color: var(--good); }
 .wc-table .wc-what { overflow-wrap: anywhere; }
+/* Fills what the other columns leave, so a long brief ends in an ellipsis
+   instead of widening the table past its card. */
+.wc-table .wc-what { width: 100%; max-width: 0; }
 /* A row that names things: closed, the first of them in brief beside it,
    cut to the row; open, the list under it, the row's full width. */
 .wc-more > summary { display: flex; align-items: baseline; gap: 18px; cursor: pointer; list-style: none; }

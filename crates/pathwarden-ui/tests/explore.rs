@@ -1167,6 +1167,29 @@ async fn the_reach_tab_follows_the_selection_in_a_browser() {
     let a = app("reach-browser");
     let run = a.analyze(&forest()).await;
     let da = a.ix(&run, "DA_ALICE@CONTOSO.LOCAL").await;
+    let origin = serve_with_probe(&a, REACH_PROBE, |p| p.contains("/explore?"));
+    let profile = a.dir.join("browser-profile");
+    let page = format!("{origin}/runs/{run}/explore?node={da}");
+    let got = probe_in_browser(exe, profile, page, (1440, 900)).await;
+    assert_eq!(got["first"], "Who can reach DA_ALICE", "{got}");
+    let picked = got["picked"].as_str().unwrap();
+    // As the page shortens it: the name before its domain.
+    let short = match picked.split_once('@') {
+        Some((name, _)) => name,
+        None => picked.split('.').next().unwrap(),
+    };
+    assert_eq!(
+        got["second"].as_str().unwrap(),
+        format!("Who can reach {short}"),
+        "{got}"
+    );
+}
+
+/// Serves the app on a free port through a small proxy that adds the
+/// session and `/probe.js` (the page's CSP allows a script from its own
+/// origin), loaded at the end of each page `inject` picks. Returns the
+/// origin.
+fn serve_with_probe(a: &App, probe: &'static str, inject: fn(&str) -> bool) -> String {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let origin = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
     let (router, cookie) = (a.router.clone(), a.state.session_cookie());
@@ -1192,7 +1215,7 @@ async fn the_reach_tab_follows_the_selection_in_a_browser() {
                         200,
                         "text/javascript".to_string(),
                         None,
-                        REACH_PROBE.as_bytes().to_vec(),
+                        probe.as_bytes().to_vec(),
                     )
                 } else {
                     let res = rt.block_on(async {
@@ -1214,7 +1237,7 @@ async fn the_reach_tab_follows_the_selection_in_a_browser() {
                         .and_then(|v| v.to_str().ok())
                         .unwrap_or("text/plain")
                         .to_string();
-                    if path.contains("/explore?") {
+                    if inject(&path) {
                         let page = String::from_utf8_lossy(&body).replacen(
                             "</body>",
                             r#"<script src="/probe.js" defer></script></body>"#,
@@ -1240,18 +1263,22 @@ async fn the_reach_tab_follows_the_selection_in_a_browser() {
             });
         }
     });
-    let profile = a.dir.join("browser-profile");
-    let page = format!("{origin}/runs/{run}/explore?node={da}");
+    origin
+}
+
+/// Opens `page` in headless `exe` with a `size` window (CSS pixels) and
+/// returns what the probe wrote to `#out`, as JSON.
+async fn probe_in_browser(exe: PathBuf, profile: PathBuf, page: String, size: (u32, u32)) -> Value {
     let out = tokio::task::spawn_blocking(move || {
         pathwarden_core::spawn::quiet(&exe)
             .args([
                 "--headless=new",
                 "--disable-gpu",
                 "--no-first-run",
-                "--window-size=1440,900",
                 "--virtual-time-budget=30000",
                 "--dump-dom",
             ])
+            .arg(format!("--window-size={},{}", size.0, size.1))
             .arg(format!("--user-data-dir={}", profile.display()))
             .arg(page)
             .output()
@@ -1269,18 +1296,95 @@ async fn the_reach_tab_follows_the_selection_in_a_browser() {
         .replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&amp;", "&");
-    let got: Value = serde_json::from_str(&json)
-        .unwrap_or_else(|e| panic!("{e}: {json:.300}\n{}", String::from_utf8_lossy(&out.stderr)));
-    assert_eq!(got["first"], "Who can reach DA_ALICE", "{got}");
-    let picked = got["picked"].as_str().unwrap();
-    // As the page shortens it: the name before its domain.
-    let short = match picked.split_once('@') {
-        Some((name, _)) => name,
-        None => picked.split('.').next().unwrap(),
+    serde_json::from_str(&json)
+        .unwrap_or_else(|e| panic!("{e}: {json:.300}\n{}", String::from_utf8_lossy(&out.stderr)))
+}
+
+/// What the layout probe checks in a page, a moment after it loads: the
+/// rail's footer (About, the theme, Stop) is in the window, the page
+/// doesn't scroll sideways, and no button, link or field in the page
+/// sticks out of the box that holds it (unless that box scrolls).
+const LAYOUT_PROBE: &str = r##"(function () {
+  setTimeout(function () {
+    var res = { problems: [] };
+    function name(e) { return e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + (typeof e.className === "string" && e.className ? "." + e.className.trim().split(/\s+/).join(".") : ""); }
+    var foot = document.querySelector(".rail-foot");
+    if (foot) {
+      var r = foot.getBoundingClientRect();
+      if (r.bottom > innerHeight + 1 || r.top < 0) res.problems.push("rail footer out of the window: " + Math.round(r.top) + "-" + Math.round(r.bottom) + " of " + innerHeight);
+    }
+    if (document.documentElement.scrollWidth > innerWidth + 1) res.problems.push("page scrolls sideways: " + document.documentElement.scrollWidth + " > " + innerWidth);
+    var main = document.querySelector("main");
+    function scrolls(e) {
+      for (var a = e.parentElement; a && a !== document.body; a = a.parentElement) {
+        var o = getComputedStyle(a).overflowX;
+        if (o === "auto" || o === "scroll") return true;
+      }
+      return false;
+    }
+    if (main) main.querySelectorAll("a, button, input, select, summary").forEach(function (e) {
+      if (e.closest("[hidden], .vh, .menu-list, .tip-text, details:not([open]) > :not(summary)")) return;
+      var r = e.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var box = e.parentElement;
+      while (box && getComputedStyle(box).display === "contents") box = box.parentElement;
+      for (var a = box; a && a !== document.body; a = a.parentElement) {
+        var s = getComputedStyle(a);
+        if (s.display === "contents") continue;
+        var ar = a.getBoundingClientRect();
+        if (r.right > ar.right + 2 && !scrolls(e)) {
+          res.problems.push(name(e) + " sticks out of " + name(a) + " by " + Math.round(r.right - ar.right) + " px");
+          break;
+        }
+        if (s.overflowX !== "visible") break;
+      }
+    });
+    var out = document.createElement("pre");
+    out.id = "out";
+    out.textContent = JSON.stringify(res);
+    document.body.appendChild(out);
+  }, 1500);
+})();
+"##;
+
+/// High display scaling (a 1080 px screen at 150% to 200%) or zoom gives a
+/// short, narrow window in CSS pixels. At those sizes every page keeps the
+/// rail's footer in view, never scrolls sideways, and keeps its controls
+/// inside their boxes; so does a full HD window.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pages_fit_high_display_scaling_in_a_browser() {
+    let Some(exe) = browser() else {
+        eprintln!("no Edge or Chrome found: the layout browser test was skipped");
+        return;
     };
-    assert_eq!(
-        got["second"].as_str().unwrap(),
-        format!("Who can reach {short}"),
-        "{got}"
-    );
+    let a = app("layout-browser");
+    let run = a.analyze(&forest()).await;
+    let da = a.ix(&run, "DA_ALICE@CONTOSO.LOCAL").await;
+    let origin = serve_with_probe(&a, LAYOUT_PROBE, |_| true);
+    let pages = [
+        "/".to_string(),
+        format!("/runs/{run}"),
+        format!("/runs/{run}/explore?node={da}"),
+        "/progress".to_string(),
+        "/settings".to_string(),
+    ];
+    let mut problems = Vec::new();
+    for (i, size) in [(960, 500), (1097, 560), (1280, 640), (1920, 1000)]
+        .into_iter()
+        .enumerate()
+    {
+        for (j, path) in pages.iter().enumerate() {
+            let profile = a.dir.join(format!("browser-profile-{i}-{j}"));
+            let got = probe_in_browser(exe.clone(), profile, format!("{origin}{path}"), size).await;
+            for p in got["problems"].as_array().unwrap() {
+                problems.push(format!(
+                    "{}x{} {path}: {}",
+                    size.0,
+                    size.1,
+                    p.as_str().unwrap()
+                ));
+            }
+        }
+    }
+    assert!(problems.is_empty(), "{}", problems.join("\n"));
 }
