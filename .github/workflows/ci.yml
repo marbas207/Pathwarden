@@ -8,6 +8,8 @@
 # - On demand, before a release (Actions > CI > Run workflow, or
 #   `gh workflow run CI --ref <branch>`): the Linux and Windows test suites.
 # Developers run the full and lean suites on Windows before every merge.
+# The tests run with --no-fail-fast, and each step runs after a failed one,
+# so one run shows every failure.
 #
 # Third-party actions are pinned to a full commit SHA (the tag is in the
 # comment); update both together.
@@ -77,16 +79,17 @@ jobs:
       - name: Clippy (full)
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test (full)
-        if: github.event_name == 'workflow_dispatch'
-        run: cargo test --locked --workspace
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+        run: cargo test --locked --workspace --no-fail-fast
 
       # The lean build: no built-in collector (pathwarden-collect without
       # `builtin`). Selecting only these packages keeps the feature off.
       - name: Clippy (lean)
+        if: ${{ !cancelled() }}
         run: cargo clippy --locked -p pathwarden -p pathwarden-ui --no-default-features --all-targets -- -D warnings
       - name: Test (lean, CLI and UI)
-        if: github.event_name == 'workflow_dispatch'
-        run: cargo test --locked -p pathwarden -p pathwarden-ui --no-default-features
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+        run: cargo test --locked -p pathwarden -p pathwarden-ui --no-default-features --no-fail-fast
 
   windows:
     name: Lint and test (Windows)
@@ -105,18 +108,24 @@ jobs:
       - name: Clippy (full)
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test (full)
-        run: cargo test --locked --workspace
+        if: ${{ !cancelled() }}
+        run: cargo test --locked --workspace --no-fail-fast
 
       # The desktop window (`desktop`), as the Windows release builds it. The
       # end-to-end window test is skipped here (it needs PATHWARDEN_E2E_DESKTOP).
       - name: Clippy (desktop)
+        if: ${{ !cancelled() }}
         run: cargo clippy --locked --workspace --all-targets --features pathwarden/desktop -- -D warnings
       - name: Test (desktop)
-        run: cargo test --locked --workspace --features pathwarden/desktop
+        if: ${{ !cancelled() }}
+        run: cargo test --locked --workspace --features pathwarden/desktop --no-fail-fast
 
       - name: Clippy (lean)
+        if: ${{ !cancelled() }}
         run: cargo clippy --locked -p pathwarden -p pathwarden-ui --no-default-features --all-targets -- -D warnings
       - name: Test (lean, CLI and UI)
-        run: cargo test --locked -p pathwarden -p pathwarden-ui --no-default-features
+        if: ${{ !cancelled() }}
+        run: cargo test --locked -p pathwarden -p pathwarden-ui --no-default-features --no-fail-fast
       - name: Build (lean, release)
+        if: ${{ !cancelled() }}
         run: cargo build --locked --release -p pathwarden --no-default-features --target-dir target/lean
