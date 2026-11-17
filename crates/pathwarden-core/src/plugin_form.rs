@@ -908,9 +908,16 @@ mod tests {
                 "{arg}"
             );
         }
+        // A full path, as this system writes one (`C:\` is a relative
+        // file name off Windows).
+        let full = if cfg!(windows) {
+            r"-File=C:\x\teams.ps1"
+        } else {
+            "-File=/opt/x/teams.ps1"
+        };
         e.command = Some(vec![
             "pwsh".into(),
-            r"-File=C:\x\teams.ps1".into(),
+            full.into(),
             "--url=https://hooks.example.com/x".into(),
         ]);
         assert!(check_command(true, &mut e, None).is_ok());

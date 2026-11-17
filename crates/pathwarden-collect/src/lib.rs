@@ -1270,12 +1270,16 @@ mod tests {
             ),
             ("./rusthound-ce", cwd.join("rusthound-ce")),
         ] {
+            // `\` separates folders on Windows only: elsewhere `.\SharpHound.exe`
+            // is a bare file name, refused like one.
+            if !cfg!(windows) && given.contains('\\') {
+                let e = resolve_program(Path::new(given)).unwrap_err().to_string();
+                assert!(e.contains("give its full path"), "{given}: {e}");
+                continue;
+            }
             let got = resolve_program(Path::new(given)).unwrap();
             assert!(got.is_absolute(), "{given}: {}", got.display());
-            // `\` separates folders on Windows only.
-            if cfg!(windows) || !given.contains('\\') {
-                assert_eq!(got, want, "{given}");
-            }
+            assert_eq!(got, want, "{given}");
         }
         let full = cwd.join("SharpHound.exe");
         assert_eq!(resolve_program(&full).unwrap(), full);
@@ -1294,7 +1298,12 @@ mod tests {
             assert!(resolve_program(Path::new(bare)).is_err());
         }
         // Resolved, then looked for: missing here, so refused as missing.
-        let e = refused(&mut req, r".\no-such-SharpHound.exe");
+        let missing = if cfg!(windows) {
+            r".\no-such-SharpHound.exe"
+        } else {
+            "./no-such-SharpHound.exe"
+        };
+        let e = refused(&mut req, missing);
         assert!(e.contains("no-such-SharpHound.exe"), "{e}");
         assert!(e.contains(&cwd.display().to_string()), "{e}");
         for network in [
