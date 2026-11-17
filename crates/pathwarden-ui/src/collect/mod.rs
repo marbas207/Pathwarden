@@ -2115,6 +2115,14 @@ mod tests {
         .1;
         assert_eq!(trusted_servers(&f).unwrap(), cli);
         if BUILTIN {
+            // As this account on Windows; elsewhere that is refused, so with
+            // a user and password.
+            if !cfg!(windows) {
+                f.auth = AuthChoice::Password;
+                f.user = "svc".into();
+                f.password = Some(Secret::new("x"));
+                f.ldaps = true;
+            }
             let req = build_request(f, "o".into()).unwrap();
             assert_eq!(req.server, None);
             assert_eq!(req.servers, cli);

@@ -990,10 +990,12 @@ async fn a_retest_reads_the_computers_on_the_path() {
 
     // As the current Windows account: on Windows the computer is read as
     // that account (Windows' own calls), with no password sentence;
-    // elsewhere no computer is asked for, and the result says why.
+    // elsewhere the form is refused, as for a collection, and nothing is
+    // read.
     let fake = FixedRefresher::new(&logged_off, vec![srv01_read(true, false)]);
-    let rec = targeted(ws, &dir, form(PW006, false), &fake).unwrap();
+    let rec = targeted(ws, &dir, form(PW006, false), &fake);
     if cfg!(windows) {
+        let rec = rec.unwrap();
         let asked = fake.asked.lock().unwrap();
         assert_eq!(asked[0].hosts.len(), 1);
         assert_eq!(asked[0].hosts[0].id, SRV01);
@@ -1005,12 +1007,10 @@ async fn a_retest_reads_the_computers_on_the_path() {
             rec.details
         );
     } else {
-        assert!(fake.asked.lock().unwrap()[0].hosts.is_empty());
-        assert_eq!(rec.verdict, Verdict::CantTell);
-        assert_eq!(
-            rec.details,
-            [pathwarden_core::retest::targeted::HOSTS_NEED_PASSWORD]
-        );
+        let (code, body) = rec.unwrap_err();
+        assert_eq!(code, StatusCode::BAD_REQUEST, "{body}");
+        assert_eq!(body["field"], "auth", "{body}");
+        assert!(fake.asked.lock().unwrap().is_empty());
     }
     // As the Windows account, SRV01 denies access: can't tell, with why.
     if cfg!(windows) {
