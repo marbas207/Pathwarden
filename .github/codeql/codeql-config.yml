@@ -1,0 +1,11 @@
+name: Pathwarden CodeQL config
+# Test code and the docs recorder don't ship. vendor/ stays scanned: it is
+# in the binary and handles domain credentials.
+paths-ignore:
+  - "**/tests/**"
+  - "**/*_tests.rs"
+  - "scripts/docs-media/**"
+  - "testdata/**"
+  - "demo/**"
+  - "demo-history/**"
+  - "target/**"
