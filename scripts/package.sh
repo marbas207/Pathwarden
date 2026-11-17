@@ -87,6 +87,10 @@ part=$(mktemp)
 sbom_tag="pathwarden-package-sbom-$$"
 trap 'rm -f "$sums" "$part" crates/*/"$sbom_tag".json' EXIT
 
+# sh functions share every variable with their caller: licenses() and
+# sboms() use names of their own, never package()'s (variant, bin,
+# features, name, stage).
+
 # THIRD-PARTY-LICENSES.md: the license texts of every crate built into each
 # executable (cargo-about, about.toml, about.hbs). $1: pathwarden's feature
 # flags.
@@ -118,9 +122,10 @@ sboms() {
     cargo cyclonedx -f json --spec-version 1.5 --target "$triple" --override-filename "$sbom_tag" -q $1
     mkdir -p "$2"
     for crate in pathwarden-cli pathwarden-output-servicenow pathwarden-output-jira; do
-        name=$crate
-        [ "$crate" = pathwarden-cli ] && name=pathwarden
-        sed "s|file://$root|file:///pathwarden|g; s|$root|pathwarden|g" "crates/$crate/$sbom_tag.json" > "$2/$name.cdx.json"
+        # Not `name`: sh has no local variables, and package() uses that one.
+        sbom_name=$crate
+        [ "$crate" = pathwarden-cli ] && sbom_name=pathwarden
+        sed "s|file://$root|file:///pathwarden|g; s|$root|pathwarden|g" "crates/$crate/$sbom_tag.json" > "$2/$sbom_name.cdx.json"
     done
     rm -f crates/*/"$sbom_tag".json
 }
