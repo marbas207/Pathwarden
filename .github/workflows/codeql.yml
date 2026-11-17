@@ -12,6 +12,8 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
+    # Code scanning is free on the public repo only.
+    if: github.repository == 'marbas207/Pathwarden'
     runs-on: ubuntu-latest
     permissions:
       contents: read
