@@ -1770,6 +1770,12 @@ Show 'junction-above' @(Find-PathwardenParentWriters "$dir\jparent\inner")
 Show 'reports-shallow' @(Find-PathwardenWriters "$dir\task3" @($me))
 Show 'reports-deep' @(Find-PathwardenWriters "$dir\task3" @($me) -Deep)
 New-Item -ItemType Directory -Path "$dir\owned-io", "$dir\owned-or", "$dir\good" | Out-Null
+# Owned by this user, also when elevated (whose folders Administrators own).
+foreach ($p in "$dir\owned-io", "$dir\owned-or", "$dir\good") {
+    $o = (Get-Item -LiteralPath $p).GetAccessControl('Owner')
+    $o.SetOwner([System.Security.Principal.SecurityIdentifier]$me)
+    (Get-Item -LiteralPath $p).SetAccessControl($o)
+}
 Set-Content -LiteralPath "$dir\good\pathwarden.exe" -Value x
 $admins = @(@('S-1-5-32-544', 'FullControl', 'None'), @('S-1-5-18', 'FullControl', 'None'), @($me, 'ReadAndExecute', 'None'))
 Lock "$dir\owned-io" ($admins + @(, @('S-1-3-4', 'ReadAndExecute', 'InheritOnly')))
