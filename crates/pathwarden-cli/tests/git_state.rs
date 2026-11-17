@@ -138,6 +138,37 @@ fn remote_json(remote: &Path, path: &str) -> serde_json::Value {
     serde_json::from_str(&git(remote, &["show", &format!("main:{path}")])).unwrap()
 }
 
+/// Every saved run's summary under `dir`, a line each: what a failure
+/// shows.
+fn summaries(dir: &Path) -> String {
+    fn walk(dir: &Path, out: &mut Vec<String>) {
+        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                walk(&p, out);
+            } else if p
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with("summary"))
+            {
+                let v: serde_json::Value =
+                    serde_json::from_str(&std::fs::read_to_string(&p).unwrap_or_default())
+                        .unwrap_or_default();
+                out.push(format!(
+                    "{}: created_at {} created_ms {} environment {} history {}",
+                    p.display(),
+                    v["created_at"],
+                    v["created_ms"],
+                    v["environment"],
+                    v["history"]
+                ));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, &mut out);
+    out.join("\n")
+}
+
 /// Runs by hand, by a schedule and by the app (`run --save`, the app's own
 /// recording) all commit and push with a message naming the run, and the
 /// History storage commands (set, pull, import, keep-local, forget) work
@@ -233,7 +264,7 @@ fn every_way_of_recording_commits_and_pushes() {
     let lock = checkout.join(".pathwarden.lock");
     std::thread::sleep(std::time::Duration::from_millis(1100));
     std::fs::write(&lock, "host test pid 1 token x\n").unwrap();
-    ok(pathwarden(
+    let locked = ok(pathwarden(
         &dir,
         &["run", "-i", &forest(), "--save", "--workspace", &w],
         &[],
@@ -245,7 +276,12 @@ fn every_way_of_recording_commits_and_pushes() {
         &["history", "import", "--workspace", &w],
         &[],
     ));
-    assert!(imported.contains("Imported 1 run"), "{imported}");
+    assert!(
+        imported.contains("Imported 1 run"),
+        "{imported}\n--- the run saved while locked said:\n{locked}\n--- saved runs:\n{}\n--- the remote's commits:\n{}",
+        summaries(&dir.join("ws")),
+        git(&remote, &["log", "--format=%s %ad", "--date=unix", "main"])
+    );
     assert_eq!(
         log(&remote)[0],
         "pathwarden: import 1 run(s) analyzed in the UI"
