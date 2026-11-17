@@ -96,7 +96,9 @@ jobs:
     # On demand only.
     if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
-    timeout-minutes: 100
+    # The full, desktop and lean suites, each run whatever failed before:
+    # about two hours.
+    timeout-minutes: 200
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
