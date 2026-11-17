@@ -45,36 +45,45 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
+  # The archives to build, from the inputs: always linux-x64; windows-x64
+  # unless "linux_only"; linux-x64-musl with "musl". A matrix written out
+  # with `exclude` can't drop them: `include` is applied after `exclude`
+  # and adds an excluded entry back as a new one.
+  plan:
+    name: Plan the archives
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - id: plan
+        env:
+          LINUX_ONLY: ${{ inputs.linux_only }}
+          MUSL: ${{ inputs.musl }}
+        run: |
+          set -eu
+          entries=""
+          add() { entries="${entries:+$entries,}$1"; }
+          if [ "$LINUX_ONLY" != "true" ]; then
+            add '{"name":"windows-x64","os":"windows-2022","target":"","package":"powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1","archives":"dist/*.zip"}'
+          fi
+          # The oldest supported runner, so the binaries need the oldest glibc.
+          add '{"name":"linux-x64","os":"ubuntu-22.04","target":"","package":"sh scripts/package.sh","archives":"dist/*.tar.gz"}'
+          if [ "$MUSL" = "true" ]; then
+            add '{"name":"linux-x64-musl","os":"ubuntu-22.04","target":"x86_64-unknown-linux-musl","package":"sh scripts/package.sh --target x86_64-unknown-linux-musl","archives":"dist/*.tar.gz"}'
+          fi
+          echo "matrix={\"include\":[$entries]}" >> "$GITHUB_OUTPUT"
+          echo "matrix: {\"include\":[$entries]}"
+
   build:
     name: Package (${{ matrix.name }})
+    needs: plan
     permissions:
       contents: read
     strategy:
       fail-fast: true
-      matrix:
-        # A real axis, so `exclude` can match it (it can't match keys that
-        # only `include` adds).
-        name: [windows-x64, linux-x64, linux-x64-musl]
-        include:
-          - name: windows-x64
-            os: windows-2022
-            package: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1
-            archives: dist/*.zip
-          # The oldest supported runner, so the binaries need the oldest glibc.
-          - name: linux-x64
-            os: ubuntu-22.04
-            package: sh scripts/package.sh
-            archives: dist/*.tar.gz
-          - name: linux-x64-musl
-            os: ubuntu-22.04
-            target: x86_64-unknown-linux-musl
-            package: sh scripts/package.sh --target x86_64-unknown-linux-musl
-            archives: dist/*.tar.gz
-        exclude:
-          # Only when asked for (the "musl" input).
-          - name: ${{ !inputs.musl && 'linux-x64-musl' || 'none' }}
-          # Not when only the Linux archives are asked for.
-          - name: ${{ inputs.linux_only && 'windows-x64' || 'none' }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
