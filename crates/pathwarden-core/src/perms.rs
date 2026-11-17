@@ -205,7 +205,9 @@ pub fn others_with_access(path: &Path) -> Vec<Access> {
 }
 
 /// Whether `dir` is a folder (not a link) owned by this account that only
-/// this account (and SYSTEM and Administrators on Windows) can open. Unlike
+/// this account (and SYSTEM and Administrators on Windows) can open. On
+/// Windows an elevated process's folders are owned by Administrators, which
+/// counts as this account there. Unlike
 /// [`others_with_access`], it fails closed: permissions that can't be read,
 /// or an access entry it doesn't understand, mean no.
 pub fn is_private_dir(dir: &Path) -> bool {
@@ -302,10 +304,10 @@ mod win {
     };
     use windows_sys::Win32::Security::{
         AclSizeInformation, GetAce, GetAclInformation, GetSecurityDescriptorDacl,
-        GetTokenInformation, LookupAccountNameW, LookupAccountSidW, TokenUser, ACCESS_ALLOWED_ACE,
-        ACL, ACL_SIZE_INFORMATION, DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION,
-        PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID, SECURITY_ATTRIBUTES,
-        TOKEN_QUERY, TOKEN_USER,
+        GetTokenInformation, LookupAccountNameW, LookupAccountSidW, TokenElevation, TokenUser,
+        ACCESS_ALLOWED_ACE, ACL, ACL_SIZE_INFORMATION, DACL_SECURITY_INFORMATION,
+        OWNER_SECURITY_INFORMATION, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+        PSID, SECURITY_ATTRIBUTES, TOKEN_ELEVATION, TOKEN_QUERY, TOKEN_USER,
     };
     use windows_sys::Win32::Storage::FileSystem::CreateDirectoryW;
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
@@ -574,6 +576,42 @@ mod win {
         }
     }
 
+    /// Whether this process runs elevated (an administrator's full token).
+    /// False when it can't be told: the owner check then stays strict.
+    pub fn is_elevated() -> bool {
+        // SAFETY: the token handle is closed on every path; the buffer is a
+        // TOKEN_ELEVATION of the size passed.
+        unsafe {
+            let mut token: HANDLE = null_mut();
+            if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+                return false;
+            }
+            let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+            let mut len = 0u32;
+            let ok = GetTokenInformation(
+                token,
+                TokenElevation,
+                (&mut elevation as *mut TOKEN_ELEVATION).cast(),
+                std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+                &mut len,
+            );
+            CloseHandle(token);
+            ok != 0 && elevation.TokenIsElevated != 0
+        }
+    }
+
+    /// Administrators (`S-1-5-32-544`).
+    const ADMINISTRATORS: &str = "S-1-5-32-544";
+
+    /// Whether `owner` is the owner a folder this account creates gets: the
+    /// account itself, or, for an elevated process, Administrators, which
+    /// Windows makes the owner of what an elevated administrator creates.
+    /// Anyone else, or Administrators for a process that isn't elevated,
+    /// means no.
+    pub fn is_own_owner(owner: &str, me: &str, elevated: bool) -> bool {
+        owner == me || (elevated && owner == ADMINISTRATORS)
+    }
+
     /// The SID of account `name`, as a string.
     pub fn account_sid(name: &str) -> io::Result<String> {
         let account = wide(OsStr::new(name));
@@ -722,7 +760,8 @@ mod win {
         }
     }
 
-    /// Whether `path` is owned by this account and only this account,
+    /// Whether `path` is owned by this account (or by Administrators, when
+    /// this process is elevated: [`is_own_owner`]) and only this account,
     /// SYSTEM and Administrators may read or change it. Fails closed: a
     /// descriptor that can't be read, a missing DACL, an ACE that can't be
     /// read, or any ACE type other than plain allow and deny (object,
@@ -753,8 +792,12 @@ mod win {
                 return false;
             }
             let private = (|| {
-                if owner.is_null() || sid_string(owner).as_deref() != Some(me.as_str()) {
+                if owner.is_null() {
                     return false;
+                }
+                match sid_string(owner) {
+                    Some(o) if is_own_owner(&o, &me, is_elevated()) => {}
+                    _ => return false,
                 }
                 if dacl.is_null() {
                     return false;
@@ -903,6 +946,23 @@ mod tests {
             untrusted_holders(&sec(me, &["S-1-5-32-545", "?", "S-1-5-32-545"]), me),
             ["S-1-5-32-545", "?"]
         );
+    }
+
+    /// The owner of a private folder is this account, or Administrators
+    /// only when the process is elevated; nobody else, elevated or not.
+    #[cfg(windows)]
+    #[test]
+    fn own_owner_is_this_account_or_elevated_administrators() {
+        let me = "S-1-5-21-1-2-3-1001";
+        for elevated in [false, true] {
+            assert!(win::is_own_owner(me, me, elevated));
+            assert!(!win::is_own_owner("S-1-5-21-1-2-3-1002", me, elevated));
+            assert!(!win::is_own_owner("S-1-5-18", me, elevated));
+            assert!(!win::is_own_owner("S-1-5-32-545", me, elevated));
+            assert!(!win::is_own_owner("S-1-5-32-5440", me, elevated));
+        }
+        assert!(!win::is_own_owner("S-1-5-32-544", me, false));
+        assert!(win::is_own_owner("S-1-5-32-544", me, true));
     }
 
     #[test]
