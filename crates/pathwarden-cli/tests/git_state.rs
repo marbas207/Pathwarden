@@ -368,7 +368,13 @@ fn a_run_that_loses_the_race_is_still_recorded() {
     let mut cfg = std::fs::read_to_string(b.join("git.toml")).unwrap();
     cfg.push_str(&failing);
     std::fs::write(b.join("git.toml"), cfg).unwrap();
-    std::thread::sleep(std::time::Duration::from_millis(1100));
+    // B's run starts after the latest one (which may be dated ahead,
+    // [`wait_past`]), so A's, started during B's push, is newer than B's.
+    wait_past(
+        remote_json(&remote, "last-run.json")["started_at"]
+            .as_i64()
+            .unwrap(),
+    );
     let out = ok(pathwarden(
         &b,
         &[
