@@ -157,27 +157,41 @@ window.addEventListener("message", function (e) {{
         }
     });
     let profile = std::env::temp_dir().join(format!("pw-rd-browser-{}", std::process::id()));
-    let out = pathwarden_core::spawn::quiet(&exe)
-        .args([
-            "--headless=new",
-            "--disable-gpu",
-            "--no-first-run",
-            "--window-size=1500,1200",
-            "--dump-dom",
-        ])
-        .arg(format!("--user-data-dir={}", profile.display()))
-        .arg(format!("{origin}/"))
-        .output()
-        .unwrap();
-    let _ = std::fs::remove_dir_all(&profile);
-    let dom = String::from_utf8_lossy(&out.stdout);
-    let json = dom
-        .split(r#"<pre id="out">"#)
-        .nth(1)
-        .and_then(|s| s.split("</pre>").next())
-        .unwrap_or("{}")
-        .replace("&quot;", "\"");
-    let got: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
+    let load = || {
+        let out = pathwarden_core::spawn::quiet(&exe)
+            .args([
+                "--headless=new",
+                "--disable-gpu",
+                "--no-first-run",
+                "--window-size=1500,1200",
+                "--dump-dom",
+            ])
+            .arg(format!("--user-data-dir={}", profile.display()))
+            .arg(format!("{origin}/"))
+            .output()
+            .unwrap();
+        let _ = std::fs::remove_dir_all(&profile);
+        let dom = String::from_utf8_lossy(&out.stdout).into_owned();
+        let json = dom
+            .split(r#"<pre id="out">"#)
+            .nth(1)
+            .and_then(|s| s.split("</pre>").next())
+            .unwrap_or("{}")
+            .replace("&quot;", "\"");
+        let got: serde_json::Value = serde_json::from_str(&json).unwrap_or_default();
+        (out, dom, got)
+    };
+    // The DOM is dumped when the page has loaded, which can be before every
+    // frame has reported (seen on a busy Linux runner): a case missing is
+    // loaded again, a wrong answer is not.
+    let mut tries = 0;
+    let (out, dom, got) = loop {
+        let (out, dom, got) = load();
+        tries += 1;
+        if tries == 3 || CASES.iter().all(|(name, _, _)| got.get(*name).is_some()) {
+            break (out, dom, got);
+        }
+    };
     for (name, _, _) in CASES {
         let want = name.starts_with("normal");
         assert_eq!(
