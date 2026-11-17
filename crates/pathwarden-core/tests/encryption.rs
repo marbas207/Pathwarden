@@ -2006,11 +2006,17 @@ fn an_upgrade_that_fails_partway_goes_on_and_tries_again() {
     let dir = scratch("upgrade-partway");
     let state = dir.join("state");
     let m = Machine::folder(&state);
+    // The two files in two runs' folders: off Windows a file is made
+    // unwritable by its folder, and that would stop the other one too.
     let id = m.record(1_760_000_000);
+    let other = m.record(1_760_000_100);
     m.encrypt();
-    for name in ["summary.json", "opengraph.json"] {
-        m.store.write_bundle_file(&id, name, b"{}").unwrap();
-    }
+    m.store
+        .write_bundle_file(&id, "summary.json", b"{}")
+        .unwrap();
+    m.store
+        .write_bundle_file(&other, "opengraph.json", b"{}")
+        .unwrap();
     unbind(&state);
     forget_bindings(&state);
     let key = crypt::key_for(&state).unwrap();
@@ -2019,7 +2025,7 @@ fn an_upgrade_that_fails_partway_goes_on_and_tries_again() {
         !plain.starts_with(b"pathwarden-binding/")
     };
     let stuck = state.join(format!("runs/{id}/summary.json.age"));
-    let hidden = state.join(format!("runs/{id}/opengraph.json.age"));
+    let hidden = state.join(format!("runs/{other}/opengraph.json.age"));
     // Each on its own, then both.
     for (write_fails, read_fails) in [(true, false), (false, true), (true, true)] {
         let undo_write = write_fails.then(|| unwritable(&stuck));
@@ -2056,11 +2062,11 @@ fn an_upgrade_that_fails_partway_goes_on_and_tries_again() {
         unbind(&state);
         forget_bindings(&state);
     }
-    assert_eq!(m.ids().len(), 1);
+    assert_eq!(m.ids().len(), 2);
     m.record(1_760_000_200);
     assert_eq!(m.store.encryption().unwrap().unwrap().format, crypt::FORMAT);
     assert!(all_bound(&state));
-    assert_eq!(m.ids().len(), 2);
+    assert_eq!(m.ids().len(), 3);
     remove_all(&dir);
 }
 
