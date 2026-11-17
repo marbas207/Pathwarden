@@ -213,11 +213,21 @@ pub fn history_key(dir: &Path) -> String {
 
 /// The history folder's full path, links and junctions resolved (`\\?\`
 /// left out on Windows): the one normalisation behind [`history_key`] and
-/// [`protected_file`].
+/// [`protected_file`]. A folder not made yet gets the name it will have:
+/// its nearest existing parent resolved, the rest as given. Otherwise a
+/// path through a link or with 8.3 short names (`C:\Users\RUNNER~1`)
+/// would name the folder one way before it exists and another after.
 pub fn full_path(dir: &Path) -> PathBuf {
-    let full = std::fs::canonicalize(dir)
-        .or_else(|_| std::path::absolute(dir))
-        .unwrap_or_else(|_| dir.to_path_buf());
+    let full = std::fs::canonicalize(dir).unwrap_or_else(|_| {
+        let abs = std::path::absolute(dir).unwrap_or_else(|_| dir.to_path_buf());
+        abs.ancestors()
+            .skip(1)
+            .find_map(|a| {
+                let real = std::fs::canonicalize(a).ok()?;
+                Some(real.join(abs.strip_prefix(a).ok()?))
+            })
+            .unwrap_or(abs)
+    });
     if cfg!(windows) {
         let s = full.to_string_lossy();
         let s = if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
@@ -1199,6 +1209,40 @@ mod win {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A folder has the same full path, and so the same key, before it
+    /// is made and after, also under a parent that isn't there yet and
+    /// through a link (a junction on Windows).
+    #[test]
+    fn a_folder_is_named_the_same_before_and_after_it_is_made() {
+        let base = std::env::temp_dir().join(format!("pw-fullpath-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("real")).unwrap();
+        let mut ways = vec![base.join("real").join("a").join("history")];
+        #[cfg(unix)]
+        let linked = std::os::unix::fs::symlink(base.join("real"), base.join("link")).is_ok();
+        #[cfg(windows)]
+        let linked = crate::spawn::quiet("cmd")
+            .args(["/c", "mklink", "/J"])
+            .arg(base.join("link"))
+            .arg(base.join("real"))
+            .stdout(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|s| s.success());
+        #[cfg(not(any(unix, windows)))]
+        let linked = false;
+        if linked {
+            ways.push(base.join("link").join("a").join("history"));
+        }
+        let made = base.join("real").join("a").join("history");
+        let before: Vec<String> = ways.iter().map(|w| history_key(w)).collect();
+        std::fs::create_dir_all(&made).unwrap();
+        for (w, key) in ways.iter().zip(&before) {
+            assert_eq!(*key, history_key(w), "{}", w.display());
+            assert_eq!(*key, history_key(&made), "{}", w.display());
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
 
     /// A program started through [`scrub_env`] (git, here) doesn't get
     /// the passphrase variables, even when its parent has them.
