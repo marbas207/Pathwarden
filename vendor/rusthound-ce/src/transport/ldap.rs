@@ -419,7 +419,8 @@ fn ldap_constructor(
     } else if use_ntlm {
         debug!("Auth: NTLM pass-the-hash");
     } else {
-        debug!("Password: {}", _s_password);
+        // Pathwarden patch: never log the password itself.
+        debug!("Password: {}", if _s_password.is_empty() || _s_password == "not set" { "(not set)" } else { "(set)" });
     }
     debug!("DC: {:?}", s_dc);
     debug!("Kerberos: {:?}", kerberos);
