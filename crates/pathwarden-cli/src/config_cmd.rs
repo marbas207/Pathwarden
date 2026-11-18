@@ -116,16 +116,18 @@ enum ConfigWhat {
         action: RiskAction,
     },
     /// The shared settings in the history's git repository (with `[state]
-    /// keep = "full"`): bring the settings here and the repository's in
-    /// step, or show where they changed.
+    /// keep = "full"`): bring this computer's settings and the shared ones
+    /// up to date, or show where they differ. A computer's first sync
+    /// takes the history's settings and saves its own pathwarden.toml
+    /// beside it first.
     Sync {
-        /// Take the repository's sections: those changed here and in the
-        /// repository, and on a computer that doesn't push those changed
-        /// here too (drops the changes here); or the ones --section names.
+        /// Use the shared settings: for sections that differ from them, and
+        /// on a computer that only reads those only on this computer too
+        /// (replaces this computer's); or the ones --section names.
         #[arg(long, conflicts_with_all = ["keep_local", "status"])]
         use_repo: bool,
-        /// Push the sections here over the repository's (a computer that
-        /// pushes): those changed here and in the repository, or the ones
+        /// Keep this computer's sections and share them (a computer that
+        /// pushes): those that differ from the shared settings, or the ones
         /// --section names.
         #[arg(long, conflicts_with = "status")]
         keep_local: bool,
@@ -529,7 +531,7 @@ fn sync(t: &Target, resolve: Option<Resolve>, json: bool, state: Option<PathBuf>
         if json {
             let mut v = serde_json::to_value(&s)?;
             v["active"] = true.into();
-            // Not "in step": nothing here says what the repository holds.
+            // Not "up to date": nothing here says what the repository holds.
             if s.unreadable.is_some() {
                 v["state"] = "unreadable".into();
                 if let Some(sections) = v["sections"].as_array_mut() {
@@ -553,7 +555,7 @@ fn sync(t: &Target, resolve: Option<Resolve>, json: bool, state: Option<PathBuf>
              can't share these."
         );
     } else if o.sentence().is_none() && o.status.state == Changed::InStep {
-        println!("The shared settings here and in the repository are in step.");
+        println!("The shared settings are up to date on this computer.");
     }
     if let Some(s) = o.sentence() {
         if o.done.unreadable.is_some() {
@@ -618,7 +620,7 @@ fn print_status(t: &Target, s: &settings_sync::Status, remote: Option<&(String, 
         fact("Written by", &format!("Pathwarden {v}"));
     }
     println!();
-    // Not "in step": nothing here says what the repository holds.
+    // Not "up to date": nothing here says what the repository holds.
     if let Some(words) = s.unreadable_words(false) {
         print_lines(&words);
         for n in &s.notes {
@@ -628,7 +630,11 @@ fn print_status(t: &Target, s: &settings_sync::Status, remote: Option<&(String, 
     }
     let width = s.sections.iter().map(|x| x.name.len()).max().unwrap_or(0) + 2;
     for x in &s.sections {
-        let words = x.state.words();
+        let words = if x.state == Changed::Here && !s.pushes {
+            "only on this computer"
+        } else {
+            x.state.words()
+        };
         let words = if x.state == Changed::InStep {
             format!("{d}{words}{d:#}")
         } else {
@@ -645,26 +651,28 @@ fn print_status(t: &Target, s: &settings_sync::Status, remote: Option<&(String, 
         }
     } else {
         match s.state {
-            Changed::InStep => "In step.",
-            Changed::Here if s.pushes => "Changed here: `pathwarden config sync` pushes them.",
+            Changed::InStep => "Up to date.",
+            Changed::Here if s.pushes => "Not shared yet: `pathwarden config sync` shares them.",
             Changed::Here => {
-                "Changed here, not in the repository. This computer doesn't push; `pathwarden \
-                 config sync --use-repo` drops the changes here."
+                "Only on this computer: it only reads the history. `pathwarden config sync \
+                 --use-repo` replaces them with the shared settings."
             }
             Changed::Repository => {
-                "Changed in the repository: `pathwarden config sync` applies them here (so does \
-                 every run and pull)."
+                "Shared updates: `pathwarden config sync` applies them here (so does every run \
+                 and pull)."
             }
             Changed::Both if !s.pushes => {
-                "Changed here and in the repository. `pathwarden config sync --use-repo` takes \
-                 the repository's and drops the changes here; the other sections follow the \
-                 repository on every pull."
+                "This computer's settings differ from the shared ones: both changed since this \
+                 computer last synced. `pathwarden config sync --use-repo` takes the shared \
+                 settings; the other sections follow them on every pull. Until then, runs here \
+                 use this computer's."
             }
             Changed::Both => {
-                "Changed here and in the repository. Keep one side of each section changed on \
-                 both: `pathwarden config sync --use-repo` takes the repository's, \
-                 `--keep-local` pushes these (`--section KEY` for one). The other sections are \
-                 settled on every pull."
+                "This computer's settings differ from the shared ones: both changed since this \
+                 computer last synced. Choose which to keep for each: `pathwarden config sync \
+                 --use-repo` takes the shared settings, `--keep-local` keeps this computer's \
+                 and shares them (`--section KEY` for one). Until then, runs here use this \
+                 computer's."
             }
         }
     };

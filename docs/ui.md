@@ -85,6 +85,14 @@ objects for a zone.
 and **Mappings** ([opengraph.md](opengraph.md)) edit the environment's
 `pathwarden.toml`. Changes apply from the next analysis.
 
+In a git history that keeps **Full runs and settings**, these settings are
+shared, and the line under each page's title says whether they are **up to
+date**. When this computer's and the shared ones both changed since this
+computer last synced, the page shows both sides: **Use the shared settings**
+or **Keep this computer's**. Until you choose, runs here use this
+computer's. The CLI equivalents are `pathwarden config sync --use-repo` and
+`--keep-local` (`--status` shows each section).
+
 ## Act on a finding
 
 ### Actions on a finding
@@ -148,6 +156,14 @@ This needs `pathwarden ui --allow-destinations` (see above).
 2. **What it holds**: for an encrypted history, enter the passphrase.
 3. **Open and sync**: name the environment, choose **Push runs from this
    computer** or **Read only**, and click **Use this history and sync**.
+
+With **Full runs and settings**, the first sync takes the history's shared
+settings (rules, Tier Zero additions, accepted risks, zones, management
+planes, mapping packs). Settings only this computer has are kept and
+shared. This computer's `pathwarden.toml` is saved first, next to it, as
+`pathwarden.toml.before-connect-<date>`. Runs shows one line saying what was
+taken. The CLI does the same (`pathwarden env create --from-git`,
+`pathwarden config sync`).
 
 ## Where your data goes
 

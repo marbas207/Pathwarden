@@ -365,7 +365,7 @@ fn each_section_is_settled_on_its_own() {
     assert_eq!(a.config().tier_zero, ["T"]);
     let s = o.sentence().unwrap();
     assert!(
-        s.contains("Changed here and in the repository: Rule settings"),
+        s.contains("This computer's rule settings differ from the shared ones."),
         "{s}"
     );
     assert_eq!(section(&a.status(), "rules"), Changed::Both);
@@ -423,8 +423,11 @@ fn a_reader_changes_settings_only_here() {
     let o = r.sync(Resolve::Auto).unwrap();
     assert_eq!(o.done.here_only, ["Tier Zero additions"], "{:?}", o.done);
     let s = o.sentence().unwrap();
-    assert!(s.contains("Changed here, not in the repository"), "{s}");
-    assert!(s.contains("drops the changes here"), "{s}");
+    assert!(
+        s.contains("Only on this computer: Tier Zero additions"),
+        "{s}"
+    );
+    assert!(s.contains("replaces them with the shared settings"), "{s}");
     assert_eq!(
         remote_file(&remote, SETTINGS_FILE).matches("\"B\"").count(),
         0
@@ -845,7 +848,7 @@ fn keep_local_never_undoes_the_repositorys_change() {
         .sync(Resolve::KeepLocal(vec!["suppress".into()]))
         .unwrap_err()
         .to_string();
-    assert!(e.contains("changed only in the repository"), "{e}");
+    assert!(e.contains("has only a shared update"), "{e}");
     assert!(remote_file(&remote, SETTINGS_FILE).contains("PW-013"));
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -1179,5 +1182,175 @@ fn sections_never_shared_are_ignored_on_pull() {
     for word in ["evil", "[ingest]", "[opengraph]", "[collect]"] {
         assert!(!shared.contains(word), "{word}:\n{shared}");
     }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A new install's rules, as `pathwarden.toml` starts from the example.
+const DEFAULT_RULES: &str =
+    "[rules]\ndisabled = []\nstale_days = 90\npassword_age_days = 365\nkrbtgt_age_days = 180\n";
+
+fn before_connect_copies(dir: &Path) -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("pathwarden.toml.before-connect-")
+        })
+        .collect();
+    v.sort();
+    v
+}
+
+/// A computer's first sync takes the history's settings: a fresh install
+/// with default rules gets the history's customized rules and zones, its
+/// own pathwarden.toml saved beside it first, and one line says so; a
+/// section only it has is pushed. After that a change here is pushed, and
+/// only edits on two computers wait for a choice. A computer that only
+/// reads gets the history's settings on its first sync as well.
+#[test]
+fn a_new_computer_takes_the_historys_settings() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("first");
+    let remote = bare(&root);
+    let rules = |days, disabled: &[&str]| config_edit::RulesEdit {
+        disabled: disabled.iter().map(|s| s.to_string()).collect(),
+        stale_days: days,
+        password_age_days: 365,
+        krbtgt_age_days: 180,
+        sso_key_age_days: None,
+        severity: "exposure".into(),
+        severities: Default::default(),
+    };
+    let w = Machine::new(&root, "w", &remote, true, "");
+    w.edit(|d| {
+        d.set_rules(&rules(30, &["PW-002"]), &stamp("ned", "W"))
+            .unwrap();
+        d.upsert_zone(
+            None,
+            None,
+            &config_edit::ZoneEdit {
+                name: "Tier 1 servers".into(),
+                groups: vec!["SERVER ADMINS@NORTH.LOCAL".into()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    });
+    assert!(!pushed(&w.sync(Resolve::Auto).unwrap()).is_empty());
+
+    // A fresh install, its default rules and a Tier Zero addition of its own.
+    let n = Machine::new(&root, "n", &remote, true, DEFAULT_RULES);
+    n.edit(|d| d.set_tier_zero(&["SVC_N@NORTH.LOCAL".into()]).unwrap());
+    let before = std::fs::read(n.config_path()).unwrap();
+    let s = n.status();
+    assert!(s.first_sync);
+    assert_eq!(section(&s, "rules"), Changed::Repository, "never Both");
+    assert_eq!(section(&s, "tier_zero"), Changed::Here);
+    let o = n.sync(Resolve::Auto).unwrap();
+    assert!(!o.conflict(), "{:?}", o.done);
+    assert_eq!(o.done.first, ["Rule settings", "Zones"], "{:?}", o.done);
+    assert_eq!(o.done.applied, ["Rule settings", "Zones"], "{:?}", o.done);
+    assert_eq!(o.done.pushed, ["Tier Zero additions"], "{:?}", o.done);
+    let c = n.config();
+    assert_eq!(c.rules.stale_days, 30);
+    assert_eq!(c.rules.disabled, ["PW-002"]);
+    assert_eq!(c.zones.len(), 1);
+    assert_eq!(c.tier_zero, ["SVC_N@NORTH.LOCAL"]);
+    // The copy: beside it, as it was.
+    let copies = before_connect_copies(&n.dir);
+    assert_eq!(copies.len(), 1, "{copies:?}");
+    assert_eq!(o.done.backup.as_deref(), Some(copies[0].as_path()));
+    assert_eq!(std::fs::read(&copies[0]).unwrap(), before);
+    let name = copies[0]
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    let line = format!(
+        "Rule settings and zones were taken from the run history. This computer's earlier \
+         settings are saved in {name}."
+    );
+    for s in [o.sentence().unwrap(), o.page_sentence().unwrap()] {
+        assert!(s.contains(&line), "{s}");
+        assert!(!s.contains("differ"), "{s}");
+    }
+    let a = settings_sync::unseen_applied(&n.store(), false).unwrap();
+    assert_eq!(
+        a.first.as_deref(),
+        Some(&["Rule settings".to_string(), "Zones".to_string()][..])
+    );
+    assert_eq!(a.backup.as_deref(), Some(name.as_str()));
+    assert_eq!(n.status().state, Changed::InStep);
+
+    // The writer gets the section only the new computer had.
+    let o = w.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.applied, ["Tier Zero additions"], "{:?}", o.done);
+    assert!(o.done.first.is_empty() && o.done.backup.is_none());
+    assert!(before_connect_copies(&w.dir).is_empty());
+
+    // A second sync after an edit here pushes it: no copy, no first line.
+    n.edit(|d| {
+        d.set_rules(&rules(45, &["PW-002"]), &stamp("arya", "N"))
+            .unwrap()
+    });
+    let o = n.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.pushed, ["Rule settings"], "{:?}", o.done);
+    assert!(o.done.first.is_empty() && o.done.backup.is_none());
+    assert_eq!(before_connect_copies(&n.dir).len(), 1);
+    w.sync(Resolve::Auto).unwrap();
+    assert_eq!(w.config().rules.stale_days, 45);
+
+    // Edits on two computers after the first sync still wait for a choice.
+    w.edit(|d| d.set_rules(&rules(50, &[]), &stamp("ned", "W")).unwrap());
+    w.sync(Resolve::Auto).unwrap();
+    n.edit(|d| d.set_rules(&rules(60, &[]), &stamp("arya", "N")).unwrap());
+    let o = n.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.conflict, ["Rule settings"], "{:?}", o.done);
+    assert_eq!(n.config().rules.stale_days, 60, "left as it is");
+    assert_eq!(section(&n.status(), "rules"), Changed::Both);
+    let s = o.page_sentence().unwrap();
+    assert!(
+        s.contains(
+            "This computer's rule settings differ from the shared ones. Both changed since this \
+             computer last synced."
+        ),
+        "{s}"
+    );
+    assert!(
+        !s.contains("pathwarden config"),
+        "no commands on pages: {s}"
+    );
+    assert_eq!(before_connect_copies(&n.dir).len(), 1);
+
+    // A computer that only reads: the history's settings on its first sync.
+    let r = Machine::new(&root, "r", &remote, false, DEFAULT_RULES);
+    let head = git(&remote, &["rev-parse", "main"]);
+    let o = r.sync(Resolve::Auto).unwrap();
+    assert!(!o.conflict(), "{:?}", o.done);
+    assert_eq!(
+        o.done.first,
+        ["Tier Zero additions", "Rule settings", "Zones"],
+        "{:?}",
+        o.done
+    );
+    assert_eq!(r.config().rules.stale_days, 50);
+    assert_eq!(r.config().zones.len(), 1);
+    assert_eq!(before_connect_copies(&r.dir).len(), 1);
+    assert!(o
+        .sentence()
+        .unwrap()
+        .contains("Tier Zero additions, rule settings and zones were taken from the run history."));
+    assert_eq!(
+        git(&remote, &["rev-parse", "main"]),
+        head,
+        "a reader pushes nothing"
+    );
+    assert_eq!(r.status().state, Changed::InStep);
     let _ = std::fs::remove_dir_all(&root);
 }

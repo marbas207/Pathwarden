@@ -1,5 +1,5 @@
 //! Shared settings on the app's pages: the line under Settings'
-//! title, the choice for a section changed here and in the repository and
+//! title, the choice for a section that differs from the shared settings and
 //! its buttons, the note after a pull, a save's sharing in the background,
 //! packs from the repository on Mappings, and History storage's rows. Two
 //! `pathwarden.toml` files on one local bare repository.
@@ -144,12 +144,20 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     .unwrap();
     assert!(note.unwrap().contains("pushed"), "the other machine shares");
 
-    // This workspace joins: the first Pull now takes the repository's.
+    // This workspace joins: the first Pull now takes the repository's, and
+    // saves this computer's pathwarden.toml first.
     let ws_dir = dir.join("ws");
     let ws = Workspace::open(&ws_dir).unwrap();
     std::fs::write(ws.config_path(), state(&ws.env_dir())).unwrap();
     let note = refresh(ws.clone()).await.unwrap();
-    assert!(note.contains("applied here"), "{note}");
+    assert!(
+        note.contains(
+            "Tier Zero additions, accepted risks and mapping packs were taken from the run \
+             history. This computer's earlier settings are saved in \
+             pathwarden.toml.before-connect-"
+        ),
+        "{note}"
+    );
     // These pages set where the history is kept: as `pathwarden ui --allow-destinations`.
     let mut st = AppState::new(ws.clone(), Token::generate().unwrap(), 4251);
     st.allow_destinations = true;
@@ -162,15 +170,19 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     let (s, page) = a.get("/settings").await;
     assert_eq!(s, StatusCode::OK);
     assert!(
-        page.contains("Shared through") && page.contains("in step"),
+        page.contains("Shared through") && page.contains("up to date"),
         "{page}"
     );
     assert!(
-        page.contains("updated from the repository"),
-        "the note after a pull"
+        page.contains("were taken from the run history. This computer&#39;s earlier settings")
+            || page.contains("were taken from the run history. This computer's earlier settings"),
+        "the note after a pull: {page}"
     );
     let (_, page) = a.get("/settings").await;
-    assert!(!page.contains("updated from the repository"), "shown once");
+    assert!(
+        !page.contains("were taken from the run history"),
+        "shown once"
+    );
     assert!(
         page.contains("From the repository"),
         "a risk from another computer"
@@ -228,7 +240,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         "no commands on pages: {notes:?}"
     );
     let (_, page) = a.get("/settings").await;
-    assert!(page.contains("in step"), "both saves arrived: {page}");
+    assert!(page.contains("up to date"), "both saves arrived: {page}");
 
     // Both change Tier Zero: the page asks for a choice. (The other machine
     // takes this one's change first.)
@@ -262,12 +274,23 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     .unwrap();
     let (_, page) = a.get("/settings").await;
     assert!(
-        page.contains("Settings changed here and in the repository."),
+        page.contains("This computer&#39;s Tier Zero additions differ from the shared ones.")
+            || page.contains("This computer's Tier Zero additions differ from the shared ones."),
         "{page}"
     );
     assert!(
-        page.contains("Keep mine and push") && page.contains("Use the repository"),
+        page.contains("Until then, runs here use this computer"),
+        "what happens meanwhile: {page}"
+    );
+    assert!(
+        page.contains("Keep this computer")
+            && page.contains("Use the shared settings")
+            && page.contains("Differs from the shared settings"),
         "{page}"
+    );
+    assert!(
+        !page.contains("in the repository") && !page.contains("Keep mine"),
+        "plain words: {page}"
     );
     assert!(
         page.contains("CASTELBLACK$") && page.contains("WINTERFELL$"),
@@ -275,10 +298,12 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     );
     let (_, page) = a.get("/automate/history").await;
     assert!(
-        page.contains("What it keeps") && page.contains("Resolve in Settings"),
+        page.contains("What it keeps")
+            && page.contains("Tier Zero additions differ from the shared ones")
+            && page.contains(">Review</a>"),
         "{page}"
     );
-    // Keep mine: pushed, in step again.
+    // Keep this computer's: shared, up to date again.
     let (s, r) = a
         .post(
             "/api/settings/sync",
@@ -287,8 +312,8 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         .await;
     assert_eq!(s, StatusCode::OK, "{r}");
     let (_, page) = a.get("/settings").await;
-    assert!(page.contains("in step"), "{page}");
-    assert!(!page.contains("Keep mine and push"));
+    assert!(page.contains("up to date"), "{page}");
+    assert!(!page.contains("Keep this computer"));
     let (s, r) = a
         .post(
             "/api/settings/sync",
@@ -416,7 +441,7 @@ async fn full_runs_and_settings_shares_nothing_plain() {
     }
     let log = git_out(&remote, &["log", "--format=%an <%ae> %B", "main"]);
     assert!(log.contains("pathwarden settings"), "{log}");
-    // Without the passphrase here, Settings says so: never "in step".
+    // Without the passphrase here, Settings says so: never "up to date".
     pathwarden_core::crypt::forget_all_in_process();
     pathwarden_core::keystore::use_test_store(&dir.join("keystore-none"));
     let (_, page) = a.get("/settings").await;
@@ -428,7 +453,7 @@ async fn full_runs_and_settings_shares_nothing_plain() {
         !page.contains("passphrase set"),
         "no commands on pages: {page}"
     );
-    assert!(!page.contains("in step"), "{page}");
+    assert!(!page.contains("up to date"), "{page}");
 
     // Kept plain on purpose ("Don't encrypt", then Save): shared then, and
     // not before.
@@ -455,7 +480,7 @@ async fn full_runs_and_settings_shares_nothing_plain() {
         all_objects(&remote).contains("Break-glass, reviewed quarterly"),
         "shared in plain text, as chosen"
     );
-    // ... and said so, never in the "in step" colour.
+    // ... and said so, never in the "up to date" colour.
     let (_, page) = a.get("/settings").await;
     assert!(
         page.contains(r#"<p class="sync-line plain">"#)
@@ -477,6 +502,6 @@ async fn full_runs_and_settings_shares_nothing_plain() {
         !page.contains("--no-encrypt") && !page.contains("pathwarden history"),
         "no commands on pages: {page}"
     );
-    assert!(!page.contains("in step"), "{page}");
+    assert!(!page.contains("up to date"), "{page}");
     let _ = std::fs::remove_dir_all(&dir);
 }

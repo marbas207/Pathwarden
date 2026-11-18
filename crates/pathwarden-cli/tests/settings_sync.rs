@@ -230,7 +230,7 @@ fn settings_go_through_the_repository_from_the_terminal() {
         "{e}"
     );
 
-    // The other machine sees them changed in the repository, and takes them.
+    // The other machine sees them as shared updates, and takes them.
     let v = status(&ws);
     assert_eq!(v["active"], true);
     assert_eq!(v["state"], "repository");
@@ -240,16 +240,30 @@ fn settings_go_through_the_repository_from_the_terminal() {
     assert_eq!(v["last_change"]["by"], r"NORTH\eddard.stark");
     let (text, _) = ok(&ws.run(&["sync", "--status"]));
     assert!(
-        text.contains("Accepted risks") && text.contains("changed in the repository"),
+        text.contains("Accepted risks") && text.contains("shared update"),
         "{text}"
     );
     assert!(text.contains("in plain text (not encrypted)"), "{text}");
     assert_eq!(v["encrypted"], false);
+    // Its first sync: the history's settings are taken, and its own
+    // pathwarden.toml is saved beside it first.
     let (text, _) = ok(&ws.run(&["sync"]));
     assert!(
-        text.contains("applied here: Tier Zero additions, Accepted risks"),
+        text.contains(
+            "Tier Zero additions and accepted risks were taken from the run history. This computer's earlier settings are saved in pathwarden.toml.before-connect-"
+        ),
         "{text}"
     );
+    let copies: Vec<_> = std::fs::read_dir(&ws.dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with("pathwarden.toml.before-connect-")
+        })
+        .collect();
+    assert_eq!(copies.len(), 1, "{copies:?}");
     let (text, _) = ok(&ws.run(&["risk", "list"]));
     assert!(
         text.contains(r"accepted by NORTH\eddard.stark on PW-SCHED01"),
@@ -262,7 +276,7 @@ fn settings_go_through_the_repository_from_the_terminal() {
     ok(&ws.run(&["tier-zero", "add", "SVC_BACKUP@NORTH.LOCAL", "--force"]));
     let (_, e) = ok(&sched.run(&["tier-zero", "add", "SVC_OTHER@NORTH.LOCAL", "--force"]));
     assert!(
-        e.contains("Changed here and in the repository: Tier Zero additions"),
+        e.contains("This computer's Tier Zero additions differ from the shared ones."),
         "{e}"
     );
     let (_, e) = ok(&sched.run(&["rules", "set", "--stale-days", "30"]));
@@ -287,12 +301,12 @@ fn settings_go_through_the_repository_from_the_terminal() {
     assert!(!text.contains("SVC_BACKUP"), "{text}");
     let (text, _) = ok(&ws.run(&["rules", "show"]));
     assert!(text.contains("30"), "{text}");
-    // In step: nothing to do.
+    // Up to date: nothing to do.
     let (text, _) = ok(&sched.run(&["sync"]));
-    assert!(text.contains("in step"), "{text}");
+    assert!(text.contains("up to date"), "{text}");
 
     // A computer told the history is encrypted, which it isn't: refused,
-    // and said so, never "in step"; keeping its settings isn't offered.
+    // and said so, never "up to date"; keeping its settings isn't offered.
     let refused = Machine::new(&root, "refused", &remote, r"NORTH\jon.snow", "SECOPS-WS03");
     let mut text = std::fs::read_to_string(refused.dir.join("pathwarden.toml")).unwrap();
     text.push_str("encrypted = true\n");
@@ -303,7 +317,9 @@ fn settings_go_through_the_repository_from_the_terminal() {
         "{text}"
     );
     assert!(
-        !text.contains("in step") && !text.contains("In step") && !text.contains("--keep-local"),
+        !text.contains("up to date")
+            && !text.contains("Up to date")
+            && !text.contains("--keep-local"),
         "{text}"
     );
     let v = status(&refused);

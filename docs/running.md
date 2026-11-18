@@ -74,7 +74,10 @@ pathwarden env create --from-folder \\files\pathwarden\history --name Lab
 ```
 
 Add `--read-only` to only read it. In the app, this is **Connect to a run
-history** ([ui.md](ui.md#connect-to-a-run-history)).
+history** ([ui.md](ui.md#connect-to-a-run-history)). With full runs and
+settings, the first sync takes the history's shared settings and saves this
+computer's `pathwarden.toml` first, as
+`pathwarden.toml.before-connect-<date>` next to it.
 
 ## Exit codes
 

@@ -1254,12 +1254,12 @@
     })();
   }
 
-  // "Use the repository's" / "Keep mine and push" for one section.
+  // "Use the shared settings" / "Keep this computer's" for one section.
   all("[data-sync-action]").forEach(function (b) {
     b.addEventListener("click", function () {
       var holder = b.closest(".cmp-actions, .card-actions, .card") || document.body;
       all("[data-sync-action]").forEach(function (x) { x.disabled = true; });
-      status(holder, b.getAttribute("data-sync-action") === "keep_local" ? "Pushing…" : "Taking the repository's…");
+      status(holder, b.getAttribute("data-sync-action") === "keep_local" ? "Sharing…" : "Taking the shared settings…");
       api("POST", "/api/settings/sync", {
         action: b.getAttribute("data-sync-action"),
         section: b.getAttribute("data-sync-section")

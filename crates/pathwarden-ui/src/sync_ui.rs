@@ -1,7 +1,7 @@
 //! Shared settings on the app's pages, from the approved
 //! mock-ups: the line under a configuration page's title ("Shared through
-//! … · in step"), each section's tag, the choice for a section changed
-//! here and in the repository, the note after a pull applied the
+//! … · up to date"), each section's tag, the choice for a section that
+//! differs from the shared settings, the note after a pull applied the
 //! repository's, and a save's sharing, which runs after the page has its
 //! answer. Pages never reach the network to draw this: they read the
 //! working copy as the last pull left it
@@ -95,20 +95,6 @@ fn page_of(key: &str) -> (&'static str, &'static str, &'static str) {
     }
 }
 
-/// A section's name as the conflict line says it ("Tier Zero differs").
-fn short_name(key: &str) -> &'static str {
-    match key {
-        "tier_zero" => "Tier Zero",
-        "settings_folders" => "Tier Zero settings folders",
-        "rules" => "Rules",
-        "suppress" => "Accepted risks",
-        "zone" => "Zones",
-        "management_planes" => "Management planes",
-        "mapping" => "Mapping packs",
-        _ => "",
-    }
-}
-
 pub(crate) fn tip(id: &str, about: &str, rows: &[(String, String)], open: bool) -> String {
     let mut t = String::new();
     for (k, v) in rows {
@@ -161,12 +147,12 @@ fn sections_words(names: &[&str]) -> String {
 }
 
 /// The line under a configuration page's title: where the settings are
-/// shared and whether they are in step, with the details behind ⓘ; or,
+/// shared and whether they are up to date, with the details behind ⓘ; or,
 /// when a section changed here and in the repository, the note that asks
 /// for a choice.
 pub fn sync_line(v: &View, page: &str) -> String {
     let s = &v.status;
-    // Not "in step": nothing here says what the repository holds.
+    // Not "up to date": nothing here says what the repository holds.
     if let Some(words) = s.unreadable_words(true) {
         return format!(
             r#"<div class="note warn sync-conflict sync-unreadable" role="status">{}<div><p>{}</p></div></div>"#,
@@ -180,12 +166,15 @@ pub fn sync_line(v: &View, page: &str) -> String {
         .filter(|x| x.state == Changed::Both)
         .map(|x| x.key)
         .collect();
-    let both: Vec<&str> = both_keys.iter().map(|k| short_name(k)).collect();
+    let both: Vec<&str> = both_keys
+        .iter()
+        .map(|k| settings_sync::section_name(k))
+        .collect();
     // Chosen on this page, or on the page the section is on.
     let elsewhere = both_keys.iter().map(|k| page_of(k)).find(|p| p.0 != page);
     let choose = match elsewhere {
-        None => "choose below.".to_string(),
-        Some((_, href, name)) => format!(r#"choose on <a href="{href}">{name}</a>."#),
+        None => "Choose which to keep below.".to_string(),
+        Some((_, href, name)) => format!(r#"Choose which to keep on <a href="{href}">{name}</a>."#),
     };
     let others_in_step = s
         .sections
@@ -195,39 +184,38 @@ pub fn sync_line(v: &View, page: &str) -> String {
         let rows = vec![
             (
                 "Runs".to_string(),
-                "Keep going, with the settings on this computer.".to_string(),
+                "Use this computer's settings until you choose".to_string(),
             ),
             (
-                "Repository".to_string(),
+                "Shared through".to_string(),
                 format!("<code>{}</code>", esc(&v.remote)),
             ),
             (
-                "Other sections".to_string(),
+                "Other settings".to_string(),
                 if others_in_step {
-                    "In step".to_string()
+                    "Up to date".to_string()
                 } else {
                     esc(&s.changed_words())
                 },
             ),
         ];
         return format!(
-            r#"<div class="note warn sync-conflict" role="status">{}<div><p><strong>Settings changed here and in the repository.</strong> {} {}: {choose} {}</p></div></div>"#,
+            r#"<div class="note warn sync-conflict" role="status">{}<div><p><strong>{}</strong> Both changed since this computer last synced. {choose} Until then, runs here use this computer's. {}</p></div></div>"#,
             icon("i-alert"),
-            esc(&sections_words(&both)),
-            if both.len() == 1 { "differs" } else { "differ" },
+            esc(&settings_sync::differ_words(&both)),
             tip(&format!("conf-{page}"), "While this is open", &rows, false)
         );
     }
     let changed = |c: Changed| s.sections.iter().filter(|x| x.state == c).count();
     let n = |k: usize| crate::pages::num(k);
-    let sections = |k: usize| if k == 1 { "section" } else { "sections" };
+    let changes = |k: usize| if k == 1 { "change" } else { "changes" };
     let (class, words) = if !s.in_repository {
         (
             "chg",
             if v.pushes {
-                "not in the repository yet".to_string()
+                "not shared yet".to_string()
             } else {
-                "nothing shared in the repository yet".to_string()
+                "nothing shared yet".to_string()
             },
         )
     } else if changed(Changed::Here) > 0 {
@@ -235,32 +223,32 @@ pub fn sync_line(v: &View, page: &str) -> String {
         (
             "chg",
             if v.pushes {
-                format!("{} {} changed here, not pushed yet", n(k), sections(k))
+                format!("{} {} not shared yet", n(k), changes(k))
             } else {
-                format!(
-                    "{} {} changed here, not in the repository",
-                    n(k),
-                    sections(k)
-                )
+                format!("{} {} only on this computer", n(k), changes(k))
             },
         )
     } else if changed(Changed::Repository) > 0 {
         let k = changed(Changed::Repository);
         (
             "chg",
-            format!("{} {} changed in the repository", n(k), sections(k)),
+            format!(
+                "{} shared {}, applied at the next sync",
+                n(k),
+                if k == 1 { "update" } else { "updates" }
+            ),
         )
     } else {
-        ("ok", "in step".to_string())
+        ("ok", "up to date".to_string())
     };
     let mut rows: Vec<(String, String)> = Vec::new();
     if !v.pushes {
         rows.push((
             "This computer".into(),
             if changed(Changed::Here) > 0 {
-                "Reads the repository, doesn't push: your change stays here".into()
+                "Only reads the shared settings: your change stays here".into()
             } else {
-                "Reads the repository, doesn't push".into()
+                "Only reads the shared settings".into()
             },
         ));
     }
@@ -287,18 +275,9 @@ pub fn sync_line(v: &View, page: &str) -> String {
         }
     } else {
         for x in &changed_rows {
-            rows.push((
-                x.name.to_string(),
-                match x.state {
-                    Changed::Here => "Changed here".into(),
-                    Changed::Repository => {
-                        "Changed in the repository: applied with the next sync".into()
-                    }
-                    _ => "Changed here and in the repository".into(),
-                },
-            ));
+            rows.push((x.name.to_string(), state_words(v, x.state).into()));
         }
-        rows.push(("Other sections".into(), "In step".into()));
+        rows.push(("Other settings".into(), "Up to date".into()));
     }
     if let Some(w) = &s.written_by_version {
         rows.push((
@@ -310,7 +289,7 @@ pub fn sync_line(v: &View, page: &str) -> String {
             },
         ));
     }
-    // Plain text by choice: said on the line, never the "in step" colour.
+    // Plain text by choice: said on the line, never the "up to date" colour.
     let (line_class, class, plain) = if s.encrypted {
         ("sync-line", class, "")
     } else {
@@ -335,23 +314,38 @@ pub fn sync_line(v: &View, page: &str) -> String {
     )
 }
 
-/// A section's state, as a tag beside its title. Sections in step are
+/// A section's state in the pages' words: "Not shared yet" ("Only on this
+/// computer" on one that only reads), "Shared update: applied at the next
+/// sync", "Differs from the shared settings", "Up to date".
+pub fn state_words(v: &View, c: Changed) -> &'static str {
+    match c {
+        Changed::Here if v.pushes => "Not shared yet",
+        Changed::Here => "Only on this computer",
+        Changed::Repository => "Shared update: applied at the next sync",
+        Changed::Both => BOTH_TAG,
+        Changed::InStep => "Up to date",
+    }
+}
+
+/// The tag of a section changed on both sides.
+pub const BOTH_TAG: &str = "Differs from the shared settings";
+
+/// A section's state, as a tag beside its title. Sections up to date are
 /// tagged only while another needs a choice.
 pub fn tag(v: &View, key: &str) -> String {
     let Some(x) = v.status.sections.iter().find(|x| x.key == key) else {
         return String::new();
     };
-    match x.state {
-        Changed::Here => r#"<span class="stag chg">Changed here</span>"#.into(),
-        Changed::Repository => r#"<span class="stag chg">Changed in the repository</span>"#.into(),
-        Changed::Both => {
-            r#"<span class="stag both">Changed here and in the repository</span>"#.into()
-        }
-        Changed::InStep if v.status.state == Changed::Both => {
-            r#"<span class="stag">In step</span>"#.into()
-        }
-        Changed::InStep => String::new(),
-    }
+    let class = match x.state {
+        Changed::Here | Changed::Repository => "stag chg",
+        Changed::Both => "stag both",
+        Changed::InStep if v.status.state == Changed::Both => "stag",
+        Changed::InStep => return String::new(),
+    };
+    format!(
+        r#"<span class="{class}">{}</span>"#,
+        state_words(v, x.state)
+    )
 }
 
 fn state(v: &View, key: &str) -> Changed {
@@ -406,7 +400,7 @@ pub fn conflict(v: &View, key: &str) -> Option<String> {
         })
         .unwrap_or_default();
     let mut b = format!(
-        r#"<div class="cmp"><div><h3>Here <span class="muted">{here_when}</span></h3>{}</div><div><h3>In the repository <span class="muted">{repo_who}</span></h3>{}</div></div><div class="cmp-actions"><span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{key}">Use the repository's</button><span class="act-help">Drops your change here</span></span>"#,
+        r#"<div class="cmp"><div><h3>This computer <span class="muted">{here_when}</span></h3>{}</div><div><h3>Shared <span class="muted">{repo_who}</span></h3>{}</div></div><div class="cmp-actions"><span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{key}">Use the shared settings</button><span class="act-help">Replaces this computer's</span></span>"#,
         list(&d.here),
         list(&d.repository),
         key = esc(key),
@@ -414,7 +408,7 @@ pub fn conflict(v: &View, key: &str) -> Option<String> {
     if v.pushes {
         let _ = write!(
             b,
-            r#"<span class="act"><button type="button" class="btn primary" data-sync-action="keep_local" data-sync-section="{key}">Keep mine and push</button><span class="act-help">Replaces the repository's on every machine</span></span>"#,
+            r#"<span class="act"><button type="button" class="btn primary" data-sync-action="keep_local" data-sync-section="{key}">Keep this computer's</button><span class="act-help">Shares them with everyone on this history</span></span>"#,
             key = esc(key),
         );
     }
@@ -429,7 +423,7 @@ pub fn reader_action(v: &View, key: &str) -> String {
         return String::new();
     }
     format!(
-        r#"<span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{}">Use the repository's</button><span class="act-help">Drops your change</span></span>"#,
+        r#"<span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{}">Use the shared settings</button><span class="act-help">Replaces this computer's</span></span>"#,
         esc(key)
     )
 }
@@ -453,12 +447,27 @@ pub fn here_items(v: &View, key: &str) -> Vec<String> {
 }
 
 /// The note shown once after a pull applied the repository's settings:
-/// "Accepted risks updated from the repository", with who, when and what.
+/// "Accepted risks updated from the run history", with who, when and what;
+/// after a first sync, what it took and where this computer's earlier
+/// settings are ([`settings_sync::first_sync_words`]).
 pub fn pulled_note(v: &View) -> String {
     let Some(a) = &v.applied else {
         return String::new();
     };
     let names: Vec<&str> = a.sections.iter().map(String::as_str).collect();
+    let text = match &a.first {
+        Some(first) if !first.is_empty() => {
+            let first: Vec<&str> = first.iter().map(String::as_str).collect();
+            esc(&settings_sync::first_sync_words(
+                &first,
+                a.backup.as_deref(),
+            ))
+        }
+        _ => format!(
+            "{} updated from the run history",
+            esc(&sections_words(&names))
+        ),
+    };
     let mut rows = Vec::new();
     if let Some(w) = who(&a.by, &a.on) {
         rows.push(("By".to_string(), esc(&w)));
@@ -474,10 +483,9 @@ pub fn pulled_note(v: &View) -> String {
     }
     rows.push(("Applies".to_string(), "From the next analysis".to_string()));
     format!(
-        r#"<div class="saved-note card pulled" id="pulled" role="status">{}<div>{} updated from the repository {}</div><button type="button" class="fl-remove" data-close-note aria-label="Close">{}</button></div>"#,
+        r#"<div class="saved-note card pulled" id="pulled" role="status">{}<div>{text} {}</div><button type="button" class="fl-remove" data-close-note aria-label="Close">{}</button></div>"#,
         icon("i-history"),
-        esc(&sections_words(&names)),
-        tip("pulled", "What came from the repository", &rows, false),
+        tip("pulled", "What came from the run history", &rows, false),
         icon("i-x"),
     )
 }
@@ -489,7 +497,7 @@ pub fn storage_row(v: &View) -> String {
         .sections
         .iter()
         .filter(|x| x.state == Changed::Both)
-        .map(|x| short_name(x.key))
+        .map(|x| x.name)
         .collect();
     let mut rows: Vec<(String, String)> = s
         .sections
@@ -500,38 +508,38 @@ pub fn storage_row(v: &View) -> String {
                 x.name.to_string(),
                 format!(
                     r#"<a href="/settings">{}</a>"#,
-                    esc(&upper_first(x.state.words()))
+                    esc(state_words(v, x.state))
                 ),
             )
         })
         .collect();
     if !rows.is_empty() {
-        rows.push(("Other sections".into(), "In step".into()));
+        rows.push(("Other settings".into(), "Up to date".into()));
     }
     let state = if s.unreadable.is_some() {
         r#" · <span class="sync-chg">the repository's settings can't be read here</span> · <a href="/settings">Why</a>"#
             .to_string()
     } else if !both.is_empty() {
-        let (_, href, name) = s
+        let (_, href, _) = s
             .sections
             .iter()
             .find(|x| x.state == Changed::Both)
             .map_or(("settings", "/settings", "Settings"), |x| page_of(x.key));
         format!(
-            r#" · <span class="sync-chg">{} changed here and in the repository</span> · <a href="{href}">Resolve in {name}</a>"#,
-            esc(&sections_words(&both))
+            r#" · <span class="sync-chg">{} differ from the shared ones</span> · <a href="{href}">Review</a>"#,
+            esc(&settings_sync::names_in_a_sentence(&both, false))
         )
     } else if s.state == Changed::InStep && s.in_repository {
-        " · in step".to_string()
+        " · up to date".to_string()
     } else if !s.in_repository {
-        " · not in the repository yet".to_string()
+        " · not shared yet".to_string()
     } else {
         format!(" · {}", esc(&s.changed_words()))
     };
     if !both.is_empty() {
         rows.push((
             "Runs".into(),
-            "Keep going with the settings on this computer.".into(),
+            "Use this computer's settings until you choose".into(),
         ));
     }
     // Plain text by choice: said, not left to the Encryption row.
@@ -554,14 +562,6 @@ pub fn storage_row(v: &View) -> String {
     format!(
         r#"<div><dt>Settings</dt><dd>Shared{state}{tip}<span class="fact-sub">Paths, plugins and this section stay local.</span></dd></div>"#
     )
-}
-
-fn upper_first(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-        None => String::new(),
-    }
 }
 
 // ------------------------------------------------- sharing a save
@@ -669,7 +669,7 @@ pub(crate) struct SyncBody {
 }
 
 /// `POST /api/settings/sync`: the conflict's buttons (and a reader's
-/// "Use the repository's") for one section, as `pathwarden config sync
+/// "Use the shared settings") for one section, as `pathwarden config sync
 /// --use-repo|--keep-local --section KEY`.
 pub(crate) async fn sync_section(State(st): State<Shared>, Json(body): Json<SyncBody>) -> Response {
     let ws = st.ws();
@@ -679,7 +679,7 @@ pub(crate) async fn sync_section(State(st): State<Shared>, Json(body): Json<Sync
             let resolve = match body.action.as_str() {
                 "use_repo" => Resolve::UseRepo(vec![body.section.clone()]),
                 "keep_local" => Resolve::KeepLocal(vec![body.section.clone()]),
-                _ => return Err("Choose the repository's or yours.".into()),
+                _ => return Err("Choose the shared settings or this computer's.".into()),
             };
             let loc = crate::history_ui::locate(&ws, flag.as_deref())?;
             let _lock = loc.store.lock_waiting(settings_sync::lock_wait()).map_err(|e| {

@@ -527,7 +527,8 @@ async fn runs_page(
 ) -> Html<String> {
     let runs = st.ws().runs();
     // UI runs and the runs the CLI or a schedule recorded in the history.
-    let (rows, note, gate) = {
+    let connected = landing.connected.is_some();
+    let (rows, note, gate, first) = {
         let ws = st.ws();
         let flag = st.state_dir();
         let runs = runs.clone();
@@ -535,6 +536,10 @@ async fn runs_page(
             let snap = crate::history_ui::snapshot(&ws, flag.as_deref());
             let loc = snap.location.as_ref().ok();
             let env = ws.env_id().to_string();
+            // Just connected: what the first sync took, said here, once.
+            let first = loc
+                .filter(|_| connected)
+                .and_then(|l| crate::connect_ui::first_sync_line(&l.store));
             (
                 crate::history_ui::run_rows(&ws, &runs, &snap),
                 crate::history_ui::runs_note(&ws, &runs, &snap),
@@ -543,13 +548,14 @@ async fn runs_page(
                 loc.and_then(crate::encryption_ui::gate)
                     .or_else(|| loc.and_then(|l| crate::history_ui::accept_card(l, &env)))
                     .unwrap_or_default(),
+                first,
             )
         })
         .await
         .unwrap_or_default()
     };
     // Just connected to a run history: what was loaded, once.
-    let gate = match crate::connect_ui::landing_note(&landing) {
+    let gate = match crate::connect_ui::landing_note(&landing, first.as_deref()) {
         Some(n) => format!("{n}{gate}"),
         None => gate,
     };

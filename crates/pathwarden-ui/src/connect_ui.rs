@@ -805,9 +805,23 @@ async fn cancel_api(State(st): State<Shared>, Json(body): Json<CancelBody>) -> R
     Json(serde_json::json!({ "redirect": back })).into_response()
 }
 
+/// What this computer's first sync with the history took, and where its
+/// earlier settings are ([`pathwarden_core::settings_sync::first_sync_words`]),
+/// when the last sync was a first one not shown yet. Marked shown: the
+/// pull note on Settings doesn't say it again.
+pub fn first_sync_line(store: &pathwarden_core::store::Store) -> Option<String> {
+    let a = pathwarden_core::settings_sync::unseen_applied(store, false)?;
+    let first = a.first.as_ref().filter(|f| !f.is_empty())?;
+    let names: Vec<&str> = first.iter().map(String::as_str).collect();
+    let line = pathwarden_core::settings_sync::first_sync_words(&names, a.backup.as_deref());
+    let _ = pathwarden_core::settings_sync::unseen_applied(store, true);
+    Some(line)
+}
+
 /// The note Runs shows right after connecting (`/runs?connected=N&...`):
-/// `None` without those.
-pub fn landing_note(q: &LandingQuery) -> Option<String> {
+/// `None` without those. `first`: what the first sync took
+/// ([`first_sync_line`]), said after what was loaded.
+pub fn landing_note(q: &LandingQuery, first: Option<&str>) -> Option<String> {
     let full_runs = q.connected?;
     let git = q.kind.as_deref() != Some("folder");
     let words = shared::landing_words(
@@ -822,8 +836,11 @@ pub fn landing_note(q: &LandingQuery) -> Option<String> {
     let (lead, rest) = words
         .split_once(". ")
         .map_or((words.as_str(), ""), |(a, b)| (a, b));
+    let first = first
+        .map(|f| format!(r#"<p class="cx-first">{}</p>"#, esc(f)))
+        .unwrap_or_default();
     Some(format!(
-        r#"<div class="note ok cx-landing" role="status">{}<div><p><strong>{}.</strong> {}</p></div></div>"#,
+        r#"<div class="note ok cx-landing" role="status">{}<div><p><strong>{}.</strong> {}</p>{first}</div></div>"#,
         icon("i-history"),
         esc(lead.trim_end_matches('.')),
         esc(rest)
