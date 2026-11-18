@@ -110,7 +110,7 @@ notes say so under **Upgrade notes**.
 | File | Where | Format | A newer one |
 |---|---|---|---|
 | `pathwarden.toml` | Beside the command (`-c`), or in each environment of the app's workspace. | `format = N` at the top, absent means 1. This version reads 1, and doesn't write the key while 1 is the only format. | Refused by every command, with "This pathwarden.toml was saved by a newer Pathwarden (format N). Update Pathwarden to read it." It is never rewritten. |
-| Unknown keys | `pathwarden.toml`. | Not a format change. | A near miss of a known key or section is refused as a typo everywhere: "[state]: unknown key `encryped`. Did you mean `encrypted`?". A near miss is one letter away from a known key, the same name without underscores (`tierzero`), its plural or singular (`outputs`, `zones`, `rule`), or a key holding the stem of a setting whose loss would weaken Pathwarden: `encrypt` or `push` anywhere in a `[state]` key (`encryption`, `no_push`), `tier` at the start of a top-level key (`tier0`). Any other unknown key: in the shared sections (`tier_zero`, `settings_folders` (from 0.3), `[rules]`, `[[suppress]]`, `[[zone]]`, `[management_planes]`, `[[mapping]]`) it is kept, named in a warning, and its entry is not applied; at the top level and in `[state]`, `[ingest]`, `[opengraph]` and `[collect]` it is named in a one-line warning and ignored: "[state]: `soon` is not a key this version of Pathwarden knows (a newer one may have written it); it is kept in the file and ignored." In `[[output]]` it goes to the plugin, and in `[[action]]` to the program, except a near miss of the block's own keys (`rule`, `timeout_second`), refused as a typo. A newer version keeps its new keys out of typo range. The command line prints each warning; the app lists them on **Settings** under "pathwarden.toml has keys this version doesn't know, so they are ignored.", followed by notices that name no key. Pathwarden 0.1.9 and earlier refuse such a key, so a new key is written only when it isn't the default. |
+| Unknown keys | `pathwarden.toml`. | Not a format change. | A near miss of a known key or section is refused as a typo everywhere: "[state]: unknown key `encryped`. Did you mean `encrypted`?". A near miss is one letter away from a known key, the same name without underscores (`tierzero`), its plural or singular (`outputs`, `zones`, `rule`), or a key holding the stem of a setting whose loss would weaken Pathwarden: `encrypt` or `push` anywhere in a `[state]` key (`encryption`, `no_push`), `tier` at the start of a top-level key (`tier0`). Any other unknown key: in the shared sections (`tier_zero`, `settings_folders` (from 0.3), `[rules]`, `[[suppress]]`, `[[zone]]`, `[management_planes]`, `[[mapping]]`) it is kept, named in a warning, and its entry is not applied; at the top level and in `[state]`, `[ingest]`, `[opengraph]` and `[collect]` it is named in a one-line warning and ignored: "[state]: `soon` is not a key this version of Pathwarden knows (a newer one may have written it); it is kept in the file and ignored." In `[[output]]` it goes to the plugin, and in `[[action]]` to the program; a singular or plural of the block's own keys (`rule` beside `rules`) is named in a warning, as it may have been meant as the filter. A newer version keeps its new keys out of typo range. The command line prints each warning; the app lists them on **Settings** under "pathwarden.toml has keys this version doesn't know, so they are ignored.", followed by notices that name no key. Pathwarden 0.1.9 and earlier refuse such a key, so a new key is written only when it isn't the default. |
 
 ### The history (a folder or a git repository)
 
@@ -399,7 +399,9 @@ The request (`pathwarden.action-request.v1`):
 | `record` | For a follow-up, the record it runs on, else null. |
 | `requested_by` | `by` (the user) and `on` (the computer), each null when unknown. |
 
-The describe answer (`pathwarden.action-describe.v1`): `schema` and
+The describe answer (`pathwarden.action-describe.v1`): `schema`, which
+should be `pathwarden.action-describe.v1` (a missing one is noted,
+another is refused), and
 `actions`, at most 20, each:
 
 | Field | Meaning |
@@ -408,7 +410,7 @@ The describe answer (`pathwarden.action-describe.v1`): `schema` and
 | `label` | The button, at most 80 characters. |
 | `description` | Optional, at most 300 characters. |
 | `sends` | What leaves the computer, in plain words, at most 500 characters. |
-| `applies_to` | Optional: `min_severity`, `rules`, `categories` (`attack_path`, `hygiene`), on top of the block's own filters. |
+| `applies_to` | Optional: `min_severity`, `rules`, `categories` (`attack_path`, `hygiene`), on top of the block's own filters. A fixed or held finding is rated by its rule: its category, and for a held one the highest severity the rule gives. |
 | `inputs` | At most 20, each `id`, `label`, `type` (`text`, `textarea`, `choice` or `bool`), `required`, `max` (text: 200 by default, at most 1,000; textarea: 2,000, at most 4,000), `choices` (for `choice`, at most 50) and `default`. |
 | `once` | True to hide the action while the finding has an open record from it. |
 | `follow_ups` | IDs of this program's `for: "record"` actions, offered on the records this one returns. |
@@ -422,7 +424,7 @@ The result (`pathwarden.action-result.v1`):
 
 | Field | Meaning |
 |---|---|
-| `schema` | Always `pathwarden.action-result.v1`. |
+| `schema` | Should be `pathwarden.action-result.v1`: a missing one is noted, another fails the run. |
 | `ok` | Required: whether the action worked. |
 | `message` | At most 2,000 characters, shown as text. |
 | `links` | At most 5, each `label` and `url`. |
