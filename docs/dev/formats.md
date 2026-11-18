@@ -110,7 +110,7 @@ notes say so under **Upgrade notes**.
 | File | Where | Format | A newer one |
 |---|---|---|---|
 | `pathwarden.toml` | Beside the command (`-c`), or in each environment of the app's workspace. | `format = N` at the top, absent means 1. This version reads 1, and doesn't write the key while 1 is the only format. | Refused by every command, with "This pathwarden.toml was saved by a newer Pathwarden (format N). Update Pathwarden to read it." It is never rewritten. |
-| Unknown keys | `pathwarden.toml`. | Not a format change. | A near miss of a known key or section is refused as a typo everywhere: "[state]: unknown key `encryped`. Did you mean `encrypted`?". A near miss is one letter away from a known key, the same name without underscores (`tierzero`), its plural or singular (`outputs`, `zones`, `rule`), or a key holding the stem of a setting whose loss would weaken Pathwarden: `encrypt` or `push` anywhere in a `[state]` key (`encryption`, `no_push`), `tier` at the start of a top-level key (`tier0`). Any other unknown key: in the shared sections (`tier_zero`, `settings_folders` (from 0.3), `[rules]`, `[[suppress]]`, `[[zone]]`, `[management_planes]`, `[[mapping]]`) it is kept, named in a warning, and its entry is not applied; at the top level and in `[state]`, `[ingest]`, `[opengraph]` and `[collect]` it is named in a one-line warning and ignored: "[state]: `soon` is not a key this version of Pathwarden knows (a newer one may have written it); it is kept in the file and ignored." In `[[output]]` it goes to the plugin. A newer version keeps its new keys out of typo range. The command line prints each warning; the app lists them on **Settings** under "pathwarden.toml has keys this version doesn't know, so they are ignored.", followed by notices that name no key. Pathwarden 0.1.9 and earlier refuse such a key, so a new key is written only when it isn't the default. |
+| Unknown keys | `pathwarden.toml`. | Not a format change. | A near miss of a known key or section is refused as a typo everywhere: "[state]: unknown key `encryped`. Did you mean `encrypted`?". A near miss is one letter away from a known key, the same name without underscores (`tierzero`), its plural or singular (`outputs`, `zones`, `rule`), or a key holding the stem of a setting whose loss would weaken Pathwarden: `encrypt` or `push` anywhere in a `[state]` key (`encryption`, `no_push`), `tier` at the start of a top-level key (`tier0`). Any other unknown key: in the shared sections (`tier_zero`, `settings_folders` (from 0.3), `[rules]`, `[[suppress]]`, `[[zone]]`, `[management_planes]`, `[[mapping]]`) it is kept, named in a warning, and its entry is not applied; at the top level and in `[state]`, `[ingest]`, `[opengraph]` and `[collect]` it is named in a one-line warning and ignored: "[state]: `soon` is not a key this version of Pathwarden knows (a newer one may have written it); it is kept in the file and ignored." In `[[output]]` it goes to the plugin, and in `[[action]]` to the program, except a near miss of the block's own keys (`rule`, `timeout_second`), refused as a typo. A newer version keeps its new keys out of typo range. The command line prints each warning; the app lists them on **Settings** under "pathwarden.toml has keys this version doesn't know, so they are ignored.", followed by notices that name no key. Pathwarden 0.1.9 and earlier refuse such a key, so a new key is written only when it isn't the default. |
 
 ### The history (a folder or a git repository)
 
@@ -161,6 +161,7 @@ stored passphrases are this account's own: no number, never shared.
 | Document | Schema | Compatibility |
 |---|---|---|
 | The event document (`--event`, output plugins) | `pathwarden.event.v1` | It only grows: a field is never removed or changed in meaning within v1. [Fields](#the-event-document-pathwardeneventv1). |
+| Finding actions: describe, request and result | `pathwarden.action-describe.v1`, `pathwarden.action-request.v1`, `pathwarden.action-result.v1` | They only grow. A program ignores fields it doesn't know, and so does Pathwarden. [Fields](#finding-actions-pathwardenaction-v1). |
 | The run bundle (`runs/<run>/run.json`) | `pathwarden.run-bundle.v1`, `"format"`: 2 | [Fields](#the-run-bundle-pathwardenrun-bundlev1). |
 | Evidence packs | `pathwarden.evidence.v1` | A verifier refuses another schema. [The format](../evidence.md#the-format). |
 | SARIF and DefectDojo exports | The receiver's own. | [Integrations](../integrations.md). |
@@ -372,6 +373,65 @@ absent; a plugin should ignore fields it doesn't know.
 
 The event carries names and details. Treat it like the collector output:
 write it to the run's working folder and delete it afterwards.
+
+## Finding actions (`pathwarden.action-*.v1`)
+
+An `[[action]]` block in `pathwarden.toml` names a program someone runs
+for one finding, when they ask. Pathwarden writes one JSON request to
+the program's stdin and names its kind, `describe` or `run`, in
+`PATHWARDEN_ACTION_REQUEST`. The program writes one JSON answer to the
+file named in `PATHWARDEN_ACTION_RESULT`. Each line it prints to stdout is
+a progress line (the latest 200 are kept, each cut to 500 characters);
+stderr is kept for the details. Both sides ignore fields they don't know.
+
+The request (`pathwarden.action-request.v1`):
+
+| Field | Meaning |
+|---|---|
+| `schema` | Always `pathwarden.action-request.v1`. |
+| `kind` | `describe` or `run`. A describe request carries only `settings`. |
+| `action` | The ID of the action to run, from the program's describe. |
+| `inputs` | The inputs by ID, checked against their types: text, or true or false for `bool`. |
+| `dry_run` | True when the program must change nothing. |
+| `settings` | The block's other keys. Secrets are named by `*_env` settings, and those variables are in the environment. |
+| `run` | `run_id`, `domains`, `pathwarden` (the version that analyzed it). |
+| `finding` | The finding as the [event document](#the-event-document-pathwardeneventv1) has it, plus `guide` (the rule's Markdown guide, or null) and `status` (`open`, `fixed`, `held` or `accepted`). A fixed or held finding has only the fields of `resolved` or `held`. |
+| `record` | For a follow-up, the record it runs on, else null. |
+| `requested_by` | `by` (the user) and `on` (the computer), each null when unknown. |
+
+The describe answer (`pathwarden.action-describe.v1`): `schema` and
+`actions`, at most 20, each:
+
+| Field | Meaning |
+|---|---|
+| `id` | Lowercase letters, digits, `-` and `_`, at most 40. The action is addressed as `<name>/<id>`. |
+| `label` | The button, at most 80 characters. |
+| `description` | Optional, at most 300 characters. |
+| `sends` | What leaves the computer, in plain words, at most 500 characters. |
+| `applies_to` | Optional: `min_severity`, `rules`, `categories` (`attack_path`, `hygiene`), on top of the block's own filters. |
+| `inputs` | At most 20, each `id`, `label`, `type` (`text`, `textarea`, `choice` or `bool`), `required`, `max` (text: 200 by default, at most 1,000; textarea: 2,000, at most 4,000), `choices` (for `choice`, at most 50) and `default`. |
+| `once` | True to hide the action while the finding has an open record from it. |
+| `follow_ups` | IDs of this program's `for: "record"` actions, offered on the records this one returns. |
+| `for` | `"record"`: only offered as a follow-up on a record. |
+| `when` | `"fixed"`: only offered once the finding is fixed. |
+
+An action with a problem in its `id`, `label`, filters, inputs, `for` or
+`when` isn't offered; a text that is too long is cut.
+
+The result (`pathwarden.action-result.v1`):
+
+| Field | Meaning |
+|---|---|
+| `schema` | Always `pathwarden.action-result.v1`. |
+| `ok` | Required: whether the action worked. |
+| `message` | At most 2,000 characters, shown as text. |
+| `links` | At most 5, each `label` and `url`. |
+| `records` | At most 5, each `id` (required; a follow-up returns the same one to update it), `kind`, `label`, `number`, `url`, `status`, `open` (true while it is open in the other system) and `fields` (at most 20, each value at most 200 characters). |
+
+Text is never read as HTML, and control characters are dropped. Every
+`url` must be `https://`, without a user name or password; another is
+left out. A missing result file, one that isn't JSON or has no `ok`, or
+a non-zero exit is a failed run, shown with the program's output.
 
 ## What older releases do with newer files
 

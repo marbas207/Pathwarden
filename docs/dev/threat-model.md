@@ -886,7 +886,9 @@ findings. Attackers: Collector file.
 ## 15. Output plugins
 
 A plugin is a program Pathwarden runs after a run, with the run's event on
-stdin (docs/plugins.md).
+stdin (docs/plugins.md). A finding action is a program someone runs for
+one finding, with that finding on stdin (docs/dev/formats.md, "Finding
+actions"); it is held to the same rules.
 
 Assets: the event (every finding, path, object name and SID, accepted risks
 with who accepted them and why); plugin secrets; the account plugins run as.
@@ -907,6 +909,7 @@ Attackers: Writer, Local user, Plugin endpoint, Web page (through a session).
 | Timeout (default 600 s) stops the whole process tree; stdout and stderr are capped at 4 MiB each; stdin is written on its own thread. | `plugins.rs` `timeout_of`, `MAX_OUTPUT`, `read_capped` | `plugins.rs` inline `timeout_stops_the_whole_process_tree`, `output_is_capped_with_a_note`; `crates/pathwarden-cli/tests/robustness.rs::hung_plugin_is_stopped_at_its_timeout`, `plugin_that_writes_before_reading_does_not_deadlock` |
 | Plugin output is escaped on the terminal and inserted as text in the pages. | `crates/pathwarden-cli/src/outputs.rs`; `assets/config.js` | `crates/pathwarden-cli/tests/robustness.rs::hostile_names_are_escaped_on_the_terminal` |
 | `[[output]]` never travels through the history, so a writer cannot make a reader run a program (section 5). | `config_edit.rs` `NEVER_SHARED` | `config_edit.rs` inline `shared_sections_travel_and_the_rest_stays` |
+| Finding actions (`[[action]]`) run only when someone asks, never from `pathwarden run` or a scheduled task (`PATHWARDEN_SCHEDULED`), and the command line asks before each run unless `--yes`. Their program is found, checked, started and stopped as a plugin's (the same program and argument checks, cleared environment plus `*_env`, private folder, process-tree kill at `timeout_seconds`, at most 1800, or on Cancel). `[[action]]` never travels through the history, and without `--allow-destinations` a page can't add one or change its program or `*_env` settings. The program's answers are checked strictly: text capped and never read as HTML, control characters dropped, links `https://` only, at most 5 records; a missing or broken answer is a failed run. | `actions.rs` `exec`, `parse_describe`, `parse_result`, `https_url`; `plugins.rs` `command_for_action`, `run_streaming`, `CancelHandle`; `plugin_form.rs` `check_action`; `config_edit.rs` `NEVER_SHARED`; `crates/pathwarden-ui/src/actions_ui.rs` `prepare` | `actions_tests.rs` `programs_and_secrets_of_actions_need_the_flag`, `results_are_read_strictly_and_capped`, `links_must_be_https`, `cancel_kills_the_whole_tree`, `a_missing_or_broken_result_is_a_failed_run_with_its_output`; `crates/pathwarden-cli/tests/actions.rs::actions_are_added_run_checked_and_removed` |
 | An inserted (superseded) run never runs its plugins, so it cannot close tickets a newer run keeps open. | `store.rs` | `crates/pathwarden-core/tests/git_state.rs::a_run_another_run_pushed_before_is_recorded_on_top_of_it` |
 | Jira and ServiceNow: `https://` only (http for loopback or an explicit opt-in), no credentials, query or fragment in the instance URL; auth headers in zeroed memory; credentials redacted from errors. | `pathwarden-output-jira/src/settings.rs`, `api.rs`; `pathwarden-output-servicenow/src/settings.rs`, `api.rs` | Jira: `https_required_and_no_credentials_in_the_url`, `auth_headers_are_zeroizing`, `errors_hide_credentials`; ServiceNow: `https_required_except_loopback_or_explicit_opt_in`, `credentials_in_the_instance_are_refused`, `auth_header_is_built_in_zeroizing_memory`, `transport_errors_hide_credentials`; core: `plugin_form.rs` inline `instances_need_https_and_no_credentials` |
 | Against a hostile ticketing server: neither plugin follows a redirect (a 3xx is an error naming it), each reads at most 1000 pages, and answers are capped (32 MiB, error answers 64 KiB) and refused, not cut, when larger. A certificate this computer doesn't trust is refused before anything is sent. | `pathwarden-output-servicenow/src/api.rs` `agent`, `body`, `MAX_PAGES`, `MAX_RESPONSE`; `pathwarden-output-jira/src/api.rs` `body`, `MAX_RESPONSE` | ServiceNow inline `redirects_are_not_followed`, `paging_stops_at_the_cap`, `answers_are_capped`, `an_untrusted_certificate_is_refused` (a local TLS server with a self-signed certificate) |
@@ -921,6 +924,9 @@ Attackers: Writer, Local user, Plugin endpoint, Web page (through a session).
 - **A plugin is not sandboxed.** It runs with the full rights of the account
   that runs Pathwarden and receives the whole event. The environment filter
   prevents accidental leaks, not a hostile plugin.
+- **A finding action is not sandboxed either.** It receives one finding
+  with its names, path and guide, and does what its program does; the
+  dry run (`dry_run`) is a request the program may ignore.
 - **Plugin folders are checked, not locked.** Whoever can write the folder
   holding `pathwarden.exe` (or its `plugins\`) can plant a
   `pathwarden-output-*.exe`, and could equally replace `pathwarden.exe`.

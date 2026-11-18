@@ -7,6 +7,11 @@ alerts, SIEM, email or anything you write. The
 Pathwarden. For tools that import files instead, see
 [integrations.md](integrations.md).
 
+Output plugins run on every run. To run your own program for one finding
+when someone asks (open a ticket, alert a team), add a finding action
+instead: an `[[action]]` block, set up with `pathwarden action add`. Its
+protocol is in [File formats](dev/formats.md#finding-actions-pathwardenaction-v1).
+
 ## Set up a plugin
 
 ![Setting up ticketing in the app](images/set-up-ticketing.gif)
