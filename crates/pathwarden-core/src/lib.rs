@@ -6,6 +6,7 @@
 // time, and two functions of plugins (drive types, known folders).
 #![deny(unsafe_code)]
 
+pub mod actions;
 pub mod adcs;
 pub mod analysis;
 pub mod analyze;

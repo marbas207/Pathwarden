@@ -17,14 +17,22 @@
 //! own settings name (`password_env = "..."`), never one of Pathwarden's own
 //! secrets ([`crate::keystore::SECRET_ENV`]), and a timeout
 //! (`timeout_seconds`, default 10 minutes).
+//!
+//! Finding actions ([`crate::actions`]) run the same way: found as
+//! `pathwarden-action-<name>` or by their `command`, with the same checks,
+//! environment and folder, through [`run_streaming`], which hands over each
+//! line of stdout as it arrives and can be stopped ([`CancelHandle`]).
 
-use std::io::{Read, Write};
+use std::collections::VecDeque;
+use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::config::OutputConfig;
+use crate::config::{ActionConfig, OutputConfig};
 
 pub const DEFAULT_TIMEOUT_SECS: u64 = 600;
 
@@ -73,6 +81,9 @@ pub enum PluginError {
     Start { plugin: String, detail: String },
     #[error("timed out after {0} s and was stopped (set timeout_seconds to change the limit)")]
     Timeout(u64),
+    /// Stopped through its [`CancelHandle`].
+    #[error("stopped before it finished")]
+    Cancelled,
     #[error("{0}")]
     Io(#[from] std::io::Error),
 }
@@ -149,7 +160,7 @@ pub fn folder_warnings_for(dirs: &[PathBuf]) -> Vec<String> {
 /// on PATH) and every argument that names an existing file by its full
 /// path (the script an interpreter runs, `-File C:\x\teams.ps1`). Network
 /// paths are never looked at.
-fn command_files(argv: &[String]) -> Vec<PathBuf> {
+pub(crate) fn command_files(argv: &[String]) -> Vec<PathBuf> {
     let mut out: Vec<PathBuf> = Vec::new();
     if let Some(program) = argv.first() {
         if is_interpreter(program) {
@@ -214,14 +225,43 @@ pub fn command_warnings(outputs: &[OutputConfig]) -> Vec<String> {
         .collect()
 }
 
+/// What a program is for, which names its file: an output plugin
+/// (`pathwarden-output-<name>`) or a finding action
+/// (`pathwarden-action-<name>`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kind {
+    Output,
+    Action,
+}
+
+impl Kind {
+    fn prefix(self) -> &'static str {
+        match self {
+            Kind::Output => "pathwarden-output-",
+            Kind::Action => "pathwarden-action-",
+        }
+    }
+}
+
 /// The program file for plugin `name`: `pathwarden-output-<name>(.exe)`.
 pub fn program_name(name: &str) -> String {
-    format!("pathwarden-output-{name}{}", std::env::consts::EXE_SUFFIX)
+    program_name_of(Kind::Output, name)
+}
+
+/// The program file of a `kind` plugin `name`.
+pub fn program_name_of(kind: Kind, name: &str) -> String {
+    format!("{}{name}{}", kind.prefix(), std::env::consts::EXE_SUFFIX)
 }
 
 /// Finds `pathwarden-output-<name>`.
 pub fn locate(name: &str) -> Option<PathBuf> {
-    let file = program_name(name);
+    locate_of(Kind::Output, name)
+}
+
+/// Finds the `kind` plugin `name` beside pathwarden or in its `plugins`
+/// folder.
+pub fn locate_of(kind: Kind, name: &str) -> Option<PathBuf> {
+    let file = program_name_of(kind, name);
     plugin_dirs()
         .into_iter()
         .map(|d| d.join(&file))
@@ -588,7 +628,36 @@ pub fn valid_env_name(name: &str) -> bool {
 }
 
 pub fn command_for(output: &OutputConfig) -> Result<Command, PluginError> {
-    match &output.command {
+    command_of(Kind::Output, &output.plugin, output.command.as_deref())
+}
+
+/// The program of an `[[action]]` block, found and checked as an output
+/// plugin's is ([`command_for`]).
+pub fn command_for_action(action: &ActionConfig) -> Result<Command, PluginError> {
+    let plugin = action.plugin.as_deref().unwrap_or(&action.name);
+    command_of(Kind::Action, plugin, action.command.as_deref())
+}
+
+/// The local files an `[[action]]` block runs: its plugin program, or
+/// the program and scripts its `command` names ([`command_files`]).
+pub fn action_files(action: &ActionConfig) -> Vec<PathBuf> {
+    match &action.command {
+        Some(argv) => command_files(argv),
+        None => action
+            .plugin
+            .as_deref()
+            .and_then(|p| locate_of(Kind::Action, p))
+            .into_iter()
+            .collect(),
+    }
+}
+
+fn command_of(
+    kind: Kind,
+    plugin: &str,
+    command: Option<&[String]>,
+) -> Result<Command, PluginError> {
+    match command {
         Some(argv) => {
             let program = argv
                 .first()
@@ -624,11 +693,11 @@ pub fn command_for(output: &OutputConfig) -> Result<Command, PluginError> {
             c.args(&argv[1..]);
             Ok(c)
         }
-        None => match locate(&output.plugin) {
+        None => match locate_of(kind, plugin) {
             Some(path) => Ok(crate::spawn::quiet(path)),
             None => Err(PluginError::Setup(format!(
-                "pathwarden-output-{} not found next to pathwarden or in the plugins folder beside it ({})",
-                output.plugin,
+                "{}{plugin} not found next to pathwarden or in the plugins folder beside it ({})",
+                kind.prefix(),
                 plugin_dirs()
                     .iter()
                     .map(|d| d.display().to_string())
@@ -652,8 +721,12 @@ pub fn timeout_of(output: &OutputConfig) -> Duration {
 /// Names of the environment variables the plugin's settings point at
 /// (every string value of a key ending in `_env`).
 pub fn named_env(output: &OutputConfig) -> Vec<String> {
-    output
-        .settings
+    named_env_in(&output.settings)
+}
+
+/// [`named_env`] of any program's settings (an output's, an action's).
+pub fn named_env_in(settings: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
+    settings
         .iter()
         .filter(|(k, _)| k.ends_with("_env"))
         .filter_map(|(_, v)| v.as_str().map(str::to_owned))
@@ -664,7 +737,16 @@ pub fn named_env(output: &OutputConfig) -> Vec<String> {
 }
 
 fn apply_env(cmd: &mut Command, output: &OutputConfig) {
-    let named: Vec<String> = named_env(output)
+    apply_env_in(cmd, &output.settings);
+}
+
+/// The cleared environment, the base list and the variables `settings`
+/// name ([`named_env_in`]).
+pub(crate) fn apply_env_in(
+    cmd: &mut Command,
+    settings: &serde_json::Map<String, serde_json::Value>,
+) {
+    let named: Vec<String> = named_env_in(settings)
         .into_iter()
         .map(|n| n.to_ascii_uppercase())
         .collect();
@@ -773,6 +855,162 @@ pub fn run(
     Ok(PluginRun {
         status,
         stdout: stdout.join().unwrap_or_default(),
+        stderr: stderr.join().unwrap_or_default(),
+    })
+}
+
+/// The most progress lines [`run_streaming`] keeps (the latest ones).
+pub const MAX_PROGRESS_LINES: usize = 200;
+/// The longest progress line kept, in characters; the rest is cut.
+pub const MAX_LINE_CHARS: usize = 500;
+
+/// Stops a program [`run_streaming`] runs, and every process it started,
+/// from another thread (a Cancel button). Clones share one switch.
+#[derive(Debug, Clone, Default)]
+pub struct CancelHandle(Arc<AtomicBool>);
+
+impl CancelHandle {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Asks the run to stop: it kills the process tree within 50 ms and
+    /// returns [`PluginError::Cancelled`].
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+/// What a program [`run_streaming`] ran printed and how it exited.
+#[derive(Debug)]
+pub struct Streamed {
+    pub status: ExitStatus,
+    /// Its stdout lines, the latest [`MAX_PROGRESS_LINES`], each cut to
+    /// [`MAX_LINE_CHARS`] and without control characters; empty lines are
+    /// left out.
+    pub lines: Vec<String>,
+    /// Its stderr, capped at [`MAX_OUTPUT`].
+    pub stderr: Vec<u8>,
+}
+
+/// One stdout line as kept: control and bidi characters dropped, cut to
+/// [`MAX_LINE_CHARS`]. `None` when nothing is left.
+fn progress_line(raw: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(raw);
+    let line: String = text
+        .chars()
+        .filter(|c| !c.is_control() && !crate::text::is_bidi_control(*c))
+        .take(MAX_LINE_CHARS)
+        .collect();
+    let line = line.trim();
+    (!line.is_empty()).then(|| line.to_string())
+}
+
+/// Reads stdout line by line into `tx`, up to [`MAX_OUTPUT`] bytes; the
+/// rest is read and dropped, so the program never blocks on a full pipe.
+fn read_lines(r: impl Read + Send + 'static, tx: mpsc::Sender<String>) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let mut all = std::io::BufReader::new(r);
+        let mut capped = (&mut all).take(MAX_OUTPUT as u64);
+        let mut buf = Vec::new();
+        loop {
+            buf.clear();
+            match capped.read_until(b'\n', &mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {
+                    if let Some(line) = progress_line(&buf) {
+                        let _ = tx.send(line);
+                    }
+                }
+            }
+        }
+        let _ = std::io::copy(&mut all, &mut std::io::sink());
+    })
+}
+
+/// Runs a program as [`run`] does (its process tree stopped at
+/// `timeout`), with `input` on stdin and `cmd` set up by the caller
+/// (environment, folder), and hands each stdout line to `on_line` as it
+/// arrives, on this thread. `cancel` stops it at any time. A non-zero
+/// exit is returned, not an error. `label` names it in errors.
+pub fn run_streaming(
+    mut cmd: Command,
+    label: &str,
+    input: &str,
+    timeout: Duration,
+    on_line: &mut dyn FnMut(&str),
+    cancel: &CancelHandle,
+) -> Result<Streamed, PluginError> {
+    crate::proc_tree::prepare(&mut cmd);
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| PluginError::Start {
+            plugin: label.to_string(),
+            detail: e.to_string(),
+        })?;
+    let tree = crate::proc_tree::Tree::attach(&child);
+    let stdin = child.stdin.take();
+    let text = input.to_owned();
+    let writer = thread::spawn(move || {
+        if let Some(mut stdin) = stdin {
+            let _ = stdin.write_all(text.as_bytes());
+        }
+    });
+    let (tx, rx) = mpsc::channel();
+    let stdout = read_lines(child.stdout.take().expect("piped stdout"), tx);
+    let stderr = read_all(child.stderr.take().expect("piped stderr"));
+    let mut kept: VecDeque<String> = VecDeque::new();
+    let mut take = |line: String, kept: &mut VecDeque<String>| {
+        on_line(&line);
+        if kept.len() == MAX_PROGRESS_LINES {
+            kept.pop_front();
+        }
+        kept.push_back(line);
+    };
+    let started = Instant::now();
+    let stop = |child: &mut std::process::Child| {
+        tree.kill();
+        let _ = child.kill();
+        let _ = child.wait();
+    };
+    let status = loop {
+        if cancel.is_cancelled() {
+            stop(&mut child);
+            return Err(PluginError::Cancelled);
+        }
+        if started.elapsed() > timeout {
+            stop(&mut child);
+            return Err(PluginError::Timeout(timeout.as_secs()));
+        }
+        match rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(line) => {
+                take(line, &mut kept);
+                continue;
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            // stdout closed but the program may run on: wait without spinning.
+            Err(mpsc::RecvTimeoutError::Disconnected) => thread::sleep(Duration::from_millis(50)),
+        }
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+    };
+    tree.kill();
+    let _ = writer.join();
+    let _ = stdout.join();
+    while let Ok(line) = rx.try_recv() {
+        take(line, &mut kept);
+    }
+    Ok(Streamed {
+        status,
+        lines: kept.into(),
         stderr: stderr.join().unwrap_or_default(),
     })
 }

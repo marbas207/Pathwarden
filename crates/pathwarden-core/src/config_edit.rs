@@ -109,6 +109,25 @@ pub fn check(text: &str) -> Result<Config, String> {
             }
         }
     }
+    for a in &config.actions {
+        if let Some(program) = a.command.as_ref().and_then(|c| c.first()) {
+            plugins::check_program(program).map_err(|e| format!("[[action]] {}: {e}", a.name))?;
+        }
+        for (k, v) in &a.settings {
+            if !k.ends_with("_env") {
+                continue;
+            }
+            match v.as_str() {
+                Some(name) if name.is_empty() || plugins::valid_env_name(name) => {}
+                _ => {
+                    return Err(format!(
+                        "[[action]] {}: {k} must name an environment variable (letters, digits and _), got {v}",
+                        a.name
+                    ))
+                }
+            }
+        }
+    }
     Ok(config)
 }
 
@@ -772,6 +791,43 @@ pub struct OutputEdit {
     /// (Jira's `components = [{ name = "..." }]`); otherwise every value is
     /// a string.
     pub json_fields: bool,
+}
+
+/// Changes to one `[[action]]` block ([`ConfigDoc::upsert_action`]).
+/// Settings not named here are kept. Who may change the program and the
+/// `*_env` settings is [`crate::plugin_form::check_action`]'s rule.
+#[derive(Debug, Clone, Default)]
+pub struct ActionEdit {
+    /// The block's name; empty leaves the default (`plugin`, else
+    /// `action-N`).
+    pub name: String,
+    /// `pathwarden-action-<plugin>`; with `command` `None`.
+    pub plugin: Option<String>,
+    /// The program and its arguments; with `plugin` `None`.
+    pub command: Option<Vec<String>>,
+    /// `None` leaves it; `Some(0)` removes it (the default).
+    pub timeout_seconds: Option<u64>,
+    /// `None` leaves it; `Some("")` removes it.
+    pub min_severity: Option<String>,
+    /// `None` leaves them; `Some(empty)` removes the filter.
+    pub rules: Option<Vec<String>>,
+    /// `None` leaves them; `Some(empty)` removes the filter.
+    pub categories: Option<Vec<String>>,
+    /// Scalar settings to set.
+    pub set: Vec<(String, Setting)>,
+    /// Settings to remove.
+    pub remove: Vec<String>,
+}
+
+/// The name in effect of `[[action]]` block `i` as the file has it: its
+/// `name`, else its `plugin`, else `action-N` ([`crate::config::ActionConfig::name`]).
+fn action_name_of(t: &Table, i: usize) -> String {
+    str_of(t, "name")
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .or_else(|| str_of(t, "plugin").map(str::trim))
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("action-{}", i + 1))
 }
 
 /// A `pathwarden.toml` open for editing.
@@ -1576,6 +1632,208 @@ impl ConfigDoc {
         self.remove_entry("output", index, "plugin", expect_plugin)
     }
 
+    /// The index of the `[[action]]` block named `name` (its name in
+    /// effect, any case).
+    pub fn action_index(&self, name: &str) -> Option<usize> {
+        self.doc
+            .get("action")
+            .and_then(Item::as_array_of_tables)?
+            .iter()
+            .enumerate()
+            .position(|(i, t)| action_name_of(t, i).eq_ignore_ascii_case(name.trim()))
+    }
+
+    /// Adds (`index` None) or changes an `[[action]]` block. `expect` is
+    /// its name in effect as the page or command showed it. The program,
+    /// filters and settings are checked as [`check`] checks a file; a name
+    /// another block has is refused.
+    pub fn upsert_action(
+        &mut self,
+        index: Option<usize>,
+        expect: Option<&str>,
+        a: &ActionEdit,
+    ) -> Result<(), String> {
+        let name = clean("Action name", &a.name)?;
+        if !name.is_empty() && !crate::config::valid_plugin_name(&name) {
+            return Err("Action name: use lowercase letters, digits and dashes.".into());
+        }
+        let plugin = match &a.plugin {
+            Some(p) => {
+                let p = clean("Plugin", p)?;
+                if !crate::config::valid_plugin_name(&p) {
+                    return Err("Plugin name: use lowercase letters, digits and dashes.".into());
+                }
+                Some(p)
+            }
+            None => None,
+        };
+        let command = match &a.command {
+            Some(argv) => {
+                let argv: Vec<String> = argv
+                    .iter()
+                    .map(|x| clean("Command", x))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into_iter()
+                    .filter(|x| !x.is_empty())
+                    .collect();
+                let program = argv.first().ok_or("Enter the program to run.")?;
+                plugins::check_program(program)?;
+                Some(argv)
+            }
+            None => None,
+        };
+        match (&plugin, &command) {
+            (Some(_), Some(_)) => return Err("Give a plugin or a command, not both.".into()),
+            (None, None) => return Err("Name the program: a plugin or a command.".into()),
+            _ => {}
+        }
+        if let Some(t) = a.timeout_seconds {
+            if t > crate::config::ACTION_TIMEOUT_MAX {
+                return Err(format!(
+                    "Time limit: at most {} seconds.",
+                    crate::config::ACTION_TIMEOUT_MAX
+                ));
+            }
+        }
+        let min_severity = match a.min_severity.as_deref().map(str::trim) {
+            Some("") => Some(None),
+            Some(v) => Some(Some(
+                v.parse::<findings::Severity>()
+                    .map_err(|_| {
+                        format!("Minimum severity {v:?}: use critical, high, medium, low or info.")
+                    })?
+                    .as_str(),
+            )),
+            None => None,
+        };
+        let rules = match &a.rules {
+            Some(r) => Some(clean_list("Rules", r)?),
+            None => None,
+        };
+        let categories = match &a.categories {
+            Some(c) => {
+                let mut out = Vec::new();
+                for v in clean_list("Categories", c)? {
+                    let cat = v
+                        .parse::<findings::Category>()
+                        .map_err(|_| format!("Category {v:?}: use attack-path or hygiene."))?;
+                    out.push(
+                        serde_json::to_value(cat)
+                            .ok()
+                            .and_then(|v| v.as_str().map(str::to_string))
+                            .unwrap_or(v),
+                    );
+                }
+                Some(out)
+            }
+            None => None,
+        };
+        let mut set = Vec::new();
+        for (k, v) in &a.set {
+            if !valid_key(k) || crate::config::ACTION_KEYS.contains(&k.as_str()) {
+                return Err(format!(
+                    "Setting name {k:?}: use lowercase letters, digits and _, and not one of {}",
+                    crate::config::ACTION_KEYS.join(", ")
+                ));
+            }
+            let v = match v {
+                Setting::Str(s) => Setting::Str(clean(k, s)?),
+                other => other.clone(),
+            };
+            set.push((k.clone(), v));
+        }
+        if let Some(i) = index {
+            let list = self.tables("action")?;
+            let t = list.get(i).ok_or(CHANGED)?;
+            if expect.is_some_and(|e| !e.trim().eq_ignore_ascii_case(&action_name_of(t, i))) {
+                return Err(CHANGED.into());
+            }
+        }
+        // Names are how actions are addressed (`<name>/<id>`).
+        let effective = if !name.is_empty() {
+            name.clone()
+        } else if let Some(p) = &plugin {
+            p.clone()
+        } else {
+            String::new()
+        };
+        if !effective.is_empty() {
+            if let Some(i) = self.action_index(&effective) {
+                if Some(i) != index {
+                    return Err(format!(
+                        "There is already an action named {effective}: give this one another name."
+                    ));
+                }
+            }
+        }
+        let t = self.entry("action", index, "name", None)?;
+        if name.is_empty() {
+            t.remove("name");
+        } else {
+            set_value(t, "name", Value::from(name));
+        }
+        match plugin {
+            Some(p) => {
+                set_value(t, "plugin", Value::from(p));
+                t.remove("command");
+            }
+            None => {
+                t.remove("plugin");
+            }
+        }
+        if let Some(argv) = command {
+            set_value(
+                t,
+                "command",
+                Value::Array(argv.iter().map(String::as_str).collect()),
+            );
+        }
+        match a.timeout_seconds {
+            Some(0) => {
+                t.remove("timeout_seconds");
+            }
+            Some(n) => set_value(t, "timeout_seconds", Value::from(n as i64)),
+            None => {}
+        }
+        match min_severity {
+            Some(Some(v)) => set_value(t, "min_severity", Value::from(v)),
+            Some(None) => {
+                t.remove("min_severity");
+            }
+            None => {}
+        }
+        if let Some(r) = rules {
+            set_strings(t, "rules", &r, false);
+        }
+        if let Some(c) = categories {
+            set_strings(t, "categories", &c, false);
+        }
+        for k in &a.remove {
+            if !crate::config::ACTION_KEYS.contains(&k.as_str()) {
+                t.remove(k);
+            }
+        }
+        for (k, v) in &set {
+            set_value(t, k, Value::from(v));
+        }
+        Ok(())
+    }
+
+    /// Removes `[[action]]` block `index`, when its name in effect still
+    /// reads `expect_name`.
+    pub fn remove_action(&mut self, index: usize, expect_name: &str) -> Result<(), String> {
+        let list = self.tables("action")?;
+        let t = list.get(index).ok_or(CHANGED)?;
+        if !expect_name
+            .trim()
+            .eq_ignore_ascii_case(&action_name_of(t, index))
+        {
+            return Err(CHANGED.into());
+        }
+        let raw = str_of(t, "name").unwrap_or_default().to_string();
+        self.remove_entry("action", index, "name", &raw)
+    }
+
     // ------------------------------------------------- shared settings
 
     /// The shared history's `settings/pathwarden.toml` with the sections
@@ -1746,9 +2004,17 @@ impl ConfigDoc {
 }
 
 /// Sections of `pathwarden.toml` that never travel through a shared
-/// history: this machine's history folder and remote, plugin targets, and
+/// history: this machine's history folder and remote, plugin targets and
+/// finding actions (a writer must never make a reader run a program), and
 /// limits and pack trust that stay each machine's, and how it collects.
-pub const NEVER_SHARED: &[&str] = &["state", "output", "ingest", "opengraph", "collect"];
+pub const NEVER_SHARED: &[&str] = &[
+    "state",
+    "output",
+    "action",
+    "ingest",
+    "opengraph",
+    "collect",
+];
 
 /// `text` without the comment lines (and blank ones) it starts with: the
 /// header Pathwarden writes on the repository's settings file.

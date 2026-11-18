@@ -69,6 +69,11 @@ pub struct Config {
     /// Output plugins `pathwarden run` sends the event document to.
     #[serde(rename = "output")]
     pub outputs: Vec<OutputConfig>,
+    /// Finding actions: programs someone runs for one finding, when they
+    /// ask ([`crate::actions`]). Never run by `pathwarden run` or a
+    /// schedule, and never shared through the history.
+    #[serde(rename = "action")]
+    pub actions: Vec<ActionConfig>,
     /// Size limits for reading collector files; the defaults suit very
     /// large collections.
     pub ingest: IngestConfig,
@@ -389,6 +394,176 @@ pub struct OutputConfig {
     pub command: Option<Vec<String>>,
     #[serde(flatten)]
     pub settings: serde_json::Map<String, serde_json::Value>,
+}
+
+/// One `[[action]]` block: a program someone runs for one finding, when they
+/// ask ([`crate::actions`]). `plugin` names the program
+/// (`pathwarden-action-<plugin>`, found as output plugins are) unless
+/// `command` gives one; one program may offer several actions, each
+/// addressed as `<name>/<id>`. Every key but [`ACTION_KEYS`] is passed to
+/// the program as a setting, inside the request.
+///
+/// ```toml
+/// [[action]]
+/// name = "service-desk"
+/// command = ["python", "C:\\Pathwarden\\actions\\service_desk.py"]
+/// timeout_seconds = 900
+/// min_severity = "medium"
+/// group = "Identity"            # a setting
+/// ```
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ActionConfig {
+    /// The name in effect: as written, else `plugin`, else `action-N` (N
+    /// counting the `[[action]]` blocks from 1). Set by [`Config::parse`].
+    #[serde(default)]
+    pub name: String,
+    /// Runs `pathwarden-action-<plugin>` from beside pathwarden or its
+    /// `plugins` folder.
+    #[serde(default)]
+    pub plugin: Option<String>,
+    /// Program and arguments, checked as an output's `command` is.
+    #[serde(default)]
+    pub command: Option<Vec<String>>,
+    /// How long one run may take before its process tree is stopped:
+    /// [`ACTION_TIMEOUT_DEFAULT`], at most [`ACTION_TIMEOUT_MAX`].
+    #[serde(default = "action_timeout_default")]
+    pub timeout_seconds: u64,
+    /// Only findings at least this severe.
+    #[serde(default, deserialize_with = "severity_text")]
+    pub min_severity: Option<crate::findings::Severity>,
+    /// Only findings of these rules (IDs, any case). Empty: every rule.
+    #[serde(default)]
+    pub rules: Vec<String>,
+    /// Only findings of these categories. Empty: both.
+    #[serde(default, deserialize_with = "category_list")]
+    pub categories: Vec<crate::findings::Category>,
+    /// Every other key: the program's settings.
+    #[serde(flatten)]
+    pub settings: serde_json::Map<String, serde_json::Value>,
+}
+
+/// An action's `timeout_seconds` when it sets none.
+pub const ACTION_TIMEOUT_DEFAULT: u64 = 300;
+/// The longest `timeout_seconds` an action may set (sign-in can be slow).
+pub const ACTION_TIMEOUT_MAX: u64 = 1800;
+
+fn action_timeout_default() -> u64 {
+    ACTION_TIMEOUT_DEFAULT
+}
+
+/// The keys of `[[action]]` this version knows. Every other key is a
+/// setting for the program, except a near miss of one of these, which is
+/// refused as the typo it most likely is: an ignored `rule` would quietly
+/// widen the action to every rule.
+pub const ACTION_KEYS: &[&str] = &[
+    "name",
+    "plugin",
+    "command",
+    "timeout_seconds",
+    "min_severity",
+    "rules",
+    "categories",
+];
+
+/// A severity in any case ("Medium").
+fn severity_text<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Option<crate::findings::Severity>, D::Error> {
+    use serde::de::Error;
+    match Option::<String>::deserialize(d)? {
+        None => Ok(None),
+        Some(s) if s.trim().is_empty() => Ok(None),
+        Some(s) => s.trim().parse().map(Some).map_err(D::Error::custom),
+    }
+}
+
+/// Categories in any spelling `Category` reads (`attack-path`, `hygiene`).
+fn category_list<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> Result<Vec<crate::findings::Category>, D::Error> {
+    use serde::de::Error;
+    Vec::<String>::deserialize(d)?
+        .iter()
+        .map(|s| s.trim().parse().map_err(D::Error::custom))
+        .collect()
+}
+
+/// Whether `name` can name a plugin or an action: lowercase letters, digits
+/// and dashes, at most 64.
+pub fn valid_plugin_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
+/// Checks the `[[action]]` blocks and sets each one's name in effect
+/// ([`ActionConfig::name`]).
+fn check_actions(actions: &mut [ActionConfig]) -> Result<(), ConfigError> {
+    let bad = |m: String| Err(ConfigError::Invalid(m));
+    let mut names = std::collections::HashSet::new();
+    for (i, a) in actions.iter_mut().enumerate() {
+        let n = i + 1;
+        if let Some(p) = &a.plugin {
+            if !valid_plugin_name(p) {
+                return bad(format!(
+                    "[[action]] {n}: plugin = \"{p}\": use lowercase letters, digits and dashes"
+                ));
+            }
+        }
+        match (&a.plugin, &a.command) {
+            (Some(_), Some(_)) => {
+                return bad(format!("[[action]] {n}: give plugin or command, not both"))
+            }
+            (None, None) => {
+                return bad(format!(
+                    "[[action]] {n}: name the program with plugin or command"
+                ))
+            }
+            (None, Some(c)) if c.first().is_none_or(|p| p.trim().is_empty()) => {
+                return bad(format!("[[action]] {n}: command is empty"))
+            }
+            _ => {}
+        }
+        let name = a.name.trim().to_string();
+        a.name = if !name.is_empty() {
+            name
+        } else if let Some(p) = &a.plugin {
+            p.clone()
+        } else {
+            format!("action-{n}")
+        };
+        if !valid_plugin_name(&a.name) {
+            return bad(format!(
+                "[[action]] {n}: name = \"{}\": use lowercase letters, digits and dashes",
+                a.name
+            ));
+        }
+        if !names.insert(a.name.clone()) {
+            return bad(format!(
+                "Two [[action]] blocks are named {}: give one of them another name",
+                a.name
+            ));
+        }
+        if a.timeout_seconds == 0 || a.timeout_seconds > ACTION_TIMEOUT_MAX {
+            return bad(format!(
+                "[[action]] {}: timeout_seconds must be from 1 to {ACTION_TIMEOUT_MAX}",
+                a.name
+            ));
+        }
+        if let Some(r) = a
+            .rules
+            .iter()
+            .find(|r| r.is_empty() || !r.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+        {
+            return bad(format!(
+                "[[action]] {}: rules: \"{r}\" is not a rule ID such as PW-001",
+                a.name
+            ));
+        }
+    }
+    Ok(())
 }
 
 /// Where run state lives between runs.
@@ -957,6 +1132,7 @@ pub const TOP_KEYS: &[&str] = &[
     "zone",
     "state",
     "output",
+    "action",
     "ingest",
     "opengraph",
     "mapping",
@@ -1381,6 +1557,25 @@ fn check_shared_keys(text: &str) -> Result<Vec<ConfigWarning>, ConfigError> {
     // This computer's own sections: a near miss is refused, any other
     // unknown key named and ignored.
     local_unknown(&raw, TOP_KEYS, "the top level", &mut warnings)?;
+    // `[[action]]`: every other key is a setting, but a near miss of its
+    // own keys is refused.
+    for (i, t) in raw
+        .get("action")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_table)
+        .enumerate()
+    {
+        for key in t.keys().filter(|k| !ACTION_KEYS.contains(&k.as_str())) {
+            if let Some(k) = local_near_miss(key, ACTION_KEYS) {
+                return Err(ConfigError::Invalid(format!(
+                    "[[action]] {}: unknown key `{key}`. Did you mean `{k}`?",
+                    i + 1
+                )));
+            }
+        }
+    }
     for (section, known) in [
         ("state", STATE_KEYS),
         ("ingest", INGEST_KEYS),
@@ -1912,6 +2107,7 @@ impl Config {
                 )));
             }
         }
+        check_actions(&mut config.actions)?;
         if config.state.backend == StateBackend::Git && config.state.remote.is_none() {
             return Err(ConfigError::Invalid(
                 "[state] backend = \"git\" needs a `remote` repository URL".into(),

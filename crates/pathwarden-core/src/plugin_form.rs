@@ -15,8 +15,8 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::config::OutputConfig;
-use crate::config_edit::{OutputEdit, Setting};
+use crate::config::{ActionConfig, OutputConfig};
+use crate::config_edit::{ActionEdit, OutputEdit, Setting};
 use crate::plugins;
 
 /// The plugin shipped with Pathwarden, which gets its own form.
@@ -764,6 +764,69 @@ pub fn check_command(
     Ok(())
 }
 
+/// The message for a page session that tries to add a finding action,
+/// change the program one runs, or the environment variables it reads.
+pub const ACTIONS_LOCKED: &str = "This page can't add a finding action or change the program one runs or the environment variables it reads. Edit pathwarden.toml, or start the UI with pathwarden ui --allow-destinations.";
+
+/// [`check_command`]'s rule for an `[[action]]` block, shared by the app
+/// and `pathwarden action add`. Without `allow` (the app without
+/// `--allow-destinations`) a save may change a block's other settings and
+/// filters, but not add a block, change its `plugin` or `command`, or set
+/// or remove a `*_env` setting: a page session must never make Pathwarden
+/// run a program of its choosing, nor hand a program a secret. A command
+/// the file already has is written back exactly as it is. With `allow`
+/// (and always from the terminal), network paths and relative script paths
+/// are still refused ([`plugins::check_args`]).
+pub fn check_action(
+    allow: bool,
+    edit: &mut ActionEdit,
+    existing: Option<&ActionConfig>,
+) -> Result<(), String> {
+    if allow {
+        return match &edit.command {
+            Some(new) => plugins::check_args(new),
+            None => Ok(()),
+        };
+    }
+    let Some(old) = existing else {
+        return Err(ACTIONS_LOCKED.into());
+    };
+    let norm = |c: &[String]| -> Vec<String> {
+        c.iter()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect()
+    };
+    let same_plugin = edit.plugin.as_deref().map(str::trim) == old.plugin.as_deref();
+    let same_command = match (&edit.command, &old.command) {
+        (None, None) => true,
+        (Some(new), Some(was)) => norm(new) == norm(was),
+        _ => false,
+    };
+    if !same_plugin || !same_command {
+        return Err(ACTIONS_LOCKED.into());
+    }
+    if let Some(was) = &old.command {
+        edit.command = Some(was.clone());
+    }
+    let env_changed = edit.set.iter().any(|(k, v)| {
+        k.ends_with("_env")
+            && old.settings.get(k).and_then(Value::as_str)
+                != match v {
+                    Setting::Str(s) => Some(s.trim()),
+                    _ => None,
+                }
+    }) || edit
+        .remove
+        .iter()
+        .any(|k| k.ends_with("_env") && old.settings.contains_key(k));
+    if env_changed {
+        return Err(ACTIONS_LOCKED.into());
+    }
+    Ok(())
+}
+
 /// Whether the program an output runs is there: a plugin program in the
 /// plugins folder, an interpreter in a system folder, or a local file (a
 /// network path is never looked at: that alone would sign in to the
@@ -783,6 +846,24 @@ pub fn program(o: &OutputConfig) -> (String, bool) {
             Some(p) => (p.display().to_string(), true),
             None => (plugins::program_name(&o.plugin), false),
         },
+    }
+}
+
+/// Whether the program an `[[action]]` block runs is there, as
+/// [`program`] says it for an output: the program as shown, and whether
+/// it was found.
+pub fn action_program(a: &ActionConfig) -> (String, bool) {
+    match (&a.command, &a.plugin) {
+        (Some(argv), _) => program(&OutputConfig {
+            plugin: a.name.clone(),
+            command: Some(argv.clone()),
+            settings: Default::default(),
+        }),
+        (None, Some(p)) => match plugins::locate_of(plugins::Kind::Action, p) {
+            Some(path) => (path.display().to_string(), true),
+            None => (plugins::program_name_of(plugins::Kind::Action, p), false),
+        },
+        (None, None) => (String::new(), false),
     }
 }
 
