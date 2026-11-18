@@ -306,6 +306,34 @@ fn actions_are_added_run_checked_and_removed() {
     ));
     assert!(e.contains("never from a scheduled task"), "{e}");
 
+    // Without --name, the block is named after its script, made unique.
+    let mut unnamed = vec!["add", "--"];
+    unnamed.extend(command.iter().map(String::as_str));
+    let out = ok(&call(&unnamed, &[]));
+    assert!(out.contains("Saved: finding action fake-action "), "{out}");
+    let out = ok(&call(&unnamed, &[]));
+    assert!(
+        out.contains("Saved: finding action fake-action-2 "),
+        "{out}"
+    );
+    ok(&call(&["remove", "fake-action"], &[]));
+    ok(&call(&["remove", "fake-action-2"], &[]));
+    // A block written by hand without a name: named by its place, noted.
+    let toml = dir.join("ws").join("pathwarden.toml");
+    let mut text = std::fs::read_to_string(&toml).unwrap();
+    text.push_str("\n[[action]]\ncommand = [\"sh\"]\n");
+    std::fs::write(&toml, &text).unwrap();
+    let out = call(&["list", "--json"], &[]);
+    let note = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        note.contains(
+            "an [[action]] block has no name, so it is called action-2 by its place in the file"
+        ),
+        "{note}"
+    );
+    assert!(note.contains("Add name = \"sh\" to it."), "{note}");
+    ok(&call(&["remove", "action-2"], &[]));
+
     ok(&call(&["remove", "desk"], &[]));
     let out = ok(&call(&["list"], &[]));
     assert!(out.contains("No finding actions in"), "{out}");
@@ -373,5 +401,112 @@ fn check_names_the_problems() {
         ],
     ));
     assert!(out.is_empty(), "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Ctrl-C (SIGINT) while an action runs stops it and its processes, and
+/// the command says so. The program runs in a process group of its own,
+/// which the signal doesn't reach.
+#[cfg(unix)]
+#[test]
+fn interrupting_a_run_cancels_it() {
+    let dir =
+        std::env::temp_dir().join(format!("pathwarden-cli-action-int-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let forest = repo("testdata/forest");
+    ok(&run(
+        &dir,
+        &[
+            "run",
+            "--save",
+            "--workspace",
+            "ws",
+            "-i",
+            forest.to_str().unwrap(),
+        ],
+    ));
+    let ws = dir.join("ws").display().to_string();
+    let script = fake_action().display().to_string();
+    ok(&run(
+        &dir,
+        &[
+            "action",
+            "--workspace",
+            &ws,
+            "add",
+            "--name",
+            "desk",
+            "--setting",
+            "mark_env=PW_FAKE_ACTION_MARK",
+            "--",
+            "sh",
+            &script,
+        ],
+    ));
+    let findings = json(&run(
+        &dir,
+        &["findings", "-i", forest.to_str().unwrap(), "--json"],
+    ));
+    let list = findings
+        .as_array()
+        .or_else(|| findings["findings"].as_array())
+        .unwrap()
+        .clone();
+    let high = list
+        .iter()
+        .find(|f| f["severity"] == "high" && f["category"] == "attack_path")
+        .unwrap()["fingerprint"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mark = dir.join("still-running");
+    let mut child = Command::new(bin())
+        .current_dir(&dir)
+        .env("NO_COLOR", "1")
+        .env("LOCALAPPDATA", dir.join("lad"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("PW_FAKE_ACTION_MARK", &mark)
+        .env_remove("PATHWARDEN_SCHEDULED")
+        .args([
+            "action",
+            "--workspace",
+            &ws,
+            "run",
+            &high,
+            "--action",
+            "desk/open",
+            "--input",
+            "note=slow",
+            "-y",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Until the program says it waits.
+    let mut out = child.stdout.take().unwrap();
+    let mut seen = Vec::new();
+    let mut buf = [0u8; 256];
+    while !String::from_utf8_lossy(&seen).contains("Waiting for the fake desk") {
+        let n = std::io::Read::read(&mut out, &mut buf).unwrap();
+        assert!(n > 0, "{}", String::from_utf8_lossy(&seen));
+        seen.extend_from_slice(&buf[..n]);
+    }
+    let started = std::time::Instant::now();
+    assert!(Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .unwrap()
+        .success());
+    let status = child.wait().unwrap();
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    let mut err = String::new();
+    std::io::Read::read_to_string(&mut child.stderr.take().unwrap(), &mut err).unwrap();
+    assert_eq!(status.code(), Some(130), "{err}");
+    assert!(err.contains("Cancelled."), "{err}");
+    std::thread::sleep(std::time::Duration::from_secs(10));
+    assert!(!mark.exists(), "the action's process outlived the cancel");
     let _ = std::fs::remove_dir_all(&dir);
 }

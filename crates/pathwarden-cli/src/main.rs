@@ -14,6 +14,7 @@ mod export_cmd;
 mod guide_cmd;
 mod help;
 mod history_cmd;
+mod interrupt;
 mod logo;
 mod mappings_cmd;
 mod outputs;

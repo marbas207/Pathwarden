@@ -12,6 +12,11 @@ if ($env:PATHWARDEN_ACTION_REQUEST -eq 'describe') {
     exit 0
 }
 [Console]::Out.WriteLine('Opening a ticket')
+if ($req.inputs.note -eq 'slow') {
+    # Waits until it is stopped.
+    [Console]::Out.WriteLine('Waiting for the fake desk'); [Console]::Out.Flush()
+    Start-Sleep -Seconds 120
+}
 if ($req.inputs.note -eq 'fail') {
     [Console]::Error.WriteLine('HTTP 403 from the fake desk')
     Answer '{"schema":"pathwarden.action-result.v1","ok":false,"message":"The fake desk said no."}'

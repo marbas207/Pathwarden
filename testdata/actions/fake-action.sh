@@ -12,6 +12,13 @@ if [ "$PATHWARDEN_ACTION_REQUEST" = describe ]; then
 fi
 echo 'Opening a ticket'
 case "$req" in
+*'"note":"slow"'*)
+    # Waits, with a process of its own, until it is stopped.
+    (sleep 8; [ -n "$PW_FAKE_ACTION_MARK" ] && touch "$PW_FAKE_ACTION_MARK") &
+    echo 'Waiting for the fake desk'
+    sleep 120 ;;
+esac
+case "$req" in
 *'"note":"fail"'*)
     echo 'HTTP 403 from the fake desk' >&2
     answer '{"schema":"pathwarden.action-result.v1","ok":false,"message":"The fake desk said no."}'

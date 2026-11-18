@@ -16,7 +16,7 @@ use std::process::ExitCode;
 use anstream::{eprint, eprintln, println};
 use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand};
-use pathwarden_core::actions::{self, Ask, CancelHandle, FindingContext, Outcome};
+use pathwarden_core::actions::{self, Ask, Ended, FindingContext, Outcome};
 use pathwarden_core::config::ActionConfig;
 use pathwarden_core::config_edit::{ActionEdit, Setting};
 use pathwarden_core::plugin_form;
@@ -104,7 +104,7 @@ enum ActionWhat {
         /// Only findings of this rule; repeatable.
         #[arg(long = "rule", value_name = "RULE")]
         rules: Vec<String>,
-        /// Only findings of this category (attack-path, hygiene);
+        /// Only findings of this category (attack_path, hygiene);
         /// repeatable.
         #[arg(long = "category", value_name = "CATEGORY")]
         categories: Vec<String>,
@@ -136,8 +136,11 @@ enum ActionWhat {
         ask: AskArgs,
     },
     /// For people writing actions: run a program's describe, then a dry run
-    /// of each action it offers on a sample finding, and name every problem
-    /// with its answers. Exits 2 when there are problems.
+    /// of each action it offers on a sample finding (or --fingerprint's),
+    /// and name every problem with its answers. Exits 2 when there are
+    /// problems. A program given by its path is checked without asking: it
+    /// only gets describe and dry runs. A block that is set up asks first
+    /// unless --yes.
     Check {
         /// A block's name, or the program to check: its path (a .ps1, .py,
         /// .sh or .js script runs with its interpreter), or an interpreter
@@ -286,7 +289,7 @@ pub(crate) fn run(a: ActionArgs) -> Result<ExitCode> {
                         remove: Vec::new(),
                     };
                     plugin_form::check_action(true, &mut edit, None).map_err(anyhow::Error::msg)?;
-                    config_cmd::save(&t, |d| d.upsert_action(None, None, &edit))?;
+                    config_cmd::save(&t, |d| d.upsert_action(None, &edit))?;
                     let added = config_cmd::load(&t.path)?;
                     let name = added
                         .actions
@@ -381,6 +384,21 @@ fn when_words(d: &actions::ActionDef) -> String {
     w.join(", ")
 }
 
+/// On stderr: the blocks named by their position (`action-N`), which
+/// changes when blocks move, and what to do.
+fn warn_positional(blocks: &[ActionConfig]) {
+    for a in blocks.iter().filter(|a| a.positional_name) {
+        eprintln!(
+            "Note: an [[action]] block has no name, so it is called {} by its place in the file, and that changes when blocks move. Add name = \"{}\" to it.",
+            ui::safe(&a.name),
+            ui::safe(&pathwarden_core::config::action_name_for(
+                a.plugin.as_deref(),
+                a.command.as_deref()
+            ))
+        );
+    }
+}
+
 fn list(
     t: &Target,
     blocks: &[ActionConfig],
@@ -388,6 +406,7 @@ fn list(
     run: Option<String>,
     json: bool,
 ) -> Result<ExitCode> {
+    warn_positional(blocks);
     if let Some(fp) = fingerprint {
         let ws = workspace(t)?;
         let on =
@@ -553,13 +572,18 @@ fn start(ready: &actions_ui::Ready, yes: bool, json: bool) -> Result<ExitCode> {
             println!("{l}");
         }
     };
+    let cancel = crate::interrupt::cancel_on_interrupt();
     let out = actions::run(
         &ready.prepared.config,
         &ready.prepared.request,
         &mut on_line,
-        &CancelHandle::new(),
+        &cancel,
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
+    if out.ended == Ended::Cancelled && crate::interrupt::hit() {
+        eprintln!("Cancelled.");
+        return Ok(ExitCode::from(crate::interrupt::EXIT_CANCELLED as u8));
+    }
     if json {
         let mut v = serde_json::to_value(&out)?;
         v["action"] = json!(o.address);
@@ -781,6 +805,7 @@ fn check(
                     t.label
                 );
             };
+            warn_positional(&config.actions);
             if !yes {
                 println!(
                     "Checking {} runs its program: describe, then a dry run of each action.",
@@ -850,9 +875,19 @@ fn check(
         }
     );
     let tag = ui::VIOLET;
-    let problems = actions::check(&block, &finding, &mut |who, line| {
-        println!("  {tag}[{}]{tag:#} {}", ui::safe(who), ui::safe(line));
-    });
+    let cancel = crate::interrupt::cancel_on_interrupt();
+    let problems = actions::check(
+        &block,
+        &finding,
+        &mut |who, line| {
+            println!("  {tag}[{}]{tag:#} {}", ui::safe(who), ui::safe(line));
+        },
+        &cancel,
+    );
+    if crate::interrupt::hit() {
+        eprintln!("Cancelled.");
+        return Ok(ExitCode::from(crate::interrupt::EXIT_CANCELLED as u8));
+    }
     if problems.is_empty() {
         println!("No problems: its describe and every dry run passed the checks.");
         return Ok(ExitCode::SUCCESS);
