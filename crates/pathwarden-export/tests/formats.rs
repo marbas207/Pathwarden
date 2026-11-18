@@ -214,3 +214,47 @@ fn a_set_severity_carries_its_default() {
         .unwrap_or_default()
         .contains("set by your team"));
 }
+
+/// The fixture, with records finding actions keep on its first finding.
+fn doc_with_records() -> Doc {
+    let mut ev: Value = serde_json::from_str(&event_text()).unwrap();
+    ev["findings"][0]["actions"] = serde_json::json!({
+        "records": [{
+            "action": "service-desk/open", "id": "sys-1", "kind": "ticket",
+            "number": "RITM10816190", "status": "Open", "open": true,
+            "url": "https://desk.example.com/RITM10816190",
+            "fields": { "Queue": "Identity" },
+            "by": "NORTH\\eddard.stark", "on": "SECOPS-WS02",
+            "at": "2026-11-18T14:02:11.000Z", "updated_at": "2026-11-18T14:02:11.000Z"
+        }],
+        "activity_count": 2
+    });
+    Doc::from_event(&ev.to_string()).unwrap()
+}
+
+/// Records finding actions keep travel as SARIF properties and DefectDojo
+/// references; a finding without any has neither.
+#[test]
+fn action_records_travel_in_both_exports() {
+    let d = doc_with_records();
+    let log = sarif::sarif(&d);
+    schema_validate(&log).unwrap();
+    let results = log["runs"][0]["results"].as_array().unwrap();
+    let p = &results[0]["properties"];
+    assert_eq!(p["actionRuns"], 2);
+    assert_eq!(
+        p["actionRecords"],
+        serde_json::json!([{
+            "action": "service-desk/open", "id": "sys-1", "kind": "ticket",
+            "number": "RITM10816190", "status": "Open",
+            "url": "https://desk.example.com/RITM10816190", "open": true
+        }])
+    );
+    assert!(results[1]["properties"].get("actionRecords").is_none());
+    let dojo = defectdojo::defectdojo(&d);
+    let refs = dojo["findings"][0]["references"].as_str().unwrap();
+    assert!(
+        refs.ends_with("Record RITM10816190 · Open: https://desk.example.com/RITM10816190"),
+        "{refs}"
+    );
+}

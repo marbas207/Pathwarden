@@ -16,6 +16,7 @@
 //! | how to fix it, plus the guide | `mitigation` |
 //! | attack path, affected objects | `steps_to_reproduce` |
 //! | accepted risk | `risk_accepted: true`, `active: false` |
+//! | finding actions' records | `references`, one line each after the rule's references |
 //!
 //! DefectDojo shows `description`, `impact`, `mitigation`,
 //! `steps_to_reproduce` and `severity_justification` as Markdown. Text
@@ -251,8 +252,21 @@ fn finding(doc: &Doc, f: &Finding) -> Value {
     if let Some(why) = why {
         m.insert("severity_justification".into(), md(&why).into());
     }
-    if !f.references.is_empty() {
-        m.insert("references".into(), f.references.join("\n").into());
+    // The references, then the records finding actions keep on it: "Record
+    // RITM10816190 · Open: https://...".
+    let mut refs = f.references.clone();
+    for r in f.actions.iter().flat_map(|a| &a.records) {
+        refs.push(format!(
+            "Record {}{}",
+            md(&r.line()),
+            r.url
+                .as_deref()
+                .map(|u| format!(": {}", md(u)))
+                .unwrap_or_default()
+        ));
+    }
+    if !refs.is_empty() {
+        m.insert("references".into(), refs.join("\n").into());
     }
     if let Some(when) = f.first_seen.or(doc.when) {
         m.insert("date".into(), crate::date(when).into());

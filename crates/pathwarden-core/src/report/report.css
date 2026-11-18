@@ -538,6 +538,10 @@ details.guide > .body { border-left: 2px solid var(--accent); margin: 0 22px 14p
 .ar-text { white-space: pre-line; unicode-bidi: isolate; }
 .ar-meta { display: block; color: var(--muted); font-size: 0.78rem; }
 .ar-tag { margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; color: var(--muted); background: var(--chip); white-space: nowrap; vertical-align: 1px; unicode-bidi: isolate; }
+.ac-chip { margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; color: var(--ink); background: var(--chip); white-space: nowrap; vertical-align: 1px; unicode-bidi: isolate; }
+.ac-activity { list-style: none; margin: 4px 0 0; padding: 0 0 0 12px; border-left: 2px solid var(--chip); display: grid; gap: 4px; font-size: 0.88rem; }
+.ac-activity .ac-who { color: var(--muted); }
+.ac-activity .ac-failed { color: var(--muted); }
 ol.path { margin: 0; padding-left: 1.4em; }
 ol.path li { margin: 2px 0; }
 details.more > summary { cursor: pointer; color: var(--accent); font-weight: 600; margin: 12px 0 6px; }

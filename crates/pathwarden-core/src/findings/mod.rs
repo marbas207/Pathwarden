@@ -219,6 +219,10 @@ pub struct Finding {
     /// With `suppressed`: who accepted it, where, when, and its notes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accepted: Option<crate::config::Acceptance>,
+    /// What finding actions did on it, from the history's `actions.json`
+    /// ([`crate::action_log::annotate`]): its records and how many runs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actions: Option<crate::action_log::FindingActions>,
     /// OpenGraph sources whose data this finding's evidence uses
     /// ("TaskHound"). Empty when it rests on AD data alone.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -305,6 +309,7 @@ impl Finding {
             references: Vec::new(),
             suppressed: None,
             accepted: None,
+            actions: None,
             sources: Vec::new(),
             requires: Vec::new(),
             rests_on: Default::default(),

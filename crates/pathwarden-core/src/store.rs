@@ -272,6 +272,7 @@ const STATE_FILES: &[StatePattern] = &[
     StatePattern::File(SETTINGS_FILE),
     StatePattern::File(ENVIRONMENT_FILE),
     StatePattern::File(LAST_CHANGE_FILE),
+    StatePattern::File(crate::action_log::FILE),
     StatePattern::Bundle(BUNDLE_DIR),
 ];
 
@@ -4468,6 +4469,7 @@ pub fn neutral_message(message: &str) -> String {
         "pathwarden: re-encrypt the history with a new passphrase",
         "pathwarden: earlier runs",
         "pathwarden: changes kept from an earlier push",
+        crate::action_log::MESSAGE,
     ];
     let first = message.lines().next().unwrap_or("").trim();
     if FIXED.contains(&first) && !message.trim().contains('\n') {

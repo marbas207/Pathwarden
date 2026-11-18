@@ -1049,6 +1049,49 @@ fn accepted_tag(f: &Finding) -> String {
     )
 }
 
+/// The chips of a finding's records on its row ("RITM10816190 · Open"),
+/// as text ([`crate::action_log::chip`]).
+fn action_chips(f: &Finding) -> String {
+    f.actions
+        .iter()
+        .flat_map(|a| &a.records)
+        .map(|r| {
+            format!(
+                r#"<span class="ac-chip">{}</span>"#,
+                esc(&crate::action_log::chip(&r.record, false))
+            )
+        })
+        .collect()
+}
+
+/// A finding's Activity list, newest first, as text: "Opened RITM10816190
+/// — NORTH\eddard.stark, SECOPS-WS02, Nov 18, 2026, 2:02 PM". Empty when
+/// no action ran on it.
+fn action_activity(f: &Finding) -> String {
+    let Some(a) = f.actions.as_ref().filter(|a| !a.activity.is_empty()) else {
+        return String::new();
+    };
+    let mut h = String::from(r#"<h4>Activity</h4><ul class="ac-activity">"#);
+    for e in &a.activity {
+        let _ = write!(
+            h,
+            r#"<li{}>{} <span class="ac-who">— {}</span></li>"#,
+            if e.ok { "" } else { r#" class="ac-failed""# },
+            esc(&e.summary()),
+            esc(&e.who_when())
+        );
+    }
+    if a.activity_count > a.activity.len() {
+        let _ = write!(
+            h,
+            r#"<li class="ac-who">and {} earlier</li>"#,
+            num(a.activity_count - a.activity.len())
+        );
+    }
+    h.push_str("</ul>");
+    h
+}
+
 /// [`short_date`] of `t`, with the time ("Oct 19, 9:12 AM") when `other`
 /// is on the same day (UTC), and its seconds ("Oct 19, 9:12:05 AM") when in
 /// the same minute, so two runs of one day read apart.
@@ -3547,11 +3590,11 @@ fn finding_row(
     let stamps = stamps.as_ref();
     let _ = write!(
         h,
-        r#"<details class="row finding" id="f-{fp}" data-sev="{sev}" data-cat="{category}" data-suppressed="{sup}" data-objects="{objects}" data-text="{search}"{intro_data}>
-<summary>{badge}<span class="title">{intro_badge}{title}{ar_tag}{set_tag}{seen_line}</span>{exp}</summary>
+        r#"<details class="row finding" id="f-{fp}" data-sev="{sev}" data-cat="{category}" data-suppressed="{sup}" data-objects="{objects}" data-records="{records}" data-text="{search}"{intro_data}>
+<summary>{badge}<span class="title">{intro_badge}{title}{ar_tag}{ac_chips}{set_tag}{seen_line}</span>{exp}</summary>
 <div class="body">
 <dl class="facts">{sevfact}<div><dt>Category</dt><dd>{cat}</dd></div>{expfact}<div><dt>Domain</dt><dd>{domain}</dd></div>{seen_fact}<div><dt>Finding ID</dt><dd><code>{id}</code></dd></div>{supfact}</dl>
-{note}<h4>Why it matters</h4><p>{summary}</p>
+{note}{activity}<h4>Why it matters</h4><p>{summary}</p>
 {listed}<h4 id="fix-{fp}">How to fix it</h4><p>{fix}</p>
 "#,
         fp = esc(&f.fingerprint),
@@ -3564,6 +3607,9 @@ fn finding_row(
         badge = badge(f.severity),
         title = esc(&f.title),
         ar_tag = accepted_tag(f),
+        ac_chips = action_chips(f),
+        records = f.actions.as_ref().map_or(0, |a| a.records.len()),
+        activity = action_activity(f),
         set_tag = f.severity_default.map(set_chip).unwrap_or_default(),
         sevfact = f
             .severity_default

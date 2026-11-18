@@ -171,7 +171,7 @@ fn actions_are_added_run_checked_and_removed() {
         .iter()
         .map(|a| a["id"].as_str().unwrap())
         .collect();
-    assert_eq!(ids, ["open", "status", "ping"]);
+    assert_eq!(ids, ["open", "status", "ping", "close"]);
     let on = json(&call(&["list", "--fingerprint", &critical, "--json"], &[]));
     let offered: Vec<&str> = on["actions"]
         .as_array()
@@ -198,6 +198,19 @@ fn actions_are_added_run_checked_and_removed() {
         "{e}"
     );
 
+    // `request` prints the request a run sends (before the run: `open` is
+    // `once`, so its record hides it afterwards).
+    let printed = json(&call(
+        &[
+            "request",
+            &critical,
+            "--action",
+            "desk/open",
+            "--input",
+            "note=Please review",
+        ],
+        &[],
+    ));
     // A run: progress lines, then the result; the program got the request.
     let seen = dir.join("request.json");
     let seen_s = seen.display().to_string();
@@ -222,6 +235,7 @@ fn actions_are_added_run_checked_and_removed() {
         "  Record: FAKE0001 · Open  https://desk.example.com/FAKE0001",
         "    Queue: Identity",
         "  Open in the fake desk: https://desk.example.com/FAKE0001",
+        "Saved on this finding in the run history.",
     ] {
         assert!(out.contains(want), "{want}: {out}");
     }
@@ -251,18 +265,7 @@ fn actions_are_added_run_checked_and_removed() {
     assert!(got["requested_by"].is_object());
     assert_eq!(got["record"], serde_json::Value::Null);
 
-    // `request` prints that same request.
-    let printed = json(&call(
-        &[
-            "request",
-            &critical,
-            "--action",
-            "desk/open",
-            "--input",
-            "note=Please review",
-        ],
-        &[],
-    ));
+    // `request` printed that same request.
     assert_eq!(printed, got);
 
     // A dry run, as JSON; a failure, with the program's error output.
@@ -272,10 +275,123 @@ fn actions_are_added_run_checked_and_removed() {
     assert_eq!(r["message"], "Would open a ticket (dry run).");
     assert_eq!(r["action"], "desk/open");
     assert_eq!(r["progress"], serde_json::json!(["Opening a ticket"]));
+    assert_eq!(r["saved"], false, "a dry run saves nothing");
     let (out, e) = err(&call(&["run", &high, "--input", "note=fail", "-y"], &[]));
     assert!(e.contains("The fake desk said no."), "{e}");
     assert!(out.contains("Details (exit code 1):"), "{out}");
     assert!(out.contains("HTTP 403 from the fake desk"), "{out}");
+
+    // What was saved: the record on the critical finding, and every run
+    // but the dry one, newest first.
+    let recs = json(&call(&["records", &critical, "--json"], &[]));
+    assert_eq!(recs.as_array().unwrap().len(), 1, "{recs}");
+    assert_eq!(recs[0]["id"], "fake-1");
+    assert_eq!(recs[0]["action"], "desk/open");
+    assert_eq!(recs[0]["number"], "FAKE0001");
+    assert_eq!(recs[0]["open"], true);
+    assert_eq!(recs[0]["fingerprint"], critical.as_str());
+    let all = json(&call(&["records", "--json"], &[]));
+    assert_eq!(all, recs);
+    let out = ok(&call(&["records", &critical], &[]));
+    assert!(
+        out.contains("fake-1  FAKE0001 · Open  https://desk.example.com/FAKE0001"),
+        "{out}"
+    );
+    assert!(out.contains("    Queue: Identity"), "{out}");
+    let out = ok(&call(&["records", &high], &[]));
+    assert!(out.contains("has no records."), "{out}");
+    let act = json(&call(&["activity", "--json"], &[]));
+    let act = act.as_array().unwrap();
+    assert_eq!(act.len(), 2, "{act:?}");
+    assert_eq!(act[0]["fingerprint"], high.as_str());
+    assert_eq!(act[0]["ok"], false);
+    assert_eq!(act[0]["message"], "The fake desk said no.");
+    assert_eq!(act[1]["action"], "desk/open");
+    assert_eq!(act[1]["record_ids"], serde_json::json!(["fake-1"]));
+    assert_eq!(act[1]["dry_run"], false);
+    let out = ok(&call(&["activity", &critical], &[]));
+    assert!(out.contains("  Opened FAKE0001 — "), "{out}");
+    let out = ok(&call(&["activity"], &[]));
+    assert!(
+        out.contains("! Open a ticket failed: The fake desk said no"),
+        "{out}"
+    );
+    // `findings --json` carries it on the finding.
+    let forest = repo("testdata/forest");
+    let fj = json(&run(
+        &dir,
+        &[
+            "findings",
+            "-i",
+            forest.to_str().unwrap(),
+            "--workspace",
+            ws,
+            "--json",
+        ],
+    ));
+    let f = fj
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["fingerprint"] == critical.as_str())
+        .unwrap();
+    assert_eq!(f["actions"]["records"][0]["id"], "fake-1", "{f}");
+    assert_eq!(f["actions"]["activity_count"], 1);
+
+    // `once`: open is hidden while its record is open; the follow-up runs
+    // on the record and updates it.
+    let on = json(&call(&["list", "--fingerprint", &critical, "--json"], &[]));
+    assert_eq!(on["actions"].as_array().unwrap().len(), 1, "{on}");
+    let (_, e) = err(&call(
+        &["run", &critical, "--action", "desk/status", "-y"],
+        &[],
+    ));
+    assert!(
+        e.contains("Check status runs on a record of this finding: name one of fake-1."),
+        "{e}"
+    );
+    let out = ok(&call(&["run", &critical, "--record", "fake-1", "-y"], &[]));
+    assert!(out.contains("Check status (desk/status) on "), "{out}");
+    assert!(out.contains(", record FAKE0001 · Open: "), "{out}");
+    assert!(out.contains("Done: FAKE0001 is Closed."), "{out}");
+    assert!(
+        out.contains("Saved on this finding in the run history."),
+        "{out}"
+    );
+    let recs = json(&call(&["records", &critical, "--json"], &[]));
+    assert_eq!(recs.as_array().unwrap().len(), 1, "{recs}");
+    assert_eq!(recs[0]["action"], "desk/open");
+    assert_eq!(recs[0]["status"], "Closed");
+    assert_eq!(recs[0]["open"], false);
+    let on = json(&call(&["list", "--fingerprint", &critical, "--json"], &[]));
+    assert_eq!(on["actions"].as_array().unwrap().len(), 2, "{on}");
+
+    // A record is removed only when asked, and the removal is activity.
+    let (_, e) = err(&call(&["records", "remove", &critical, "fake-1"], &[]));
+    assert!(e.contains("pass --yes"), "{e}");
+    let (_, e) = err(&call(
+        &["records", "remove", &critical, "fake-9", "-y"],
+        &[],
+    ));
+    assert!(
+        e.contains("This finding has no record fake-9. Its records: fake-1."),
+        "{e}"
+    );
+    let out = ok(&call(
+        &["records", "remove", &critical, "FAKE-1", "-y"],
+        &[],
+    ));
+    assert!(
+        out.contains("Removed record fake-1 (FAKE0001 · Closed) from "),
+        "{out}"
+    );
+    let recs = json(&call(&["records", &critical, "--json"], &[]));
+    assert!(recs.as_array().unwrap().is_empty(), "{recs}");
+    let act = json(&call(&["activity", &critical, "--json"], &[]));
+    assert_eq!(act[0]["kind"], "remove");
+    assert_eq!(act[0]["record_ids"], serde_json::json!(["fake-1"]));
+    assert_eq!(act[1]["action"], "desk/status");
+    assert_eq!(act.as_array().unwrap().len(), 3);
 
     // Test: a dry run on the latest run's first finding it applies to.
     let out = ok(&call(&["test", "desk", "-y"], &[]));
@@ -298,6 +414,22 @@ fn actions_are_added_run_checked_and_removed() {
     );
     let out = ok(&call(&["check", "desk", "-y"], &[]));
     assert!(out.contains("No problems"), "{out}");
+    // A real finding could leave the computer: it asks first.
+    let (_, e) = err(&call(&["check", "desk"], &[]));
+    assert!(e.contains("pass --yes"), "{e}");
+    let (_, e) = err(&call(&["check", &script, "--fingerprint", &high], &[]));
+    assert!(e.contains("pass --yes"), "{e}");
+    let out = ok(&call(
+        &["check", &script, "--fingerprint", &high, "-y"],
+        &[],
+    ));
+    assert!(
+        out.contains(&format!("Checking fake-action on {high}.")),
+        "{out}"
+    );
+    // Check and test are dry runs: nothing more was saved.
+    let act = json(&call(&["activity", "--json"], &[]));
+    assert_eq!(act.as_array().unwrap().len(), 4, "{act}");
 
     // Never from a scheduled task.
     let (_, e) = err(&call(

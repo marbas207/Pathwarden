@@ -7,9 +7,15 @@ req=$(cat)
 if [ -n "$PW_FAKE_ACTION_OUT" ]; then printf '%s' "$req" > "$PW_FAKE_ACTION_OUT"; fi
 answer() { printf '%s' "$1" > "$PATHWARDEN_ACTION_RESULT"; }
 if [ "$PATHWARDEN_ACTION_REQUEST" = describe ]; then
-    answer '{"schema":"pathwarden.action-describe.v1","actions":[{"id":"open","label":"Open a ticket","description":"Opens a ticket in the fake desk.","sends":"The finding'"'"'s title and the note.","inputs":[{"id":"note","label":"Note","type":"textarea"},{"id":"urgency","label":"Urgency","type":"choice","choices":["Low","Medium","High"],"default":"Medium"}],"once":true,"follow_ups":["status"]},{"id":"status","label":"Check status","for":"record","sends":"The ticket'"'"'s number."},{"id":"ping","label":"Ping the team","sends":"The finding'"'"'s ID.","applies_to":{"min_severity":"critical"}}]}'
+    answer '{"schema":"pathwarden.action-describe.v1","actions":[{"id":"open","label":"Open a ticket","description":"Opens a ticket in the fake desk.","sends":"The finding'"'"'s title and the note.","inputs":[{"id":"note","label":"Note","type":"textarea"},{"id":"urgency","label":"Urgency","type":"choice","choices":["Low","Medium","High"],"default":"Medium"}],"once":true,"follow_ups":["status","close"]},{"id":"status","label":"Check status","for":"record","sends":"The ticket'"'"'s number."},{"id":"ping","label":"Ping the team","sends":"The finding'"'"'s ID.","applies_to":{"min_severity":"critical"}},{"id":"close","label":"Close the ticket","for":"record","when":["fixed"],"sends":"The ticket'"'"'s number."}]}'
     exit 0
 fi
+case "$req" in
+*'"action":"status"'*)
+    # A follow-up: the ticket it runs on is closed now.
+    answer '{"schema":"pathwarden.action-result.v1","ok":true,"message":"FAKE0001 is Closed.","records":[{"id":"fake-1","kind":"ticket","number":"FAKE0001","status":"Closed","open":false}]}'
+    exit 0 ;;
+esac
 echo 'Opening a ticket'
 case "$req" in
 *'"note":"slow"'*)

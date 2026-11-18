@@ -47,7 +47,7 @@ fn the_example_describe_reads() {
     assert!(open.once);
     assert_eq!(open.follow_ups, ["status", "close"]);
     assert_eq!(d.actions[1].for_, Some(For::Record));
-    assert_eq!(d.actions[2].when, Some(When::Fixed));
+    assert_eq!(d.actions[2].when, Some(vec![FindingStatus::Fixed]));
     // A BOM is fine.
     let bom = [b"\xef\xbb\xbf".as_slice(), DESCRIBE.as_bytes()].concat();
     assert_eq!(parse_describe(&bom).unwrap().0, d);
@@ -113,8 +113,8 @@ fn bad_actions_are_left_out_with_why() {
             "actions[0].for \"finding\" isn't \"record\", the only value v1 knows",
         ),
         (
-            with("when", json!("open")),
-            "actions[0].when \"open\" isn't \"fixed\", the only value v1 knows",
+            with("when", json!("later")),
+            "actions[0].when \"later\" isn't one of open, held, accepted, fixed",
         ),
         (
             with("once", json!("yes")),
@@ -751,6 +751,7 @@ fn an_action_is_picked_and_its_request_built() {
         action: Some("service-desk/open".into()),
         inputs: object(json!({ "urgency": "low" })),
         dry_run: true,
+        ..Ask::default()
     };
     let p = prepare(&programs, &open, &[], &ask).unwrap();
     let r = &p.request;
@@ -784,6 +785,7 @@ fn an_action_is_picked_and_its_request_built() {
         action: Some("service-desk/open".into()),
         inputs: object(json!({ "x": 1 })),
         dry_run: false,
+        ..Ask::default()
     };
     assert_eq!(
         prepare(&programs, &open, &[], &ask).unwrap_err(),
@@ -1575,4 +1577,146 @@ fn a_result_that_isnt_a_file_is_refused() {
     assert_eq!(out.message, "The result file isn't a plain file.");
     assert!(started.elapsed() < Duration::from_secs(20));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `when`: without one, open, held and accepted findings; a fixed finding
+/// only the actions that list `fixed`, and the follow-ups on its records.
+/// A string is a list of one, as #4's `"when": "fixed"` was.
+#[test]
+fn when_says_where_a_finding_must_stand() {
+    let c = Config::parse("[[action]]\nplugin = \"desk\"\n").unwrap();
+    let d = described(
+        r#"{"schema":"pathwarden.action-describe.v1","actions":[
+          {"id":"open","label":"Open","sends":"x","follow_ups":["status","close"]},
+          {"id":"any","label":"Any","sends":"x","when":["open","held","accepted","fixed"]},
+          {"id":"done","label":"Done","sends":"x","when":"fixed"},
+          {"id":"open-only","label":"Open only","sends":"x","when":["open"]},
+          {"id":"status","label":"Status","sends":"x","for":"record"},
+          {"id":"close","label":"Close","sends":"x","for":"record","when":["fixed"]}]}"#,
+    );
+    assert_eq!(d.actions[0].when, None);
+    assert_eq!(d.actions[2].when, Some(vec![FindingStatus::Fixed]));
+    let programs = [Program {
+        config: &c.actions[0],
+        describe: &d,
+    }];
+    let e = event();
+    let at = |fp: &str| {
+        addresses(&offered(&programs, &finding_in_event(&e, fp).unwrap(), &[]))
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        at("PW-001-aaaa"),
+        ["desk/open", "desk/any", "desk/open-only"]
+    );
+    assert_eq!(at("PW-011-bbbb"), ["desk/open", "desk/any"]);
+    assert_eq!(at("PW-004-dddd"), ["desk/open", "desk/any"]);
+    assert_eq!(at("PW-003-cccc"), ["desk/any", "desk/done"]);
+    // Follow-ups on a record: without `when`, however the finding stands.
+    let r = rec("desk/open", true);
+    let fixed = finding_in_event(&e, "PW-003-cccc").unwrap();
+    assert_eq!(
+        addresses(&follow_ups(&programs, &fixed, &r)),
+        ["desk/status", "desk/close"]
+    );
+    let held = finding_in_event(&e, "PW-004-dddd").unwrap();
+    assert_eq!(
+        addresses(&follow_ups(&programs, &held, &r)),
+        ["desk/status"]
+    );
+    // Every value in words; a list must say something.
+    let bad = |when: Value| {
+        one(json!({ "id": "a", "label": "A", "sends": "x", "when": when }))
+            .unwrap()
+            .1
+    };
+    assert_eq!(
+        bad(json!([])),
+        ["actions[0].when must list at least one of open, held, accepted, fixed"]
+    );
+    assert_eq!(
+        bad(json!(["open", "soon"])),
+        ["actions[0].when[1] \"soon\" isn't one of open, held, accepted, fixed"]
+    );
+    assert_eq!(
+        bad(json!(3)),
+        ["actions[0].when 3 isn't one of open, held, accepted, fixed"]
+    );
+    let (d, p) =
+        one(json!({ "id": "a", "label": "A", "sends": "x", "when": ["fixed", "fixed", "open"] }))
+            .unwrap();
+    assert!(p.is_empty(), "{p:?}");
+    assert_eq!(
+        d.actions[0].when,
+        Some(vec![FindingStatus::Fixed, FindingStatus::Open])
+    );
+    // It reads back as a list.
+    assert_eq!(
+        serde_json::to_value(&d.actions[0]).unwrap()["when"],
+        json!(["fixed", "open"])
+    );
+}
+
+/// With a record, the action is one of that record's follow-ups, and the
+/// request carries the record.
+#[test]
+fn a_follow_up_is_prepared_on_a_record() {
+    let c = config();
+    let d = desk();
+    let programs = [Program {
+        config: &c.actions[0],
+        describe: &d,
+    }];
+    let e = event();
+    let open = finding_in_event(&e, "PW-001-aaaa").unwrap();
+    let records = [rec("service-desk/open", true)];
+    let ask = Ask {
+        action: Some("service-desk/status".into()),
+        record: Some("R1".into()),
+        ..Ask::default()
+    };
+    let p = prepare(&programs, &open, &records, &ask).unwrap();
+    assert_eq!(p.offered.address, "service-desk/status");
+    assert_eq!(p.request["record"]["id"], "r1");
+    assert_eq!(p.record.as_ref().unwrap().action, "service-desk/open");
+    // The one follow-up that applies needs no name.
+    let only = Ask {
+        record: Some("r1".into()),
+        ..Ask::default()
+    };
+    assert_eq!(
+        prepare(&programs, &open, &records, &only)
+            .unwrap()
+            .offered
+            .address,
+        "service-desk/status"
+    );
+    // Named without its record; a record that isn't there.
+    let bare = Ask {
+        action: Some("service-desk/status".into()),
+        ..Ask::default()
+    };
+    assert_eq!(
+        prepare(&programs, &open, &records, &bare).unwrap_err(),
+        "Check status runs on a record of this finding: name one of r1."
+    );
+    let gone = Ask {
+        record: Some("r9".into()),
+        ..Ask::default()
+    };
+    assert_eq!(
+        prepare(&programs, &open, &records, &gone).unwrap_err(),
+        "This finding has no record r9. Its records: r1."
+    );
+    // Close waits for a fix; on an open finding it isn't offered.
+    let close = Ask {
+        action: Some("service-desk/close".into()),
+        record: Some("r1".into()),
+        ..Ask::default()
+    };
+    assert!(prepare(&programs, &open, &records, &close)
+        .unwrap_err()
+        .contains("doesn't apply to this record"));
 }

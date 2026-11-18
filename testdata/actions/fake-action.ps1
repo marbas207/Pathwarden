@@ -8,7 +8,12 @@ $req = $text | ConvertFrom-Json
 if ($env:PW_FAKE_ACTION_OUT) { [IO.File]::WriteAllText($env:PW_FAKE_ACTION_OUT, $text) }
 function Answer([string]$json) { [IO.File]::WriteAllText($env:PATHWARDEN_ACTION_RESULT, $json) }
 if ($env:PATHWARDEN_ACTION_REQUEST -eq 'describe') {
-    Answer '{"schema":"pathwarden.action-describe.v1","actions":[{"id":"open","label":"Open a ticket","description":"Opens a ticket in the fake desk.","sends":"The finding''s title and the note.","inputs":[{"id":"note","label":"Note","type":"textarea"},{"id":"urgency","label":"Urgency","type":"choice","choices":["Low","Medium","High"],"default":"Medium"}],"once":true,"follow_ups":["status"]},{"id":"status","label":"Check status","for":"record","sends":"The ticket''s number."},{"id":"ping","label":"Ping the team","sends":"The finding''s ID.","applies_to":{"min_severity":"critical"}}]}'
+    Answer '{"schema":"pathwarden.action-describe.v1","actions":[{"id":"open","label":"Open a ticket","description":"Opens a ticket in the fake desk.","sends":"The finding''s title and the note.","inputs":[{"id":"note","label":"Note","type":"textarea"},{"id":"urgency","label":"Urgency","type":"choice","choices":["Low","Medium","High"],"default":"Medium"}],"once":true,"follow_ups":["status","close"]},{"id":"status","label":"Check status","for":"record","sends":"The ticket''s number."},{"id":"ping","label":"Ping the team","sends":"The finding''s ID.","applies_to":{"min_severity":"critical"}},{"id":"close","label":"Close the ticket","for":"record","when":["fixed"],"sends":"The ticket''s number."}]}'
+    exit 0
+}
+if ($req.action -eq 'status') {
+    # A follow-up: the ticket it runs on is closed now.
+    Answer ('{"schema":"pathwarden.action-result.v1","ok":true,"message":"FAKE0001 is Closed.","records":[{"id":"' + $req.record.id + '","kind":"ticket","number":"FAKE0001","status":"Closed","open":false}]}')
     exit 0
 }
 [Console]::Out.WriteLine('Opening a ticket')

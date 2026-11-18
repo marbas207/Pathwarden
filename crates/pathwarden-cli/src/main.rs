@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
@@ -1271,7 +1271,8 @@ fn run(mut command: Command) -> Result<ExitCode> {
                 by_fix,
                 introduced
                     .or(since)
-                    .map(|p| (p, state.or(env_state.clone()))),
+                    .map(|p| (p, state.clone().or(env_state.clone()))),
+                state.or(env_state).as_deref(),
             )
         }
         Command::Changes {
@@ -2718,12 +2719,35 @@ pub(crate) fn fail_on_code<'a>(
 
 /// `introduced`: `--introduced` (or `--since`) and the state folder to
 /// read it from.
+/// What finding actions did on each finding (`actions`), from the run
+/// history the settings (or `state`) name, as it is here: nothing is
+/// fetched, and a history that can't be read leaves them without.
+fn with_actions(input: &Input, state: Option<&Path>, findings: &mut [Finding]) {
+    let config = match &input.config {
+        Some(path) => match Config::from_file(path) {
+            Ok(c) => c,
+            Err(_) => return,
+        },
+        None => Config::default(),
+    };
+    let Ok(store) = store::Store::new(&config.state, state) else {
+        return;
+    };
+    if !store.dir.is_dir() || store.check_expected().is_err() {
+        return;
+    }
+    if let Ok(file) = pathwarden_core::action_log::load(&store) {
+        pathwarden_core::action_log::annotate(&file, findings, &mut []);
+    }
+}
+
 fn findings_cmd(
     input: &Input,
     filter: &FindingsFilter,
     fail_on: Option<Severity>,
     by_fix: bool,
     introduced: Option<(pathwarden_core::introduced::Period, Option<PathBuf>)>,
+    state: Option<&Path>,
 ) -> Result<ExitCode> {
     if let Some(unknown) = filter.rules.iter().find(|r| {
         !findings::rules()
@@ -2736,8 +2760,11 @@ fn findings_cmd(
         bail!("Unknown rule '{unknown}'. See `pathwarden rules`.");
     }
     let mut p = progress::Analysis::new(Through::Rules, input.verbose);
-    let ev = run_rules(input, &mut p)?;
+    let mut ev = run_rules(input, &mut p)?;
     p.done();
+    if input.json {
+        with_actions(input, state, &mut ev.findings);
+    }
     let all = &ev.findings;
     let mut shown: Vec<&Finding> = all.iter().filter(|f| filter.shows(f)).collect();
     // `--introduced`: only the period's findings, each with its badge.

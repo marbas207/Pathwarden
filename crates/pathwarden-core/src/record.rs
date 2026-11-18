@@ -536,7 +536,7 @@ pub fn save_and_publish<P: RecordProgress>(
     }
     if !push || !store.is_git() {
         tell(p);
-        return (prep, Ok(Saved::default()));
+        return (with_actions(store, prep), Ok(Saved::default()));
     }
     let message = prep.commit_message();
     let first_compared = prep.compared_with.clone();
@@ -617,13 +617,28 @@ pub fn save_and_publish<P: RecordProgress>(
     }
     tell(p);
     (
-        prep,
+        with_actions(store, prep),
         Ok(Saved {
             pushed: published.pushed,
             inserted,
             unpushed,
         }),
     )
+}
+
+/// The run's findings and those it found fixed, with what finding
+/// actions did on each ([`crate::action_log::annotate`]), as the history
+/// holds it now: so the event, the report and the exports carry it. A
+/// file this version can't read leaves them without.
+fn with_actions(store: &Store, mut prep: Prepared) -> Prepared {
+    if let Ok(file) = crate::action_log::load(store) {
+        crate::action_log::annotate(
+            &file,
+            &mut prep.analysis.findings,
+            &mut prep.reconciled.resolved,
+        );
+    }
+    prep
 }
 
 #[cfg(test)]

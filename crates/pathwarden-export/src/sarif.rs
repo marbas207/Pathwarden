@@ -9,6 +9,7 @@
 //! | accepted risk | `suppressions: [{kind: "external", status: "accepted", justification}]` |
 //! | change since the last run | `baselineState`: new and regressed `new`, open and suppressed `unchanged` |
 //! | affected objects | `locations[].logicalLocations[]` (no files: AD objects have none) |
+//! | finding actions' records | `properties.actionRecords` (`action`, `id`, `kind`, `label`, `number`, `status`, `url`, `open`) and `properties.actionRuns` |
 //!
 //! Results carry no physical location, which SARIF allows. Tools that need
 //! one (GitHub code scanning) are not a target; see docs/integrations.md.
@@ -254,8 +255,39 @@ fn result_object(f: &Finding, rule_index: usize) -> Value {
     if !f.sources.is_empty() {
         p.insert("sources".into(), f.sources.clone().into());
     }
+    if let Some(a) = &f.actions {
+        p.insert("actionRecords".into(), action_records(&a.records));
+        p.insert("actionRuns".into(), a.activity_count.into());
+    }
     r.insert("properties".into(), Value::Object(p));
     Value::Object(r)
+}
+
+/// A finding's action records as SARIF properties: what made each, its
+/// ID, number, status, whether it is open, and its link.
+fn action_records(records: &[crate::doc::ActionRecord]) -> Value {
+    records
+        .iter()
+        .map(|r| {
+            let mut m = Map::new();
+            m.insert("action".into(), r.action.clone().into());
+            m.insert("id".into(), r.id.clone().into());
+            for (k, v) in [
+                ("kind", &r.kind),
+                ("label", &r.label),
+                ("number", &r.number),
+                ("status", &r.status),
+                ("url", &r.url),
+            ] {
+                if let Some(v) = v {
+                    m.insert(k.into(), v.clone().into());
+                }
+            }
+            m.insert("open".into(), r.open.into());
+            Value::Object(m)
+        })
+        .collect::<Vec<_>>()
+        .into()
 }
 
 #[cfg(test)]

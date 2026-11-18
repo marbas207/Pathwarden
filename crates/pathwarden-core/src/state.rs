@@ -1102,6 +1102,9 @@ pub struct Resolved {
     pub resolved_at: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// What finding actions did on it ([`crate::action_log::annotate`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub actions: Option<crate::action_log::FindingActions>,
 }
 
 pub struct Reconciled {
@@ -1320,6 +1323,7 @@ pub fn reconcile_scoped<F: Observed>(
                 first_seen: t.first_seen,
                 resolved_at: now,
                 title: t.title.clone(),
+                actions: None,
             });
         }
         if !include_names {
@@ -1434,6 +1438,7 @@ mod tests {
             references: Vec::new(),
             suppressed: None,
             accepted: None,
+            actions: None,
             sources: Vec::new(),
             requires: Vec::new(),
             rests_on: Default::default(),

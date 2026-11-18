@@ -54,6 +54,51 @@ pub struct Finding {
     pub times_seen: Option<u32>,
     /// External sources the evidence rests on (OpenGraph, PingCastle).
     pub sources: Vec<String>,
+    /// What finding actions did on it: its records (a ticket) and how
+    /// many times an action ran. `None` when none did.
+    pub actions: Option<Actions>,
+}
+
+/// The event's `actions` on a finding.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct Actions {
+    pub records: Vec<ActionRecord>,
+    pub activity_count: usize,
+}
+
+/// A record an action keeps on a finding, as the event has it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ActionRecord {
+    /// The action that made it, `<name>/<id>`.
+    pub action: String,
+    pub id: String,
+    pub kind: Option<String>,
+    pub label: Option<String>,
+    pub number: Option<String>,
+    pub url: Option<String>,
+    pub status: Option<String>,
+    pub open: bool,
+    pub fields: BTreeMap<String, String>,
+}
+
+impl ActionRecord {
+    /// "RITM10816190 · Open": its number (else label, else ID) and status.
+    pub fn line(&self) -> String {
+        let name = self
+            .number
+            .as_deref()
+            .or(self.label.as_deref())
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&self.id);
+        let status = self
+            .status
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(if self.open { "Open" } else { "Closed" });
+        format!("{name} · {status}")
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

@@ -52,7 +52,9 @@ enum ActionWhat {
         json: bool,
     },
     /// Run an action for one finding. It asks first unless --yes, prints
-    /// the program's progress lines as they come, then the result.
+    /// the program's progress lines as they come, then the result, and
+    /// saves what it did on the finding in the run history (a dry run
+    /// saves nothing).
     Run {
         /// The finding (its ID, e.g. PW-006-8ae0b31a46eacada).
         #[arg(value_name = "FINDING_ID")]
@@ -138,9 +140,10 @@ enum ActionWhat {
     /// For people writing actions: run a program's describe, then a dry run
     /// of each action it offers on a sample finding (or --fingerprint's),
     /// and name every problem with its answers. Exits 2 when there are
-    /// problems. A program given by its path is checked without asking: it
-    /// only gets describe and dry runs. A block that is set up asks first
-    /// unless --yes.
+    /// problems. A program given by its path is checked on the sample
+    /// finding without asking: it only gets describe and dry runs. It asks
+    /// first unless --yes when a real finding could be sent: a block that
+    /// is set up, or --fingerprint.
     Check {
         /// A block's name, or the program to check: its path (a .ps1, .py,
         /// .sh or .js script runs with its interpreter), or an interpreter
@@ -160,11 +163,51 @@ enum ActionWhat {
         /// The run the finding is in (default: the newest run that has it).
         #[arg(long, value_name = "RUN", requires = "fingerprint")]
         run: Option<String>,
-        /// Don't ask before checking a block that is set up.
+        /// Don't ask before checking a block that is set up, or a real
+        /// finding.
         #[arg(long, short = 'y')]
         yes: bool,
     },
-    // `records` and `activity` come with saving what actions did.
+    /// What finding actions created or look after (a ticket), kept on each
+    /// finding in the run history: one finding's, or every finding's.
+    Records {
+        #[command(subcommand)]
+        what: Option<RecordsWhat>,
+        /// Only this finding's records (its ID, e.g.
+        /// PW-006-8ae0b31a46eacada).
+        #[arg(value_name = "FINDING_ID")]
+        fingerprint: Option<String>,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Every run of a finding action, newest first, kept on each finding in
+    /// the run history: one finding's, or every finding's.
+    Activity {
+        /// Only this finding's activity (its ID).
+        #[arg(value_name = "FINDING_ID")]
+        fingerprint: Option<String>,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum RecordsWhat {
+    /// Remove a record from a finding. The removal is saved in its
+    /// activity. Nothing is changed in the other system.
+    Remove {
+        /// The finding (its ID).
+        #[arg(value_name = "FINDING_ID")]
+        fingerprint: String,
+        /// The record's ID, as `records` shows it.
+        #[arg(value_name = "RECORD_ID")]
+        record: String,
+        /// Don't ask before removing it.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
 }
 
 /// Which action, with what, for `run` and `request`.
@@ -177,9 +220,14 @@ struct AskArgs {
     /// An input the action asks for, e.g. note="Please review"; repeatable.
     #[arg(long = "input", value_name = "ID=VALUE", value_parser = key_value)]
     inputs: Vec<(String, String)>,
-    /// Ask the program for a dry run: it changes nothing.
+    /// Ask the program for a dry run: it changes nothing, and nothing is
+    /// saved on the finding.
     #[arg(long)]
     dry_run: bool,
+    /// Run a follow-up (such as Check status) on this record of the
+    /// finding, by its ID (`records` shows them).
+    #[arg(long, value_name = "RECORD_ID")]
+    record: Option<String>,
     /// The run the finding is in, by the ID `pathwarden runs list` prints
     /// (default: the newest run that has it).
     #[arg(long, value_name = "RUN")]
@@ -196,6 +244,7 @@ impl AskArgs {
                 .map(|(k, v)| (k.clone(), Value::String(v.clone())))
                 .collect(),
             dry_run: self.dry_run,
+            record: self.record.clone(),
         }
     }
 }
@@ -331,6 +380,23 @@ pub(crate) fn run(a: ActionArgs) -> Result<ExitCode> {
                 ActionWhat::Request { fingerprint, ask } => {
                     request(&t, &config.actions, &fingerprint, &ask)
                 }
+                ActionWhat::Records {
+                    what:
+                        Some(RecordsWhat::Remove {
+                            fingerprint,
+                            record,
+                            yes,
+                        }),
+                    ..
+                } => remove_record(&t, &fingerprint, &record, yes),
+                ActionWhat::Records {
+                    what: None,
+                    fingerprint,
+                    json,
+                } => records(&t, fingerprint.as_deref(), json),
+                ActionWhat::Activity { fingerprint, json } => {
+                    activity(&t, fingerprint.as_deref(), json)
+                }
                 ActionWhat::Check { .. } => unreachable!("handled above"),
             }
         }
@@ -369,19 +435,38 @@ fn filters_line(a: &ActionConfig) -> String {
     parts.join("; ")
 }
 
-/// When an action is offered, in words: "once", "on a record", "once fixed".
+/// When an action is offered, in words: "on a record", "when fixed",
+/// "when open or fixed", "while it has no open record".
 fn when_words(d: &actions::ActionDef) -> String {
     let mut w = Vec::new();
     if d.for_.is_some() {
-        w.push("on a record");
+        w.push("on a record".to_string());
     }
-    if d.when.is_some() {
-        w.push("once fixed");
+    if let Some(when) = &d.when {
+        let names: Vec<&str> = when
+            .iter()
+            .map(|s| match s {
+                actions::FindingStatus::Open => "open",
+                actions::FindingStatus::Held => "held",
+                actions::FindingStatus::Accepted => "accepted",
+                actions::FindingStatus::Fixed => "fixed",
+            })
+            .collect();
+        w.push(format!("when {}", or_list(&names)));
     }
     if d.once {
-        w.push("while it has no open record");
+        w.push("while it has no open record".into());
     }
     w.join(", ")
+}
+
+/// "a", "a or b", "a, b or c".
+fn or_list(items: &[&str]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.to_string(),
+        [rest @ .., last] => format!("{} or {last}", rest.join(", ")),
+    }
 }
 
 /// On stderr: the blocks named by their position (`action-N`), which
@@ -534,7 +619,12 @@ fn confirm(question: &str) -> Result<()> {
 
 /// Says what is about to run, asks unless `yes`, runs it with its progress
 /// lines printed as they come, and prints the result.
-fn start(ready: &actions_ui::Ready, yes: bool, json: bool) -> Result<ExitCode> {
+fn start(
+    ws: &pathwarden_ui::workspace::Workspace,
+    ready: &actions_ui::Ready,
+    yes: bool,
+    json: bool,
+) -> Result<ExitCode> {
     let o = &ready.prepared.offered;
     let f = &ready.finding;
     let dry = ready.prepared.request["dry_run"].as_bool().unwrap_or(false);
@@ -546,10 +636,19 @@ fn start(ready: &actions_ui::Ready, yes: bool, json: bool) -> Result<ExitCode> {
         }
     };
     say(format!(
-        "{} ({}) on {}: {}, in run {}.",
+        "{} ({}) on {}{}: {}, in run {}.",
         ui::safe(&o.def.label),
         ui::safe(&o.address),
         ui::safe(&f.fingerprint),
+        ready
+            .prepared
+            .record
+            .as_ref()
+            .map(|r| format!(
+                ", record {}",
+                ui::safe(&pathwarden_core::action_log::chip(&r.record, false))
+            ))
+            .unwrap_or_default(),
         ui::safe(&f.title),
         ui::safe(&ready.run.id)
     ));
@@ -584,20 +683,48 @@ fn start(ready: &actions_ui::Ready, yes: bool, json: bool) -> Result<ExitCode> {
         eprintln!("Cancelled.");
         return Ok(ExitCode::from(crate::interrupt::EXIT_CANCELLED as u8));
     }
+    // What it did, on the finding at once (a dry run saves nothing). A
+    // run that couldn't be saved still ran: said, not an error.
+    let saved = if out.dry_run {
+        None
+    } else {
+        Some(actions_ui::save_outcome(ws, ready, &out))
+    };
+    let mut said = Vec::new();
+    match &saved {
+        Some(Ok(s)) => {
+            if s.saved {
+                said.push(SAVED_WORDS.to_string());
+            }
+            said.extend(s.notes.iter().cloned());
+        }
+        Some(Err(why)) => said.push(format!("Not saved on the finding: {why}")),
+        None => {}
+    }
     if json {
         let mut v = serde_json::to_value(&out)?;
         v["action"] = json!(o.address);
         v["fingerprint"] = json!(f.fingerprint);
         v["run"] = json!(ready.run.id);
+        v["saved"] = json!(matches!(&saved, Some(Ok(s)) if s.saved));
+        for line in &said {
+            eprintln!("{}", ui::safe(line));
+        }
         emit_json(&v)?;
         return Ok(ExitCode::from(if out.ok { exit::OK } else { exit::ERROR }));
     }
     print_outcome(&out);
+    for line in &said {
+        println!("{}", ui::safe(line));
+    }
     if !out.ok {
         bail!("{}", out.message);
     }
     Ok(ExitCode::SUCCESS)
 }
+
+/// What `action run` says once the outcome is saved.
+const SAVED_WORDS: &str = "Saved on this finding in the run history.";
 
 /// The result: the message, records and links, then what was wrong with
 /// it, and on a failure the program's error output.
@@ -655,7 +782,7 @@ fn run_one(
     let ws = workspace(t)?;
     let ready = actions_ui::prepare(ws, blocks, ask.run.as_deref(), fingerprint, &ask.ask())
         .map_err(anyhow::Error::msg)?;
-    start(&ready, yes, json)
+    start(ws, &ready, yes, json)
 }
 
 fn test(
@@ -709,10 +836,11 @@ fn test(
         action: Some(offered.address.clone()),
         inputs: Map::new(),
         dry_run: true,
+        record: None,
     };
     let ready = actions_ui::prepare(ws, blocks, Some(&run.id), &finding.fingerprint, &ask)
         .map_err(anyhow::Error::msg)?;
-    start(&ready, yes, false)
+    start(ws, &ready, yes, false)
 }
 
 fn request(
@@ -806,13 +934,6 @@ fn check(
                 );
             };
             warn_positional(&config.actions);
-            if !yes {
-                println!(
-                    "Checking {} runs its program: describe, then a dry run of each action.",
-                    ui::safe(&a.name)
-                );
-                confirm("Check it?")?;
-            }
             a.clone()
         }
         _ => {
@@ -864,6 +985,21 @@ fn check(
         }
         _ => actions::sample_finding(),
     };
+    // A real finding could leave the computer: a block that is set up (its
+    // program may send even a dry run's request on), or --fingerprint.
+    if !yes && (by_name || fingerprint.is_some()) {
+        println!(
+            "Checking {} runs its program: describe, then a dry run of each action on {}{}.",
+            ui::safe(&block.name),
+            ui::safe(&finding.fingerprint),
+            if fingerprint.is_some() {
+                ", a finding of this environment"
+            } else {
+                ", a sample finding"
+            }
+        );
+        confirm("Check it?")?;
+    }
     println!(
         "Checking {} on {}{}.",
         ui::safe(&block.name),
@@ -904,4 +1040,169 @@ fn check(
         println!("  - {}", ui::safe(p));
     }
     Ok(ExitCode::from(exit::ERROR))
+}
+
+/// A record as `records` prints it: its chip, link, fields, and who first
+/// made it, where and when.
+fn print_record(r: &actions::ActionRecord, indent: &str) {
+    let d = ui::DIM;
+    println!(
+        "{indent}{}  {}{}",
+        ui::safe(&r.record.id),
+        ui::safe(&pathwarden_core::action_log::chip(&r.record, false)),
+        r.record
+            .url
+            .as_deref()
+            .map(|u| format!("  {}", ui::safe(u)))
+            .unwrap_or_default()
+    );
+    for (k, v) in &r.record.fields {
+        println!("{indent}  {d}{}: {}{d:#}", ui::safe(k), ui::safe(v));
+    }
+    let first = pathwarden_core::action_log::Activity {
+        at: r.at.clone(),
+        by: r.by.clone(),
+        on: r.on.clone(),
+        ..Default::default()
+    };
+    println!(
+        "{indent}  {d}by {} — {}{d:#}",
+        ui::safe(&r.action),
+        ui::safe(&first.who_when())
+    );
+}
+
+/// The finding `fp` names (any case) among the log's, or `fp` as given.
+fn finding_key(log: &pathwarden_core::action_log::ActionsFile, fp: &str) -> String {
+    log.findings
+        .keys()
+        .find(|k| k.eq_ignore_ascii_case(fp.trim()))
+        .cloned()
+        .unwrap_or_else(|| fp.trim().to_string())
+}
+
+fn records(t: &Target, fingerprint: Option<&str>, json: bool) -> Result<ExitCode> {
+    let ws = workspace(t)?;
+    let log = actions_ui::log(ws).map_err(anyhow::Error::msg)?;
+    let mut rows: Vec<(String, Vec<actions::ActionRecord>)> = match fingerprint {
+        Some(fp) => {
+            let key = finding_key(&log, fp);
+            let records = log.records(&key);
+            vec![(key, records)]
+        }
+        None => log
+            .findings
+            .iter()
+            .filter(|(_, l)| !l.records.is_empty())
+            .map(|(fp, l)| (fp.clone(), l.records.clone()))
+            .collect(),
+    };
+    rows.retain(|(_, r)| fingerprint.is_some() || !r.is_empty());
+    if json {
+        let list: Vec<Value> = rows
+            .iter()
+            .flat_map(|(fp, rs)| {
+                rs.iter().map(move |r| {
+                    let mut v = serde_json::to_value(r).unwrap_or_default();
+                    v["fingerprint"] = json!(fp);
+                    v
+                })
+            })
+            .collect();
+        emit_json(&list)?;
+        return Ok(ExitCode::SUCCESS);
+    }
+    if rows.iter().all(|(_, r)| r.is_empty()) {
+        match fingerprint {
+            Some(fp) => println!("{} has no records.", ui::safe(fp.trim())),
+            None => println!("No finding has records in {}.", t.label),
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    for (fp, rs) in &rows {
+        println!("{}:", ui::safe(fp));
+        for r in rs {
+            print_record(r, "  ");
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn activity(t: &Target, fingerprint: Option<&str>, json: bool) -> Result<ExitCode> {
+    let ws = workspace(t)?;
+    let log = actions_ui::log(ws).map_err(anyhow::Error::msg)?;
+    // Newest first, each with its finding.
+    let mut all: Vec<(String, pathwarden_core::action_log::Activity)> = match fingerprint {
+        Some(fp) => {
+            let key = finding_key(&log, fp);
+            log.activity(&key)
+                .into_iter()
+                .map(|a| (key.clone(), a))
+                .collect()
+        }
+        None => log
+            .findings
+            .keys()
+            .flat_map(|fp| log.activity(fp).into_iter().map(move |a| (fp.clone(), a)))
+            .collect(),
+    };
+    all.sort_by(|a, b| b.1.at.cmp(&a.1.at));
+    if json {
+        let list: Vec<Value> = all
+            .iter()
+            .map(|(fp, a)| {
+                let mut v = serde_json::to_value(a).unwrap_or_default();
+                v["fingerprint"] = json!(fp);
+                v
+            })
+            .collect();
+        emit_json(&list)?;
+        return Ok(ExitCode::SUCCESS);
+    }
+    if all.is_empty() {
+        match fingerprint {
+            Some(fp) => println!("No action ran on {}.", ui::safe(fp.trim())),
+            None => println!("No action ran on any finding in {}.", t.label),
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    let d = ui::DIM;
+    for (fp, a) in &all {
+        let what = if fingerprint.is_some() {
+            String::new()
+        } else {
+            format!("{}  ", ui::safe(fp))
+        };
+        println!(
+            "  {what}{}{} {d}— {}{d:#}",
+            if a.ok { "" } else { "! " },
+            ui::safe(&a.summary()),
+            ui::safe(&a.who_when())
+        );
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn remove_record(t: &Target, fingerprint: &str, record: &str, yes: bool) -> Result<ExitCode> {
+    let ws = workspace(t)?;
+    if !yes {
+        println!(
+            "This removes record {} from {} in the run history, for everyone. Nothing changes in the other system.",
+            ui::safe(record.trim()),
+            ui::safe(fingerprint.trim())
+        );
+        confirm("Remove it?")?;
+    }
+    let (r, notes) =
+        actions_ui::remove_record(ws, fingerprint, record).map_err(anyhow::Error::msg)?;
+    println!(
+        "Removed record {} ({}) from {}. The removal is in its activity.",
+        ui::safe(&r.record.id),
+        ui::safe(&pathwarden_core::action_log::chip(&r.record, false)),
+        ui::safe(fingerprint.trim())
+    );
+    for n in notes {
+        println!("{}", ui::safe(&n));
+    }
+    Ok(ExitCode::SUCCESS)
 }

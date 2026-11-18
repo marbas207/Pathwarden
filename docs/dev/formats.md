@@ -125,6 +125,7 @@ notes say so under **Upgrade notes**.
 | `settings/pathwarden.toml` | `format = N`, absent means 1. | Refused whole: nothing of it is applied, and nothing is pushed over it, not even with `config sync --keep-local`. Every page and command says "The repository's settings were saved by a newer Pathwarden. Update Pathwarden to sync them." |
 | `settings/environment.json` | `"format"`: 1 (from 0.2; absent means 1). | Not read, and never written over: a change to the shared settings is refused with "The repository's settings/environment.json was saved by a newer Pathwarden. Update Pathwarden to change the shared settings." |
 | `settings/last-change.json` | `"format"`: 1 (from 0.2; absent means 1). Every other field is optional and only shown. | Not shown: the settings commit says what changed instead. |
+| `actions.json` | `"version"`: 1 (from 1.0.0-rc.3; absent means 1). What finding actions did: see [What actions did](#what-actions-did-actionsjson). | Not read, and never written over: running an action works, and saving what it did says "The history's actions.json was saved by a newer Pathwarden, so what actions do can't be saved here. Update Pathwarden to save it." Findings carry no `actions`. |
 | `.pathwarden-encryption` | `"format"`: 2, every file bound to its place (0.2). 1 is a history encrypted by 0.1.7 to 0.1.9. | "This history was encrypted by a newer Pathwarden (encryption format N). Update Pathwarden to read it." |
 | `<file>.age` binding line | Binding version 1. | Refused: "needs a newer Pathwarden". |
 | `.pathwarden-state` | A marker. Its text is for people. | Nothing to read. |
@@ -364,8 +365,8 @@ absent; a plugin should ignore fields it doesn't know.
 | `schema` | Always `pathwarden.event.v1`. |
 | `run` | The run: `version` (1), `run_id`, `started_at`, `finished_at` and `collected_at` (Unix seconds; `collected_at` may be null), `pathwarden` (the version), `collector_files`, `domains` (collected), `trusted_domains`, `objects`, `changes` (counts: `new`, `open`, `regressed`, `suppressed`, `resolved`, `held`, `unchecked`), `sources_exact`, `sources` and `hosts` (optional, as in `last-run.json`), `settings_files` (optional, from 0.3: the Tier Zero settings files the run used, as in `last-run.json`). |
 | `posture` | `tier_zero` (`objects`, `population`, `relevant_population`, `exposed`, `exposure_percent`, `exposure_status`, `status_reason`, `objects_with_findings`, `protected_percent`, and the deprecated `exposure_grade`, `grade_reason` and `protection_score`: see [Renamed keys](#renamed-keys)), `zones` (the same for each Privilege Zone), `findings` (counts by category and severity, `open_by_rule`), `completeness` (per domain, see [The event document](../#the-event-document-pathwardeneventv1)), `exposure_basis`, `plan` (`steps`, `exposed_after`). |
-| `findings` | Every finding in this run. Each has `change` (`new`, `open`, `regressed`, `suppressed`), `first_seen`, `times_seen`, `rule`, `category`, `severity`, `rule_severity`, `severity_default` (optional), `exposure` (`scope`, `principals`, `population`, `percent`, or null), `fingerprint`, `title`, `domain`, `summary`, `remediation`, `affected` (`id`, `name`, `kind`, `detail`), `path` (`source`, `target`, `steps` with `from`, `from_kind`, `edge`, `to`, `to_kind`, or null), `references`, `suppressed` (the reason, or null), `accepted` (who accepted the risk, when, its review date and notes; optional), `sources` and `requires` (optional; from 0.3 `requires` also holds the units, as in `last-run.json`'s `hosts`, of the computers whose sessions or local groups the finding rests on: one per list read on each computer, capped at 256 computers per kind, past which `s:*` or `l:*` stands for every computer of that kind the last run listed), `rests_on` (`sessions`, `local_groups`). |
-| `resolved` | Findings that were open last run and are gone: `fingerprint`, `rule`, `severity`, `first_seen`, `resolved_at`, `title` (optional). |
+| `findings` | Every finding in this run. Each has `change` (`new`, `open`, `regressed`, `suppressed`), `first_seen`, `times_seen`, `rule`, `category`, `severity`, `rule_severity`, `severity_default` (optional), `exposure` (`scope`, `principals`, `population`, `percent`, or null), `fingerprint`, `title`, `domain`, `summary`, `remediation`, `affected` (`id`, `name`, `kind`, `detail`), `path` (`source`, `target`, `steps` with `from`, `from_kind`, `edge`, `to`, `to_kind`, or null), `references`, `suppressed` (the reason, or null), `accepted` (who accepted the risk, when, its review date and notes; optional), `actions` (optional, from 1.0.0-rc.3: what finding actions did on it, from the history's `actions.json` when the run was recorded: `records`, each as in [What actions did](#what-actions-did-actionsjson), and `activity_count`, how many runs it keeps; absent when none ran), `sources` and `requires` (optional; from 0.3 `requires` also holds the units, as in `last-run.json`'s `hosts`, of the computers whose sessions or local groups the finding rests on: one per list read on each computer, capped at 256 computers per kind, past which `s:*` or `l:*` stands for every computer of that kind the last run listed), `rests_on` (`sessions`, `local_groups`). |
+| `resolved` | Findings that were open last run and are gone: `fingerprint`, `rule`, `severity`, `first_seen`, `resolved_at`, `title` (optional), `actions` (optional, as on `findings`). |
 | `held` | Findings this run couldn't check: `fingerprint`, `rule`. Not fixed: a plugin that closes tickets for missing findings leaves these open. |
 | `plan` | The remediation path: `exposed_before`, `exposed_after`, `exposure_before`, `exposure_after`, `exposure_delta`, `relevant_population`, `relevant_population_after`, `first_fix_exposure_after`, `total_cost`, and `fixes` (`from`, `from_kind`, `edges`, `to`, `to_kind`, `cost`, `principals_through`, `shortest_paths_through`, `sdprop_copies`, `inherited_by`, `action`). |
 | `guides` | The step-by-step guide (Markdown) for every rule with findings, by rule ID. |
@@ -415,7 +416,7 @@ another is refused), and
 | `once` | True to hide the action while the finding has an open record from it. |
 | `follow_ups` | IDs of this program's `for: "record"` actions, offered on the records this one returns. |
 | `for` | `"record"`: only offered as a follow-up on a record. |
-| `when` | `"fixed"`: only offered once the finding is fixed. |
+| `when` | Optional: where the finding must stand for the action to be offered, a list of `open`, `held`, `accepted` and `fixed` (one value alone is a list of one, so `"fixed"` still reads). Without it: open, held and accepted findings, not fixed ones; a follow-up (`for: "record"`) without it is offered on a record however the finding stands. A fixed finding is offered only the actions that list `fixed`, and the follow-ups on its records. |
 
 An action with a problem in its `id`, `label`, filters, inputs, `for` or
 `when` isn't offered; a text that is too long is cut.
@@ -435,6 +436,42 @@ Text is never read as HTML, and control characters are dropped. Every
 left out. A missing result file, one that isn't JSON or has no `ok`, or
 a non-zero exit is a failed run, shown with the program's output.
 
+### What actions did (`actions.json`)
+
+Every run of a finding action that isn't a dry run is saved at once on
+its finding in the history's `actions.json`, a state file like the others
+(encrypted with the history, committed and pushed with the fixed message
+`pathwarden: save what a finding action did`). It is a file of its own
+because `findings.json` is rebuilt every run.
+
+```json
+{ "version": 1,
+  "findings": { "PW-001-8ae0b31a46eacada": {
+    "activity": [ { "at": "2026-11-18T14:02:11.123Z", "by": "NORTH\\eddard.stark",
+                    "on": "SECOPS-WS02", "run_id": "20261118T140200.000Z",
+                    "action": "service-desk/open", "label": "Open a service request",
+                    "ok": true, "message": "Opened RITM10816190.",
+                    "record_ids": ["4f1c"], "dry_run": false } ],
+    "records": [ { "action": "service-desk/open", "id": "4f1c", "kind": "request",
+                   "number": "RITM10816190", "status": "Open", "open": true,
+                   "url": "https://example.service-now.com/...", "fields": {},
+                   "by": "NORTH\\eddard.stark", "on": "SECOPS-WS02",
+                   "at": "2026-11-18T14:02:11.123Z",
+                   "updated_at": "2026-11-18T14:02:11.123Z" } ] } } }
+```
+
+| Field | Meaning |
+|---|---|
+| `findings` | By fingerprint, as the event has it. |
+| `activity` | Oldest first; the latest 100 of a finding are kept. Each: `at` (RFC 3339, UTC, with milliseconds), `by` and `on` (the user and computer, each optional), `run_id` (the run the finding was in, optional), `action` (`<name>/<id>`), `label` (the action's then), `ok`, `message` (the result's, or what went wrong), `record_ids` (the records it made, changed or removed), `dry_run` (always false) and `kind` (absent for a run; `remove` when someone removed a record, with `action` the record's). |
+| `records` | What the actions returned (a [result's record](#finding-actions-pathwardenaction-v1)), plus `action` (the action that made it), `by`, `on` and `at` (who first made it, where and when) and `updated_at`. A follow-up that returns the same `id` updates the record of its block, keeping when and by whom it was first made. A record stays until someone removes it (`pathwarden action records remove`), which is logged as activity. |
+
+When another computer pushed first, the change is made again on what it
+left, finding by finding: activity is the union of both (one entry per
+`at`, `by` and `action`), and records are matched by `action` and `id`,
+the newer `updated_at` winning. Fields this version doesn't know, in the
+file, a finding or an entry, are kept as they are.
+
 ## What older releases do with newer files
 
 The published releases can't follow the policy where they predate it.
@@ -445,6 +482,7 @@ What each does with what 0.2 writes:
 | 0.1.5, 0.1.6 | Refuse `findings.json` above version 1, and an encrypted history (the stub). Read history points, `last-run.json` and run files without checking their version. Never see full runs, settings in the repository, or a loaded run (`summary.v2.json`). Refuse a top-level or `[state]` key they don't know in `pathwarden.toml`, so `format = 2` too. |
 | 0.1.7 | As 0.1.6, and reads an encrypted history of marker format 1 only: it refuses format 2. Refuses `[state]` keys it doesn't know (for example `full_runs_kept`, `refresh`). |
 | 0.2.0 | Ignores `last-run.json`'s `hosts` and drops it when it writes the file, so the next run of 0.3 treats that run as an upgrade (see `last-run.json`). Holds a finding whose `requires` has session or local group units (`s:`, `l:`) it doesn't know, with the wrong reason ("its source did not report covering the affected host this run"), until a run sees the finding again. Ignores the paths' `edge_hosts`. A `last-run.json` written by a development build between 0.2.0 and 0.3 with stored credential units (`h:`) in `sources` makes 0.2.0 hold every attack path for one run, as a missing source. |
+| 1.0.0-rc.2 and earlier | Keep `actions.json` as the repository has it: they commit only the files they know, and their pull cleans only files no commit holds. They don't read it, so their runs' findings carry no `actions`. |
 | 0.1.9 | Leaves full runs of format 2 alone and says to update. Refuses an encrypted history of marker format 2. Reads `settings/pathwarden.toml` without checking `format`, keeping the keys it doesn't know aside. Doesn't see runs loaded by 0.2. |
 
 **Going back to 0.1.9 on a computer that loaded full runs with 0.2.** 0.1.9

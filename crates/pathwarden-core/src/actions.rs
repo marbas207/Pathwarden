@@ -119,21 +119,39 @@ pub struct ActionDef {
     /// Only offered as a follow-up on a record (`for: "record"`).
     #[serde(rename = "for", skip_serializing_if = "Option::is_none")]
     pub for_: Option<For>,
-    /// Only offered once the finding is fixed (`when: "fixed"`).
+    /// Where the finding must stand for it to be offered (`when`: open,
+    /// held, accepted, fixed), as the program gave it; `None` when it gave
+    /// none ([`ActionDef::offered_when`] has the defaults).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub when: Option<When>,
+    pub when: Option<Vec<FindingStatus>>,
+}
+
+/// Where a finding stands for an action without `when`: open, held or
+/// accepted. A fixed finding is offered only the actions that list
+/// `fixed`, and the follow-ups on its records.
+pub const DEFAULT_WHEN: [FindingStatus; 3] = [
+    FindingStatus::Open,
+    FindingStatus::Held,
+    FindingStatus::Accepted,
+];
+
+impl ActionDef {
+    /// Whether it may be offered on a finding that stands at `status`: one
+    /// `when` lists, or without `when` open, held or accepted
+    /// ([`DEFAULT_WHEN`]); a follow-up (`for: "record"`) without `when`, on
+    /// a record of a finding however it stands.
+    pub fn offered_when(&self, status: FindingStatus) -> bool {
+        match &self.when {
+            Some(w) => w.contains(&status),
+            None => self.for_ == Some(For::Record) || DEFAULT_WHEN.contains(&status),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum For {
     Record,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum When {
-    Fixed,
 }
 
 /// Which findings an action is for: an `[[action]]` block's filters, or
@@ -379,6 +397,46 @@ fn filters_of(o: &Map<String, Value>, path: &str, p: &mut Problems) -> Option<Fi
     (p.0.len() == before).then_some(f)
 }
 
+/// Reads an action's `when`: one of open, held, accepted, fixed, or a
+/// list of them (`"fixed"` is `["fixed"]`). `Some(None)` when absent;
+/// `None` when it can't be used.
+fn when_of(v: Option<&Value>, path: &str, p: &mut Problems) -> Option<Option<Vec<FindingStatus>>> {
+    const NAMES: &str = "open, held, accepted, fixed";
+    let at = format!("{path}.when");
+    let items: Vec<&Value> = match v {
+        None | Some(Value::Null) => return Some(None),
+        Some(Value::Array(items)) => items.iter().collect(),
+        Some(one) => vec![one],
+    };
+    if items.is_empty() {
+        p.add(&at, format!("must list at least one of {NAMES}"));
+        return None;
+    }
+    let before = p.0.len();
+    let mut out = Vec::new();
+    for (i, item) in items.iter().enumerate() {
+        let here = if matches!(v, Some(Value::Array(_))) {
+            format!("{at}[{i}]")
+        } else {
+            at.clone()
+        };
+        let status = match item.as_str() {
+            Some("open") => FindingStatus::Open,
+            Some("held") => FindingStatus::Held,
+            Some("accepted") => FindingStatus::Accepted,
+            Some("fixed") => FindingStatus::Fixed,
+            _ => {
+                p.add(&here, format!("{item} isn't one of {NAMES}"));
+                continue;
+            }
+        };
+        if !out.contains(&status) {
+            out.push(status);
+        }
+    }
+    (p.0.len() == before).then_some(Some(out))
+}
+
 /// Reads input `i` of an action. `None` when it can't be used.
 fn input_of(v: &Value, path: &str, p: &mut Problems) -> Option<InputDef> {
     let before = p.0.len();
@@ -616,17 +674,7 @@ fn action_of(v: &Value, path: &str, p: &mut Problems) -> Option<ActionDef> {
             None
         }
     };
-    let when = match o.get("when") {
-        None | Some(Value::Null) => Some(None),
-        Some(Value::String(s)) if s == "fixed" => Some(Some(When::Fixed)),
-        Some(other) => {
-            p.add(
-                &format!("{path}.when"),
-                format!("{other} isn't \"fixed\", the only value v1 knows"),
-            );
-            None
-        }
-    };
+    let when = when_of(o.get("when"), path, p);
     block(p, at);
     let mut follow_ups = Vec::new();
     match o.get("follow_ups") {
@@ -1237,7 +1285,7 @@ pub fn parse_result(bytes: &[u8]) -> Result<(ActionResult, Vec<String>), Vec<Str
 // ------------------------------------------------------------- finding
 
 /// Where a finding stands in the run the request is built from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum FindingStatus {
     Open,
@@ -1428,18 +1476,18 @@ fn offer(config: &ActionConfig, def: &ActionDef) -> Offered {
 }
 
 /// Whether `def` of `config` may be offered on `f` at all: the block's
-/// filters, the action's `applies_to`, and `when`.
+/// filters, the action's `applies_to`, and `when`
+/// ([`ActionDef::offered_when`]).
 fn may_offer(config: &ActionConfig, def: &ActionDef, f: &FindingContext) -> bool {
-    Filters::of_config(config).matches(f)
-        && def.applies_to.matches(f)
-        && (def.when != Some(When::Fixed) || f.status == FindingStatus::Fixed)
+    Filters::of_config(config).matches(f) && def.applies_to.matches(f) && def.offered_when(f.status)
 }
 
 /// The actions offered on finding `f`, in config order and then each
 /// program's order: those whose block filters and `applies_to` match,
-/// that aren't only for records (`for: "record"`), that wait for a fix
-/// (`when: "fixed"`) only once it is fixed, and, for `once`, while `f`
-/// has no open record from that action. `records` are `f`'s records.
+/// that aren't only for records (`for: "record"`), whose `when` lists
+/// where `f` stands (without one: open, held or accepted, never fixed),
+/// and, for `once`, while `f` has no open record from that action.
+/// `records` are `f`'s records.
 pub fn offered(programs: &[Program], f: &FindingContext, records: &[ActionRecord]) -> Vec<Offered> {
     let mut out = Vec::new();
     for p in programs {
@@ -1463,7 +1511,8 @@ pub fn offered(programs: &[Program], f: &FindingContext, records: &[ActionRecord
 
 /// The follow-ups offered on `record` of finding `f`: those the action
 /// that made it lists, of the same program, that may be offered on `f`
-/// (the filters and `when`), in the order it lists them.
+/// (the filters, and `when`: without one, a follow-up is offered however
+/// `f` stands, fixed too), in the order it lists them.
 pub fn follow_ups(programs: &[Program], f: &FindingContext, record: &ActionRecord) -> Vec<Offered> {
     let Some((name, id)) = record.action.split_once('/') else {
         return Vec::new();
@@ -1600,36 +1649,89 @@ pub fn finding_request(f: &FindingContext, dry_run: bool, who: &crate::identity:
     })
 }
 
-/// A run, ready to start: the block, the action and the request.
+/// A run, ready to start: the block, the action and the request, and for
+/// a follow-up the record it runs on.
 #[derive(Debug, Clone)]
 pub struct Prepared {
     pub config: ActionConfig,
     pub offered: Offered,
     pub request: Value,
+    pub record: Option<ActionRecord>,
 }
 
 /// What someone asks to run ([`prepare`]): the action (see [`pick`]),
-/// inputs by ID, and whether it is a dry run.
+/// inputs by ID, whether it is a dry run, and for a follow-up the ID of
+/// the finding's record it runs on.
 #[derive(Debug, Clone, Default)]
 pub struct Ask {
     pub action: Option<String>,
     pub inputs: Map<String, Value>,
     pub dry_run: bool,
+    pub record: Option<String>,
+}
+
+/// The record `id` (any case) among a finding's `records`. The error says
+/// why in words: there is none, or two actions made one with that ID.
+pub fn find_record<'a>(records: &'a [ActionRecord], id: &str) -> Result<&'a ActionRecord, String> {
+    let id = id.trim();
+    let found: Vec<&ActionRecord> = records
+        .iter()
+        .filter(|r| r.record.id.eq_ignore_ascii_case(id))
+        .collect();
+    match found.as_slice() {
+        [one] => Ok(one),
+        [] if records.is_empty() => Err(format!("This finding has no records, so none is {id}.")),
+        [] => Err(format!(
+            "This finding has no record {id}. Its records: {}.",
+            records
+                .iter()
+                .map(|r| r.record.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+        _ => Err(format!(
+            "Two actions made a record {id} on this finding ({}), so it can't be told which.",
+            found
+                .iter()
+                .map(|r| r.action.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
 }
 
 /// Picks the action `ask` names on finding `f` among the described
 /// `programs`, checks the inputs and builds the request. `records` are
-/// `f`'s records. A `for: "record"` action is refused here: it runs as a
-/// follow-up on a record. The error says what is wrong, in words.
+/// `f`'s records. With `ask.record`, the action is one of that record's
+/// follow-ups ([`follow_ups`]); without, a `for: "record"` action is
+/// refused: it runs as a follow-up on a record. The error says what is
+/// wrong, in words.
 pub fn prepare(
     programs: &[Program],
     f: &FindingContext,
     records: &[ActionRecord],
     ask: &Ask,
 ) -> Result<Prepared, String> {
-    let offered = offered(programs, f, records);
+    let record = match &ask.record {
+        Some(id) => Some(find_record(records, id)?.clone()),
+        None => None,
+    };
+    let offered = match &record {
+        Some(r) => follow_ups(programs, f, r),
+        None => offered(programs, f, records),
+    };
     let o = match pick(&offered, ask.action.as_deref()) {
         Ok(o) => o.clone(),
+        Err(_) if record.is_some() && offered.is_empty() => {
+            return Err(format!(
+                "No follow-up applies to record {} of this finding.",
+                record
+                    .as_ref()
+                    .map(|r| r.record.id.as_str())
+                    .unwrap_or_default()
+            ))
+        }
+        Err(e) if record.is_some() => return Err(e.replace("this finding", "this record")),
         Err(e) => {
             // A follow-up named directly: say where it runs.
             let follow_up = ask
@@ -1644,9 +1746,18 @@ pub fn prepare(
                         .filter(|d| d.for_ == Some(For::Record))
                 });
             return Err(match follow_up {
-                Some(d) => format!(
+                Some(d) if records.is_empty() => format!(
                     "{} runs on a record of this finding, and it has none.",
                     d.label
+                ),
+                Some(d) => format!(
+                    "{} runs on a record of this finding: name one of {}.",
+                    d.label,
+                    records
+                        .iter()
+                        .map(|r| r.record.id.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 ),
                 None => e,
             });
@@ -1664,13 +1775,14 @@ pub fn prepare(
         f,
         &inputs,
         ask.dry_run,
-        None,
+        record.as_ref().map(|r| &r.record),
         &crate::identity::Actor::current(),
     );
     Ok(Prepared {
         config,
         offered: o,
         request,
+        record,
     })
 }
 
