@@ -15,9 +15,9 @@ domain itself; the **lean** one analyzes SharpHound or RustHound-CE files.
 2. Unzip `pathwarden.exe` anywhere. The ServiceNow and Jira plugins go next
    to it.
 
-On Linux, [build from source](dev/building.md) for now; Linux releases come
-with 1.0.0-rc.2. There is no desktop window on Linux: `pathwarden ui` opens
-the app in your browser.
+On Linux, download a `linux-x64` archive from the same page, verify it and
+unpack it. There is no desktop window on Linux: `pathwarden ui` opens the app
+in your browser.
 
 ## 2. Try the demo
 

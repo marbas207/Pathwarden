@@ -9,11 +9,11 @@ what is next. The open issues on GitHub are the detailed list.
 
 ## 1.0 release candidates
 
-1.0.0-rc.1 is out. From here to 1.0, release candidates carry fixes only.
+1.0.0-rc.2 is out. From here to 1.0, release candidates carry fixes only.
 
-- **1.0.0-rc.2:** when a domain fails in a later collection, its numbers are
+- **1.0.0-rc.3:** when a domain fails in a later collection, its numbers are
   carried from its last good collection, marked with that date, so trends
-  stay on one line. Fixes reported against rc.1.
+  stay on one line. Fixes reported against rc.2.
 - **1.0:** when the release candidates have run without new problems.
 
 ## After 1.0
