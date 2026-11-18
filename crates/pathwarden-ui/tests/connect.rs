@@ -1,5 +1,5 @@
 //! Connect to a run history in the app: the page's steps through
-//! its API (look at it, the passphrase, connect), the note on Runs, the
+//! its API (connect, the passphrase, use this history), the note on Runs, the
 //! New environment choice, and Start a new run history refusing a
 //! repository that holds one. A local bare repository; no network.
 
@@ -264,7 +264,7 @@ async fn the_page_looks_opens_and_connects() {
         "Push runs from this computer",
         "What it keeps and its encryption come from the run history.",
         "Encrypted. Your passphrase opens it.",
-        "Connect and sync",
+        "Use this history and sync",
     ] {
         assert!(page.contains(want), "{want}");
     }

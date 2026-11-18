@@ -143,10 +143,11 @@ use `pathwarden history storage set` or `pathwarden env create --from-git`.
 This needs `pathwarden ui --allow-destinations` (see above).
 
 1. **Where is it?**: the repository URL and branch, or a shared folder.
-   Click **Look at it**. Never put a password in the URL.
+   Click **Connect**. Pathwarden downloads a copy to show what the history
+   holds; a large one can take a few minutes. Never put a password in the URL.
 2. **What it holds**: for an encrypted history, enter the passphrase.
 3. **Open and sync**: name the environment, choose **Push runs from this
-   computer** or **Read only**, and click **Connect and sync**.
+   computer** or **Read only**, and click **Use this history and sync**.
 
 ## Where your data goes
 

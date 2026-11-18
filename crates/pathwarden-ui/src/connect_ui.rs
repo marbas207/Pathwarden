@@ -206,7 +206,7 @@ fn where_card(q: &PageQuery) -> String {
   <div class="field"><label for="cx-branch">Branch</label><input class="input mono" id="cx-branch" value="{branch}" placeholder="The repository's default branch" autocomplete="off" spellcheck="false"><p class="hint">Leave it empty unless your team uses another branch.</p></div>
 </div>
 <div class="field" data-when-kind="folder"{folder_hidden}><label for="cx-folder">Folder</label><input class="input mono" id="cx-folder" value="{folder_value}" placeholder="\\fileserver\security\pathwarden-history" autocomplete="off" spellcheck="false"><p class="hint">The folder that holds the history itself.</p></div>
-<div class="card-actions"><button type="button" class="btn primary" id="cx-look">{search} Look at it</button><span class="muted small cx-quiet">Pathwarden only reads it. Nothing is pushed.</span></div>
+<div class="card-actions"><button type="button" class="btn primary" id="cx-look">{search} Connect</button><span class="muted small cx-quiet">Pathwarden only reads it. Nothing is pushed.</span></div>
 </section>"#,
         env = attr(q.env.as_deref().unwrap_or_default()),
         git_on = if folder { "" } else { " checked" },
@@ -507,7 +507,7 @@ fn this_computer(st: &AppState, s: &Session, found: &Found, lock: shared::Lock) 
             false
         ),
         i = icon(if git { "i-sync" } else { "i-download" }),
-        go = if git { "Connect and sync" } else { "Connect" },
+        go = if git { "Use this history and sync" } else { "Use this history" },
         is_new = target.is_none(),
         what = esc(&match &target_name {
             Some(n) => format!("Connects {n} and loads its runs."),
@@ -630,7 +630,7 @@ struct ProbeBody {
     env: Option<String>,
 }
 
-/// `POST /api/connect/probe`: step 1's Look at it. `{token}`, or the
+/// `POST /api/connect/probe`: step 1's Connect. `{token}`, or the
 /// refusal as a note to show.
 async fn probe_api(State(st): State<Shared>, Json(body): Json<ProbeBody>) -> Response {
     if let Some(r) = locked(&st) {
@@ -717,7 +717,7 @@ async fn open_api(State(st): State<Shared>, SecretJson(body): SecretJson<OpenBod
 
 /// A probe that is gone (connected or cancelled meanwhile, or older than
 /// a day).
-const GONE: &str = "This page is out of date: look at the run history again.";
+const GONE: &str = "This page is out of date: connect to the run history again.";
 
 #[derive(Deserialize)]
 struct GoBody {

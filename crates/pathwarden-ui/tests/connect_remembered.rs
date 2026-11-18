@@ -200,7 +200,7 @@ async fn a_passphrase_kept_here_opens_and_connects() {
             !page.contains("Enter the passphrase to open it"),
             "round {round}: no passphrase asked: {page}"
         );
-        for want in ["Encrypted.", "Connect and sync"] {
+        for want in ["Encrypted.", "Use this history and sync"] {
             assert!(page.contains(want), "round {round}: {want}");
         }
         // Remember is offered; ticked for one kept on this computer (in

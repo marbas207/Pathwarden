@@ -47,7 +47,7 @@
       }
       look.disabled = true;
       msg.innerHTML = "";
-      if (quiet) quiet.textContent = "Looking at it…";
+      if (quiet) quiet.textContent = body.kind === "git" ? "Downloading the history… A large one can take a few minutes." : "Reading the folder…";
       post("/api/connect/probe", body).then(function (j) {
         location.href = "/environments/connect?s=" + encodeURIComponent(j.token);
       }, function (e) {
