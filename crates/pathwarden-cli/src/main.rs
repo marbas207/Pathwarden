@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
 
+mod action_cmd;
 mod changes_cmd;
 mod config_cmd;
 mod demo;
@@ -623,6 +624,10 @@ not new, and does not fail --fail-on new."
     /// Output plugins that run after each run: ServiceNow, Jira, your own script;
     /// add, remove, test (the app's Ticketing and alerts page).
     Plugins(plugins_cmd::PluginsArgs),
+    /// Finding actions: your own program for one finding, run when you ask
+    /// (open a ticket, alert a team); list, run, add, remove, test, and
+    /// request and check for writing one.
+    Action(action_cmd::ActionArgs),
     /// The environments of the app's workspace: list, create, set domains,
     /// use, rename or remove them.
     Env {
@@ -1091,6 +1096,7 @@ impl Command {
             | Command::Zones { .. }
             | Command::Mappings(_)
             | Command::Plugins(_)
+            | Command::Action(_)
             | Command::Export(_)
             | Command::Schedule(_)
             | Command::Rules { .. }
@@ -1481,6 +1487,7 @@ fn run(mut command: Command) -> Result<ExitCode> {
         Command::Config(args) => config_cmd::run(args),
         Command::Mappings(args) => mappings_cmd::run(args),
         Command::Plugins(args) => plugins_cmd::run(args),
+        Command::Action(args) => return action_cmd::run(args),
         Command::Env { action } => match action {
             EnvAction::List { workspace, json } => save_cmd::env_list(workspace.as_deref(), json),
             EnvAction::Rename {

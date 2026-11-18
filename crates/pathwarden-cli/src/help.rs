@@ -41,8 +41,8 @@ pub const GROUPS: &[(&str, &[&str])] = &[
     (
         "Configure & automate",
         &[
-            "run", "env", "config", "zones", "mappings", "plugins", "schedule", "export", "rules",
-            "guide",
+            "run", "env", "config", "zones", "mappings", "plugins", "action", "schedule", "export",
+            "rules", "guide",
         ],
     ),
 ];

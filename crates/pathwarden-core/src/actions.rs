@@ -35,7 +35,8 @@ use sha2::{Digest, Sha256};
 
 use crate::config::ActionConfig;
 use crate::findings::{Category, Severity};
-use crate::plugins::{self, CancelHandle, PluginError};
+pub use crate::plugins::CancelHandle;
+use crate::plugins::{self, PluginError};
 
 pub const DESCRIBE_SCHEMA: &str = "pathwarden.action-describe.v1";
 pub const REQUEST_SCHEMA: &str = "pathwarden.action-request.v1";
@@ -1541,6 +1542,24 @@ pub fn run_request(
         "run": f.run,
         "finding": f.finding,
         "record": record,
+        "requested_by": { "by": who.user, "on": who.computer },
+    })
+}
+
+/// A `run` request for finding `f` with no action, inputs or settings:
+/// what `pathwarden action request` prints when no action is set up, for
+/// someone writing one.
+pub fn finding_request(f: &FindingContext, dry_run: bool, who: &crate::identity::Actor) -> Value {
+    json!({
+        "schema": REQUEST_SCHEMA,
+        "kind": "run",
+        "action": "",
+        "inputs": {},
+        "dry_run": dry_run,
+        "settings": {},
+        "run": f.run,
+        "finding": f.finding,
+        "record": null,
         "requested_by": { "by": who.user, "on": who.computer },
     })
 }
