@@ -13,7 +13,9 @@ what is next. The open issues on GitHub are the detailed list.
 
 - **1.0.0-rc.3:** when a domain fails in a later collection, its numbers are
   carried from its last good collection, marked with that date, so trends
-  stay on one line. Fixes reported against rc.2.
+  stay on one line. Finding actions: your own buttons on a finding (open a
+  ticket, alert a team, run a check), and a record of what they did that
+  everyone sharing the history sees. Fixes reported against rc.2.
 - **1.0:** when the release candidates have run without new problems.
 
 ## After 1.0
