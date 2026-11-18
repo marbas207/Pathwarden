@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/marbas207/Pathwarden/blob/main/docs/schemas/action-result.v1.json",
+  "title": "Pathwarden finding action: result (pathwarden.action-result.v1)",
+  "description": "What a finding action program writes to the file named in PATHWARDEN_ACTION_RESULT when PATHWARDEN_ACTION_REQUEST is run: whether it worked, a message, links and records. docs/actions.md explains each field. A result that passes this schema is kept as it is; Pathwarden cuts a text that is too long and leaves out a link or record it can't keep, each with a problem `pathwarden action check` names. No text is ever read as HTML. Fields Pathwarden doesn't know are ignored, so the schema allows them.",
+  "type": "object",
+  "required": ["schema", "ok"],
+  "properties": {
+    "schema": {
+      "const": "pathwarden.action-result.v1",
+      "$comment": "Missing: noted as a problem. Another value: the run failed."
+    },
+    "ok": {
+      "type": "boolean",
+      "description": "Whether the action worked. Missing or not true or false: the run failed. A run counts as worked only when ok is true and the program exited 0."
+    },
+    "message": {
+      "type": ["string", "null"],
+      "maxLength": 2000,
+      "description": "What happened, in plain words, at most 2,000 characters. It may hold line breaks. Empty: \"Done.\" when it worked."
+    },
+    "links": {
+      "type": ["array", "null"],
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/link"},
+      "description": "At most 5 links the result card offers."
+    },
+    "records": {
+      "type": ["array", "null"],
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/record"},
+      "description": "At most 5 things the action created or looks after, saved on the finding. Each id must be unique in the list.",
+      "$comment": "Each record's id must be unique in the list; a second one is left out."
+    }
+  },
+  "$defs": {
+    "url": {
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^\\s*[Hh][Tt][Tt][Pp][Ss]://(?!:[0-9]*([/?#]|\\s*$))[^/?#@\\\\<>\"\\s\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\u200e\\u200f\\u061c]+([/?#][^\\s\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\u200e\\u200f\\u061c]*)?\\s*$",
+      "description": "An https:// address with a host and without a user name or password, spaces or control characters, at most 2,048 characters."
+    },
+    "text": {"type": ["string", "null"], "maxLength": 200},
+    "link": {
+      "type": "object",
+      "required": ["label", "url"],
+      "properties": {
+        "label": {
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 80,
+          "description": "The link's text, at most 80 characters."
+        },
+        "url": {"$ref": "#/$defs/url"}
+      }
+    },
+    "record": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "\\S",
+          "maxLength": 200,
+          "description": "The record's ID in the other system, at most 200 characters. A follow-up returns the same id to update the record. Missing, empty or too long: the record is left out."
+        },
+        "kind": {"$ref": "#/$defs/text", "description": "What it is, e.g. ticket or request."},
+        "label": {"$ref": "#/$defs/text", "description": "A name to show when it has no number."},
+        "number": {
+          "$ref": "#/$defs/text",
+          "description": "The number people know it by, e.g. RITM10816190. Shown on the chip."
+        },
+        "url": {
+          "oneOf": [{"type": "null"}, {"$ref": "#/$defs/url"}],
+          "description": "Where to open it. Not https://: left out, the record kept."
+        },
+        "status": {
+          "$ref": "#/$defs/text",
+          "description": "Its status in the other system, e.g. Open. Shown on the chip."
+        },
+        "open": {
+          "type": ["boolean", "null"],
+          "description": "True while it is open in the other system: an action with once stays hidden, and a fixed finding's chip says it is still open. Default false."
+        },
+        "fields": {
+          "type": ["object", "null"],
+          "maxProperties": 20,
+          "propertyNames": {"minLength": 1, "maxLength": 60},
+          "additionalProperties": {"type": ["string", "number", "boolean"], "maxLength": 200},
+          "description": "At most 20 named values to show with it. Names at most 60 characters; values text (numbers and true or false are kept as text), at most 200 characters."
+        }
+      }
+    }
+  }
+}

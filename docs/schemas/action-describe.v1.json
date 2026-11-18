@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/marbas207/Pathwarden/blob/main/docs/schemas/action-describe.v1.json",
+  "title": "Pathwarden finding action: describe answer (pathwarden.action-describe.v1)",
+  "description": "What a finding action program writes to the file named in PATHWARDEN_ACTION_RESULT when PATHWARDEN_ACTION_REQUEST is describe: the actions it offers, in order. docs/actions.md explains each field. A document that passes this schema passes `pathwarden action check`'s describe checks; the few rules JSON Schema can't say are in $comment. Fields Pathwarden doesn't know are ignored, so the schema allows them.",
+  "type": "object",
+  "required": ["schema", "actions"],
+  "properties": {
+    "schema": {
+      "const": "pathwarden.action-describe.v1",
+      "$comment": "Missing: noted as a problem. Another value: the whole answer is refused."
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {"$ref": "#/$defs/action"},
+      "$comment": "Each action's id must be unique. Past 20, the rest are left out."
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]{1,40}$",
+      "description": "Lowercase letters, digits, - and _, at most 40."
+    },
+    "text": {
+      "type": "string",
+      "pattern": "\\S",
+      "description": "Text that isn't only spaces. Control and bidi characters are dropped, and the text is trimmed, before its length is checked."
+    },
+    "action": {
+      "type": "object",
+      "required": ["id", "label", "sends"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id",
+          "description": "The action's ID in this program. Pathwarden addresses it as <block name>/<id>, e.g. desk/open."
+        },
+        "label": {
+          "allOf": [{"$ref": "#/$defs/text"}, {"maxLength": 80}],
+          "description": "The button, at most 80 characters."
+        },
+        "description": {
+          "type": ["string", "null"],
+          "maxLength": 300,
+          "description": "One line under the dialog's title, at most 300 characters."
+        },
+        "sends": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "What leaves the computer, in plain words, at most 500 characters. Shown before every run."
+        },
+        "applies_to": {
+          "type": ["object", "null"],
+          "description": "Which findings the action is for, on top of the [[action]] block's own filters. Empty or missing: every finding.",
+          "properties": {
+            "min_severity": {
+              "type": ["string", "null"],
+              "pattern": "^\\s*([Cc][Rr][Ii][Tt][Ii][Cc][Aa][Ll]|[Hh][Ii][Gg][Hh]|[Mm][Ee][Dd][Ii][Uu][Mm]|[Ll][Oo][Ww]|[Ii][Nn][Ff][Oo])\\s*$",
+              "description": "Only findings at least this severe: critical, high, medium, low or info, in any case."
+            },
+            "rules": {
+              "type": ["array", "null"],
+              "items": {"type": "string", "pattern": "^[A-Za-z0-9-]+$"},
+              "description": "Rule IDs such as PW-001, any case."
+            },
+            "categories": {
+              "type": ["array", "null"],
+              "items": {
+                "type": "string",
+                "pattern": "^([-_ ]*[Aa][-_ ]*[Tt][-_ ]*[Tt][-_ ]*[Aa][-_ ]*[Cc][-_ ]*[Kk][-_ ]*[Pp][-_ ]*[Aa][-_ ]*[Tt][-_ ]*[Hh][-_ ]*([Ss][-_ ]*)?|[-_ ]*[Hh][-_ ]*[Yy][-_ ]*[Gg][-_ ]*[Ii][-_ ]*[Ee][-_ ]*[Nn][-_ ]*[Ee][-_ ]*)$"
+              },
+              "description": "attack_path or hygiene. Pathwarden reads them in any case, with or without - and _ (attack-path, AttackPath)."
+            }
+          }
+        },
+        "inputs": {
+          "type": ["array", "null"],
+          "maxItems": 20,
+          "items": {"$ref": "#/$defs/input"},
+          "$comment": "Each input's id must be unique within the action."
+        },
+        "once": {
+          "type": ["boolean", "null"],
+          "description": "True: hide the action while the finding has an open record from it."
+        },
+        "follow_ups": {
+          "type": ["array", "null"],
+          "items": {"$ref": "#/$defs/id"},
+          "$comment": "Each must be the id of an action of this program with for: \"record\"; another is dropped with a problem."
+        },
+        "for": {
+          "type": ["string", "null"],
+          "enum": ["record", null],
+          "description": "\"record\": only offered as a follow-up on a record this program returned."
+        },
+        "when": {
+          "description": "The finding statuses the action is offered on. Default: open, held and accepted. A fixed finding shows only actions whose list has fixed. \"fixed\" alone is the older form of [\"fixed\"].",
+          "oneOf": [
+            {"type": "null"},
+            {"const": "fixed"},
+            {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"enum": ["open", "held", "accepted", "fixed"]}
+            }
+          ]
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": ["id", "label", "type"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id", "description": "The key of this input in the request's inputs."},
+        "label": {
+          "allOf": [{"$ref": "#/$defs/text"}, {"maxLength": 80}],
+          "description": "The field's name in the dialog, at most 80 characters."
+        },
+        "type": {"enum": ["text", "textarea", "choice", "bool"]},
+        "required": {
+          "type": ["boolean", "null"],
+          "description": "True: the action can't run while it is empty. Default false."
+        },
+        "max": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "text: at most 1,000 (default 200). textarea: at most 4,000 (default 2,000). Not for choice or bool."
+        },
+        "choices": {
+          "type": ["array", "null"],
+          "minItems": 1,
+          "maxItems": 50,
+          "uniqueItems": true,
+          "items": {"allOf": [{"$ref": "#/$defs/text"}, {"maxLength": 100}]},
+          "description": "choice only: the choices, in order, each at most 100 characters."
+        },
+        "default": {
+          "description": "bool: true or false. choice: one of the choices (default: the first). text and textarea: text no longer than max, without control characters (a textarea may hold line breaks and tabs)."
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "text"}}},
+          "then": {
+            "properties": {
+              "max": {"maximum": 1000},
+              "default": {
+                "type": ["string", "null"],
+                "maxLength": 1000,
+                "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\u200e\\u200f\\u061c]*$"
+              }
+            },
+            "$comment": "A default longer than max (200 without one) is refused."
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "textarea"}}},
+          "then": {
+            "properties": {
+              "max": {"maximum": 4000},
+              "default": {
+                "type": ["string", "null"],
+                "maxLength": 4000,
+                "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f-\\u009f\\u202a-\\u202e\\u2066-\\u2069\\u200e\\u200f\\u061c]*$"
+              }
+            },
+            "$comment": "A default longer than max (2,000 without one) is refused."
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "choice"}}},
+          "then": {
+            "required": ["choices"],
+            "properties": {"max": {"type": "null"}, "default": {"type": ["string", "null"]}},
+            "$comment": "default must be one of the choices."
+          }
+        },
+        {
+          "if": {"properties": {"type": {"const": "bool"}}},
+          "then": {"properties": {"max": {"type": "null"}, "default": {"type": ["boolean", "null"]}}}
+        }
+      ]
+    }
+  }
+}

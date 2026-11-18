@@ -74,6 +74,8 @@ See the [sample report](docs/sample-report.html).
 - [Coverage comparison](docs/coverage.md) with BloodHound Enterprise and
   BloodHound CE.
 - [How it works](docs/how-it-works.md) and the [rules](docs/rules.md).
+- [Output plugins](docs/plugins.md), and [writing an action](docs/actions.md):
+  your own buttons on a finding.
 - For developers and reviewers: [building](docs/dev/building.md),
   [threat model](docs/dev/threat-model.md) and
   [file formats](docs/dev/formats.md).

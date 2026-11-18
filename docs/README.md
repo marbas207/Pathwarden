@@ -27,6 +27,8 @@
   [ServiceNow](../crates/pathwarden-output-servicenow/README.md) and
   [Jira](../crates/pathwarden-output-jira/README.md) plugins.
 - [Integrations](integrations.md): SARIF, DefectDojo, Jira and PingCastle.
+- [Writing an action](actions.md): your own buttons on a finding, with the
+  [examples and helpers](../examples/actions/README.md).
 
 ## For developers and reviewers
 

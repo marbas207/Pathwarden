@@ -1,0 +1,6 @@
+match,owner,contact
+SVC-*@SCALE.LOCAL,Service accounts team,svc-owners@scale.example
+*ADMINS@SCALE.LOCAL,Identity team,identity@scale.example
+HELPDESK*@SCALE.LOCAL,Service desk,servicedesk@scale.example
+*$@SCALE.LOCAL,Server team,servers@scale.example
+*.SCALE.LOCAL,Server team,servers@scale.example

@@ -7,10 +7,9 @@ alerts, SIEM, email or anything you write. The
 Pathwarden. For tools that import files instead, see
 [integrations.md](integrations.md).
 
-Output plugins run on every run. To run your own program for one finding
-when someone asks (open a ticket, alert a team), add a finding action
-instead: an `[[action]]` block, set up with `pathwarden action add`. Its
-protocol is in [File formats](dev/formats.md#finding-actions-pathwardenaction-v1).
+Output plugins run on every run, by themselves. To run your own program
+for one finding when someone asks (open a ticket, alert a team), write a
+finding action instead: [Writing an action](actions.md).
 What each action did is saved on its finding in the run history
 (`pathwarden action records`, `pathwarden action activity`), and the event
 plugins get carries it as each finding's `actions`, so a plugin can, for

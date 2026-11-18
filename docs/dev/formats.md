@@ -378,7 +378,8 @@ write it to the run's working folder and delete it afterwards.
 ## Finding actions (`pathwarden.action-*.v1`)
 
 An `[[action]]` block in `pathwarden.toml` names a program someone runs
-for one finding, when they ask. Pathwarden writes one JSON request to
+for one finding, when they ask. [Writing an action](../actions.md) is the
+guide, with JSON Schemas in [docs/schemas](../schemas/). Pathwarden writes one JSON request to
 the program's stdin and names its kind, `describe` or `run`, in
 `PATHWARDEN_ACTION_REQUEST`. The program writes one JSON answer to the
 file named in `PATHWARDEN_ACTION_RESULT`. Each line it prints to stdout is

@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/marbas207/Pathwarden/blob/main/docs/schemas/action-request.v1.json",
+  "title": "Pathwarden finding action: request (pathwarden.action-request.v1)",
+  "description": "What Pathwarden writes to a finding action program's stdin: a describe request (what do you offer?) or a run request (run this action on this finding). PATHWARDEN_ACTION_REQUEST names the kind too. docs/actions.md explains each field. Within v1 fields are only added: a program must ignore fields it doesn't know, so the schema allows them.",
+  "type": "object",
+  "required": ["schema", "kind", "settings"],
+  "properties": {
+    "schema": { "const": "pathwarden.action-request.v1" },
+    "kind": { "enum": ["describe", "run"] },
+    "settings": {
+      "type": "object",
+      "description": "The [[action]] block's keys other than name, plugin, command, timeout_seconds, min_severity, rules and categories, as TOML gave them (text, numbers, true or false, lists, tables). A secret is never here: a setting whose name ends in _env names an environment variable, and that variable is in the program's environment."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "run" } } },
+      "then": {
+        "required": ["action", "inputs", "dry_run", "run", "finding", "record", "requested_by"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The id of the action to run, from the program's describe. Empty only in `pathwarden action request`'s output when no action is set up."
+          },
+          "inputs": {
+            "type": "object",
+            "additionalProperties": { "type": ["string", "boolean"] },
+            "description": "Every input the action describes, by id, already checked: text (trimmed; a textarea's line breaks as \\n) for text, textarea and choice inputs (a choice exactly as described), true or false for bool. An input left empty is \"\", or its default."
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "True: the program must change nothing. It may read, and should check everything it can short of changing something."
+          },
+          "run": {
+            "type": "object",
+            "required": ["run_id", "domains", "pathwarden"],
+            "properties": {
+              "run_id": { "type": ["string", "null"], "description": "The run the finding is in, e.g. 20261118T140200.000Z." },
+              "domains": { "type": ["array", "null"], "items": { "type": "string" }, "description": "The domains the run collected." },
+              "pathwarden": { "type": ["string", "null"], "description": "The Pathwarden version that analyzed the run." }
+            }
+          },
+          "finding": { "$ref": "#/$defs/finding" },
+          "record": {
+            "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/record" }],
+            "description": "For a follow-up (an action with for: \"record\"), the record it runs on, as saved on the finding; else null."
+          },
+          "requested_by": {
+            "type": "object",
+            "required": ["by", "on"],
+            "properties": {
+              "by": { "type": ["string", "null"], "description": "Who asked: the user, e.g. SCALE\\analyst. Null when unknown." },
+              "on": { "type": ["string", "null"], "description": "The computer they asked from. Null when unknown." }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "description": "The finding as the run's event document (pathwarden.event.v1, docs/dev/formats.md) has it, plus guide and status. An open or accepted finding has every field of the event's findings; a fixed one only those of resolved (fingerprint, rule, severity, first_seen, resolved_at, title), a held one only those of held (fingerprint, rule).",
+      "required": ["fingerprint", "rule", "status", "guide"],
+      "properties": {
+        "fingerprint": { "type": "string", "description": "The finding's ID, e.g. PW-006-1bbba15126c6fc31. It stays the same across runs: use it as the key in the other system." },
+        "rule": { "type": "string", "description": "The rule, e.g. PW-006." },
+        "status": { "enum": ["open", "held", "accepted", "fixed"], "description": "Where the finding stands in the run." },
+        "guide": { "type": ["string", "null"], "description": "The rule's step-by-step guide, in Markdown, or null." },
+        "title": { "type": ["string", "null"] },
+        "rule_title": { "type": ["string", "null"] },
+        "severity": { "type": ["string", "null"], "enum": ["critical", "high", "medium", "low", "info", null] },
+        "category": { "type": ["string", "null"], "enum": ["attack_path", "hygiene", null] },
+        "change": { "type": ["string", "null"], "description": "new, open, regressed or suppressed." },
+        "domain": { "type": ["string", "null"] },
+        "summary": { "type": ["string", "null"] },
+        "remediation": { "type": ["string", "null"] },
+        "affected": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": ["string", "null"] },
+              "kind": { "type": ["string", "null"] },
+              "detail": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "path": {
+          "type": ["object", "null"],
+          "properties": {
+            "source": { "type": "string" },
+            "target": { "type": "string" },
+            "steps": { "type": "array", "items": { "type": "object" } }
+          }
+        },
+        "references": { "type": ["array", "null"], "items": { "type": "string" } },
+        "suppressed": { "type": ["string", "null"], "description": "The accepted risk's reason, or null." },
+        "accepted": { "type": ["object", "null"], "description": "Who accepted the risk, when, its review date and notes." },
+        "first_seen": { "type": ["integer", "null"], "description": "Unix seconds." },
+        "resolved_at": { "type": ["integer", "null"], "description": "A fixed finding: when it was gone, in Unix seconds." },
+        "times_seen": { "type": ["integer", "null"] }
+      }
+    },
+    "record": {
+      "type": "object",
+      "required": ["id"],
+      "description": "A record kept on the finding: what a result returned (id, kind, label, number, url, status, open, fields), and which action made it, who first ran it, where and when, and when it last changed.",
+      "properties": {
+        "id": { "type": "string" },
+        "action": { "type": "string", "description": "The action that made it, as <block name>/<id>." },
+        "kind": { "type": ["string", "null"] },
+        "label": { "type": ["string", "null"] },
+        "number": { "type": ["string", "null"] },
+        "url": { "type": ["string", "null"] },
+        "status": { "type": ["string", "null"] },
+        "open": { "type": "boolean" },
+        "fields": { "type": "object", "additionalProperties": { "type": "string" } },
+        "by": { "type": ["string", "null"] },
+        "on": { "type": ["string", "null"] },
+        "at": { "type": "string" },
+        "updated_at": { "type": "string" }
+      }
+    }
+  }
+}

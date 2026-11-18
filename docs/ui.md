@@ -105,7 +105,8 @@ something else differs. The CLI equivalents are `pathwarden config sync --use-re
 A finding's action bar has **Retest**, **Accept risk** (a **Reason** and an
 optional **Review by** date), **Add a note**, **Open in Explore** and **Copy
 ID**. After the review date an accepted risk counts as open again. A
-downloaded report has no actions.
+downloaded report has no actions. Your own buttons, such as **Open a
+ticket**, are finding actions: [Writing an action](actions.md).
 
 ### Retesting a finding
 

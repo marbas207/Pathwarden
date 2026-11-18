@@ -4,7 +4,8 @@
 #
 # - Every push to main or lane/** and every pull request: formatting,
 #   cargo deny (deny.toml) and clippy (full and lean) on Linux. Quick, with
-#   a build cache. Rust is the version rust-toolchain.toml pins.
+#   a build cache. Rust is the version rust-toolchain.toml pins. And the
+#   finding action kit (docs/schemas, examples/actions): no cargo, seconds.
 # - On demand, before a release (Actions > CI > Run workflow, or
 #   `gh workflow run CI --ref <branch>`): the Linux and Windows test suites.
 # Developers run the full and lean suites on Windows before every merge.
@@ -60,6 +61,21 @@ jobs:
           tool: cargo-deny@0.20.2
       - name: cargo deny
         run: cargo deny --locked check
+
+  action-kit:
+    name: Finding action kit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The schemas, the Python and PowerShell helpers' tests, and each example
+      # run by hand and against the stub ticket system. Standard library
+      # Python and the runner's pwsh; `pathwarden action check` on the
+      # examples runs in the test suites (tests/action_examples.rs).
+      - name: Check the schemas, helpers and examples
+        run: python3 scripts/check-action-examples.py
 
   linux:
     name: Lint and test (Linux)
