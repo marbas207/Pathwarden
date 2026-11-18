@@ -28,7 +28,7 @@ use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -81,9 +81,6 @@ pub enum PluginError {
     Start { plugin: String, detail: String },
     #[error("timed out after {0} s and was stopped (set timeout_seconds to change the limit)")]
     Timeout(u64),
-    /// Stopped through its [`CancelHandle`].
-    #[error("stopped before it finished")]
-    Cancelled,
     #[error("{0}")]
     Io(#[from] std::io::Error),
 }
@@ -875,7 +872,7 @@ impl CancelHandle {
     }
 
     /// Asks the run to stop: it kills the process tree within 50 ms and
-    /// returns [`PluginError::Cancelled`].
+    /// returns with [`Stopped::Cancelled`].
     pub fn cancel(&self) {
         self.0.store(true, Ordering::SeqCst);
     }
@@ -885,17 +882,35 @@ impl CancelHandle {
     }
 }
 
-/// What a program [`run_streaming`] ran printed and how it exited.
+/// Why [`run_streaming`] stopped a program.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Stopped {
+    /// It ran past its time limit (seconds).
+    TimedOut(u64),
+    /// Its [`CancelHandle`] was used.
+    Cancelled,
+}
+
+/// What a program [`run_streaming`] ran printed and how it ended.
 #[derive(Debug)]
 pub struct Streamed {
-    pub status: ExitStatus,
+    /// How it exited; `None` when it was stopped.
+    pub status: Option<ExitStatus>,
+    /// Why it was stopped; `None` when it exited by itself.
+    pub stopped: Option<Stopped>,
     /// Its stdout lines, the latest [`MAX_PROGRESS_LINES`], each cut to
     /// [`MAX_LINE_CHARS`] and without control characters; empty lines are
     /// left out.
     pub lines: Vec<String>,
-    /// Its stderr, capped at [`MAX_OUTPUT`].
+    /// Its stderr, capped at [`MAX_OUTPUT`]: what it wrote before it was
+    /// stopped too.
     pub stderr: Vec<u8>,
 }
+
+/// How long the readers get, once the program has ended or was stopped,
+/// to hand over what it wrote. A process that escaped the tree and holds
+/// the pipes open can't hold the run up for longer.
+const DRAIN_TIME: Duration = Duration::from_secs(2);
 
 /// One stdout line as kept: control and bidi characters dropped, cut to
 /// [`MAX_LINE_CHARS`]. `None` when nothing is left.
@@ -912,7 +927,7 @@ fn progress_line(raw: &[u8]) -> Option<String> {
 
 /// Reads stdout line by line into `tx`, up to [`MAX_OUTPUT`] bytes; the
 /// rest is read and dropped, so the program never blocks on a full pipe.
-fn read_lines(r: impl Read + Send + 'static, tx: mpsc::Sender<String>) -> thread::JoinHandle<()> {
+fn read_lines(r: impl Read + Send + 'static, tx: mpsc::Sender<String>) {
     thread::spawn(move || {
         let mut all = std::io::BufReader::new(r);
         let mut capped = (&mut all).take(MAX_OUTPUT as u64);
@@ -929,14 +944,54 @@ fn read_lines(r: impl Read + Send + 'static, tx: mpsc::Sender<String>) -> thread
             }
         }
         let _ = std::io::copy(&mut all, &mut std::io::sink());
-    })
+    });
+}
+
+/// stderr as it is read, and whether its pipe has closed.
+type SharedOutput = (Arc<Mutex<Vec<u8>>>, Arc<AtomicBool>);
+
+/// Reads stderr into a buffer shared as it grows, up to [`MAX_OUTPUT`]
+/// bytes and a note if there was more, so what was read is there even if
+/// the pipe never closes.
+fn read_shared(mut r: impl Read + Send + 'static) -> SharedOutput {
+    let buf = Arc::new(Mutex::new(Vec::new()));
+    let done = Arc::new(AtomicBool::new(false));
+    let (b, d) = (buf.clone(), done.clone());
+    thread::spawn(move || {
+        let mut chunk = [0u8; 8192];
+        let mut extra: u64 = 0;
+        loop {
+            match r.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    let mut b = b.lock().unwrap_or_else(|e| e.into_inner());
+                    let room = MAX_OUTPUT.saturating_sub(b.len());
+                    b.extend_from_slice(&chunk[..n.min(room)]);
+                    extra += n.saturating_sub(room) as u64;
+                }
+            }
+        }
+        if extra > 0 {
+            let note = format!(
+                "\n[pathwarden: output truncated after {} MiB; {extra} more bytes dropped]\n",
+                MAX_OUTPUT / (1024 * 1024)
+            );
+            b.lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .extend_from_slice(note.as_bytes());
+        }
+        d.store(true, Ordering::SeqCst);
+    });
+    (buf, done)
 }
 
 /// Runs a program as [`run`] does (its process tree stopped at
 /// `timeout`), with `input` on stdin and `cmd` set up by the caller
 /// (environment, folder), and hands each stdout line to `on_line` as it
 /// arrives, on this thread. `cancel` stops it at any time. A non-zero
-/// exit is returned, not an error. `label` names it in errors.
+/// exit, a timeout and a cancel are returned ([`Streamed::stopped`]), with
+/// what it printed until then; `Err` only when it can't be started.
+/// `label` names it in errors.
 pub fn run_streaming(
     mut cmd: Command,
     label: &str,
@@ -958,14 +1013,15 @@ pub fn run_streaming(
     let tree = crate::proc_tree::Tree::attach(&child);
     let stdin = child.stdin.take();
     let text = input.to_owned();
-    let writer = thread::spawn(move || {
+    thread::spawn(move || {
         if let Some(mut stdin) = stdin {
+            // A program may exit without reading everything.
             let _ = stdin.write_all(text.as_bytes());
         }
     });
     let (tx, rx) = mpsc::channel();
-    let stdout = read_lines(child.stdout.take().expect("piped stdout"), tx);
-    let stderr = read_all(child.stderr.take().expect("piped stderr"));
+    read_lines(child.stdout.take().expect("piped stdout"), tx);
+    let (stderr, stderr_done) = read_shared(child.stderr.take().expect("piped stderr"));
     let mut kept: VecDeque<String> = VecDeque::new();
     let mut take = |line: String, kept: &mut VecDeque<String>| {
         on_line(&line);
@@ -975,19 +1031,20 @@ pub fn run_streaming(
         kept.push_back(line);
     };
     let started = Instant::now();
-    let stop = |child: &mut std::process::Child| {
-        tree.kill();
-        let _ = child.kill();
-        let _ = child.wait();
-    };
-    let status = loop {
-        if cancel.is_cancelled() {
-            stop(&mut child);
-            return Err(PluginError::Cancelled);
-        }
-        if started.elapsed() > timeout {
-            stop(&mut child);
-            return Err(PluginError::Timeout(timeout.as_secs()));
+    let (status, stopped) = loop {
+        let stop = if cancel.is_cancelled() {
+            Some(Stopped::Cancelled)
+        } else if started.elapsed() > timeout {
+            Some(Stopped::TimedOut(timeout.as_secs()))
+        } else {
+            None
+        };
+        if let Some(why) = stop {
+            // The whole tree: a grandchild must not outlive it.
+            tree.kill();
+            let _ = child.kill();
+            let _ = child.wait();
+            break (None, Some(why));
         }
         match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(line) => {
@@ -999,19 +1056,32 @@ pub fn run_streaming(
             Err(mpsc::RecvTimeoutError::Disconnected) => thread::sleep(Duration::from_millis(50)),
         }
         if let Some(status) = child.try_wait()? {
-            break status;
+            break (Some(status), None);
         }
     };
+    // Anything the program left running would hold its pipes open.
     tree.kill();
-    let _ = writer.join();
-    let _ = stdout.join();
-    while let Ok(line) = rx.try_recv() {
-        take(line, &mut kept);
+    // What it wrote, for at most DRAIN_TIME: the readers are not waited
+    // for past that, so a process that escaped the tree can't hang the run.
+    let deadline = Instant::now() + DRAIN_TIME;
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        match rx.recv_timeout(left.min(Duration::from_millis(50))) {
+            Ok(line) => take(line, &mut kept),
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) if left.is_zero() => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+        }
     }
+    while !stderr_done.load(Ordering::SeqCst) && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(20));
+    }
+    let stderr = stderr.lock().unwrap_or_else(|e| e.into_inner()).clone();
     Ok(Streamed {
         status,
+        stopped,
         lines: kept.into(),
-        stderr: stderr.join().unwrap_or_default(),
+        stderr,
     })
 }
 

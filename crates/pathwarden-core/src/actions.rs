@@ -495,7 +495,11 @@ fn input_of(v: &Value, path: &str, p: &mut Problems) -> Option<InputDef> {
                 (InputType::Text | InputType::Textarea, Value::String(s)) => {
                     let lines = kind == InputType::Textarea;
                     let limit = max.unwrap_or(if lines { TEXTAREA_MAX } else { TEXT_MAX });
-                    !clean_text(s, limit, lines).1
+                    let control = s.chars().any(|c| {
+                        (c.is_control() && !(lines && matches!(c, '\n' | '\r' | '\t')))
+                            || crate::text::is_bidi_control(c)
+                    });
+                    !control && s.chars().count() <= limit
                 }
                 _ => false,
             };
@@ -505,7 +509,8 @@ fn input_of(v: &Value, path: &str, p: &mut Problems) -> Option<InputDef> {
                     match kind {
                         InputType::Bool => "must be true or false".to_string(),
                         InputType::Choice => "must be one of the choices".to_string(),
-                        _ => "must be text no longer than max".to_string(),
+                        _ => "must be text no longer than max, without control characters"
+                            .to_string(),
                     },
                 );
             }
@@ -1068,6 +1073,15 @@ fn record_of(v: &Value, path: &str, p: &mut Problems) -> Option<Record> {
                         continue;
                     }
                 };
+                if r.fields.contains_key(&name) {
+                    p.add(
+                        &format!("{path}.fields"),
+                        format!(
+                            "name '{name}' is there twice once cleaned; the second was left out"
+                        ),
+                    );
+                    continue;
+                }
                 let (text, cut) = clean_text(&text, MAX_FIELD, false);
                 if cut {
                     p.add(
@@ -1304,8 +1318,14 @@ pub fn findings_in_event(event: &Value) -> Vec<FindingContext> {
                     .or_else(|| f["rule_title"].as_str())
                     .unwrap_or_default()
                     .to_string(),
-                severity: f["severity"].as_str().and_then(|s| s.parse().ok()),
-                category: f["category"].as_str().and_then(|s| s.parse().ok()),
+                severity: f["severity"]
+                    .as_str()
+                    .and_then(|s| s.parse().ok())
+                    .or_else(|| rule_severity(rule)),
+                category: f["category"]
+                    .as_str()
+                    .and_then(|s| s.parse().ok())
+                    .or_else(|| rule_category(rule)),
                 status,
                 finding,
                 run: run.clone(),
@@ -1313,6 +1333,26 @@ pub fn findings_in_event(event: &Value) -> Vec<FindingContext> {
         }
     }
     out
+}
+
+/// The category of rule `rule`'s findings, from the rule catalog, for a
+/// fixed or held finding whose event entry doesn't carry it: an attack
+/// path when the rule's findings are rated by exposure, else hygiene.
+pub fn rule_category(rule: &str) -> Option<Category> {
+    crate::findings::default_levels(rule).map(|(exposure, _)| {
+        if exposure {
+            Category::AttackPath
+        } else {
+            Category::Hygiene
+        }
+    })
+}
+
+/// The severity of rule `rule`'s findings, from the rule catalog, for a
+/// held finding whose event entry doesn't carry it: the highest level the
+/// rule gives, so a held finding is offered what it was offered open.
+pub fn rule_severity(rule: &str) -> Option<Severity> {
+    crate::findings::default_levels(rule).and_then(|(_, levels)| levels.iter().max().copied())
 }
 
 /// A made-up finding for testing a program without a run ([`check`]).
@@ -1475,20 +1515,17 @@ pub fn pick<'a>(offered: &'a [Offered], address: Option<&str>) -> Result<&'a Off
         return Ok(o);
     }
     if !address.contains('/') {
-        let by_name: Vec<&Offered> = offered
+        // A block's name or an action's ID: only when it means one action.
+        let could: Vec<&Offered> = offered
             .iter()
-            .filter(|o| o.name.eq_ignore_ascii_case(address))
+            .filter(|o| o.name.eq_ignore_ascii_case(address) || o.id.eq_ignore_ascii_case(address))
             .collect();
-        let by_id: Vec<&Offered> = offered
-            .iter()
-            .filter(|o| o.id.eq_ignore_ascii_case(address))
-            .collect();
-        match (by_name.as_slice(), by_id.as_slice()) {
-            ([one], _) | ([], [one]) => return Ok(*one),
-            ([_, _, ..], _) | ([], [_, _, ..]) => {
-                let names = by_name
+        match could.as_slice() {
+            [one] => return Ok(one),
+            [] => {}
+            _ => {
+                let names = could
                     .iter()
-                    .chain(&by_id)
                     .map(|o| o.address.as_str())
                     .collect::<Vec<_>>()
                     .join(", ");
@@ -1496,7 +1533,6 @@ pub fn pick<'a>(offered: &'a [Offered], address: Option<&str>) -> Result<&'a Off
                     "{address} could be {names}: give the action as name/id."
                 ));
             }
-            _ => {}
         }
     }
     Err(if offered.is_empty() {
@@ -1640,7 +1676,7 @@ pub fn prepare(
 
 // -------------------------------------------------------------- runner
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum ActionError {
     /// A scheduled task or another unattended run asked.
     #[error("Actions run only when someone asks, never from a scheduled task.")]
@@ -1718,12 +1754,33 @@ fn answer_path(dir: &Path) -> PathBuf {
     dir.join(format!("action-result-{hex}.json"))
 }
 
+/// The answer file, when the program wrote one: refused unless it is a
+/// plain file (a pipe or device could block the read, a link point
+/// elsewhere), at most [`MAX_ANSWER_BYTES`].
 fn read_answer(path: &Path) -> Option<Result<Vec<u8>, String>> {
-    let f = match std::fs::File::open(path) {
+    match std::fs::symlink_metadata(path) {
+        Ok(m) if m.file_type().is_file() => {}
+        Ok(_) => return Some(Err("The result file isn't a plain file.".into())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(e) => return Some(Err(format!("The result file couldn't be read: {e}"))),
+    }
+    let mut open = std::fs::OpenOptions::new();
+    open.read(true);
+    #[cfg(unix)]
+    {
+        // Never wait on a pipe swapped in after the check above.
+        use std::os::unix::fs::OpenOptionsExt;
+        open.custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW);
+    }
+    let f = match open.open(path) {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
         Err(e) => return Some(Err(format!("The result file couldn't be read: {e}"))),
     };
+    match f.metadata() {
+        Ok(m) if m.file_type().is_file() => {}
+        _ => return Some(Err("The result file isn't a plain file.".into())),
+    }
     let mut bytes = Vec::new();
     if let Err(e) = f.take(MAX_ANSWER_BYTES + 1).read_to_end(&mut bytes) {
         return Some(Err(format!("The result file couldn't be read: {e}")));
@@ -1789,13 +1846,14 @@ fn exec(
         progress.push_back(line.to_string());
     };
     let text = request.to_string();
-    let ran = plugins::run_streaming(cmd, &a.name, &text, timeout, &mut keep, cancel);
-    let (ended, status, details) = match ran {
-        Ok(r) => (Ended::Exited, Some(r.status), details_of(&r.stderr)),
-        Err(PluginError::Timeout(_)) => (Ended::TimedOut, None, String::new()),
-        Err(PluginError::Cancelled) => (Ended::Cancelled, None, String::new()),
-        Err(e) => return Err(program_error(e)),
+    let ran = plugins::run_streaming(cmd, &a.name, &text, timeout, &mut keep, cancel)
+        .map_err(program_error)?;
+    let ended = match ran.stopped {
+        None => Ended::Exited,
+        Some(plugins::Stopped::TimedOut(_)) => Ended::TimedOut,
+        Some(plugins::Stopped::Cancelled) => Ended::Cancelled,
     };
+    let (status, details) = (ran.status, details_of(&ran.stderr));
     let answer = match ended {
         Ended::Exited => read_answer(&answer.0),
         _ => None,
@@ -1830,8 +1888,15 @@ pub struct Described {
     pub problems: Vec<String>,
 }
 
-/// Describes kept in memory, by [`describe_key`].
-static DESCRIBED: Mutex<Option<HashMap<String, Described>>> = Mutex::new(None);
+/// A describe kept in memory, by [`describe_key`], and when it was asked.
+type KeptDescribe = (std::time::Instant, Result<Described, ActionError>);
+
+/// Describes kept in memory, by [`describe_key`]: an answer until the
+/// program or settings change, a failure for [`FAILED_DESCRIBE_KEPT`].
+static DESCRIBED: Mutex<Option<HashMap<String, KeptDescribe>>> = Mutex::new(None);
+/// How long a failed describe is kept, so a broken program isn't started
+/// again for every finding shown.
+pub const FAILED_DESCRIBE_KEPT: Duration = Duration::from_secs(30);
 /// Most describes kept; past it the cache starts over.
 const MAX_DESCRIBED: usize = 64;
 
@@ -1859,10 +1924,12 @@ fn describe_key(a: &ActionConfig) -> String {
 }
 
 /// Asks the block's program what it offers, every time
-/// ([`describe`] keeps the answer). Its progress lines go to `on_line`.
+/// ([`describe`] keeps the answer). Its progress lines go to `on_line`;
+/// `cancel` stops it.
 pub fn describe_fresh(
     a: &ActionConfig,
     on_line: &mut dyn FnMut(&str),
+    cancel: &CancelHandle,
 ) -> Result<Described, ActionError> {
     let timeout = DESCRIBE_TIMEOUT.min(Duration::from_secs(a.timeout_seconds));
     let e = exec(
@@ -1871,7 +1938,7 @@ pub fn describe_fresh(
         &describe_request(a),
         timeout,
         on_line,
-        &CancelHandle::new(),
+        cancel,
     )?;
     let fail = |problems: Vec<String>, e: &Exec| ActionError::Describe {
         name: a.name.clone(),
@@ -1923,25 +1990,31 @@ pub fn describe_fresh(
 
 /// [`describe_fresh`], kept in memory by the program file's contents and
 /// the settings ([`describe_key`]), so a block is asked once until its
-/// program, script or settings change.
+/// program, script or settings change. A failure is kept for
+/// [`FAILED_DESCRIBE_KEPT`].
 pub fn describe(a: &ActionConfig) -> Result<Described, ActionError> {
     let key = describe_key(a);
-    if let Some(d) = DESCRIBED
+    if let Some((at, d)) = DESCRIBED
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_ref()
         .and_then(|m| m.get(&key))
     {
-        return Ok(d.clone());
+        if d.is_ok() || at.elapsed() < FAILED_DESCRIBE_KEPT {
+            return d.clone();
+        }
     }
-    let d = describe_fresh(a, &mut |_| {})?;
-    let mut cache = DESCRIBED.lock().unwrap_or_else(|e| e.into_inner());
-    let map = cache.get_or_insert_with(HashMap::new);
-    if map.len() >= MAX_DESCRIBED {
-        map.clear();
+    let d = describe_fresh(a, &mut |_| {}, &CancelHandle::new());
+    // Unattended is never an answer of the program's.
+    if !matches!(d, Err(ActionError::Unattended)) {
+        let mut cache = DESCRIBED.lock().unwrap_or_else(|e| e.into_inner());
+        let map = cache.get_or_insert_with(HashMap::new);
+        if map.len() >= MAX_DESCRIBED {
+            map.clear();
+        }
+        map.insert(key, (std::time::Instant::now(), d.clone()));
     }
-    map.insert(key, d.clone());
-    Ok(d)
+    d
 }
 
 /// Every block described ([`describe`]), in config order, each with its
@@ -2035,13 +2108,19 @@ pub fn run(
 /// then a dry run of each action it offers on `f` (a `for: "record"`
 /// action on [`sample_record`]), with [`sample_inputs`]. Every problem in
 /// words, prefixed with the action it is about; empty when there are none.
-/// Progress lines go to `on_line` with the action's address.
+/// Progress lines go to `on_line` with the action's address; `cancel`
+/// stops the program running and the checks still to come.
 pub fn check(
     a: &ActionConfig,
     f: &FindingContext,
     on_line: &mut dyn FnMut(&str, &str),
+    cancel: &CancelHandle,
 ) -> Vec<String> {
-    let described = match describe_fresh(a, &mut |l| on_line(&format!("{}:describe", a.name), l)) {
+    let described = match describe_fresh(
+        a,
+        &mut |l| on_line(&format!("{}:describe", a.name), l),
+        cancel,
+    ) {
         Ok(d) => d,
         Err(ActionError::Describe {
             problems, details, ..
@@ -2067,16 +2146,15 @@ pub fn check(
         .collect();
     let who = crate::identity::Actor::current();
     for def in &described.describe.actions {
+        if cancel.is_cancelled() {
+            out.push("Cancelled before every action was checked.".into());
+            break;
+        }
         let o = offer(a, def);
         let record = (def.for_ == Some(For::Record)).then(sample_record);
         let request = run_request(a, &o, f, &sample_inputs(def), true, record.as_ref(), &who);
         let address = o.address.clone();
-        match run(
-            a,
-            &request,
-            &mut |l| on_line(&address, l),
-            &CancelHandle::new(),
-        ) {
+        match run(a, &request, &mut |l| on_line(&address, l), cancel) {
             Ok(r) => {
                 out.extend(
                     r.problems

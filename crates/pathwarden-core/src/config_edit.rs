@@ -1643,16 +1643,21 @@ impl ConfigDoc {
             .position(|(i, t)| action_name_of(t, i).eq_ignore_ascii_case(name.trim()))
     }
 
-    /// Adds (`index` None) or changes an `[[action]]` block. `expect` is
-    /// its name in effect as the page or command showed it. The program,
-    /// filters and settings are checked as [`check`] checks a file; a name
-    /// another block has is refused.
+    /// Adds (`at` None) or changes an `[[action]]` block: `at` is its index
+    /// and its name in effect as the page or command showed it, refused
+    /// ([`CHANGED`]) when the block there has another name now. The
+    /// program, filters and settings are checked as [`check`] checks a
+    /// file. The block always gets a `name`: the one given, else the one
+    /// it has, else its plugin's, else its program's or script's file
+    /// name ([`crate::config::action_name_for`]), with `-2`, `-3`… when
+    /// another block has it. A name given that another block has is
+    /// refused.
     pub fn upsert_action(
         &mut self,
-        index: Option<usize>,
-        expect: Option<&str>,
+        at: Option<(usize, &str)>,
         a: &ActionEdit,
     ) -> Result<(), String> {
+        let index = at.map(|(i, _)| i);
         let name = clean("Action name", &a.name)?;
         if !name.is_empty() && !crate::config::valid_plugin_name(&name) {
             return Err("Action name: use lowercase letters, digits and dashes.".into());
@@ -1716,7 +1721,7 @@ impl ConfigDoc {
                 for v in clean_list("Categories", c)? {
                     let cat = v
                         .parse::<findings::Category>()
-                        .map_err(|_| format!("Category {v:?}: use attack-path or hygiene."))?;
+                        .map_err(|_| format!("Category {v:?}: use attack_path or hygiene."))?;
                     out.push(
                         serde_json::to_value(cat)
                             .ok()
@@ -1742,36 +1747,40 @@ impl ConfigDoc {
             };
             set.push((k.clone(), v));
         }
-        if let Some(i) = index {
+        let mut current = None;
+        if let Some((i, expect)) = at {
             let list = self.tables("action")?;
             let t = list.get(i).ok_or(CHANGED)?;
-            if expect.is_some_and(|e| !e.trim().eq_ignore_ascii_case(&action_name_of(t, i))) {
+            let now = action_name_of(t, i);
+            if !expect.trim().eq_ignore_ascii_case(&now) {
                 return Err(CHANGED.into());
             }
+            current = Some(now);
         }
-        // Names are how actions are addressed (`<name>/<id>`).
-        let effective = if !name.is_empty() {
-            name.clone()
-        } else if let Some(p) = &plugin {
-            p.clone()
-        } else {
-            String::new()
-        };
-        if !effective.is_empty() {
-            if let Some(i) = self.action_index(&effective) {
-                if Some(i) != index {
-                    return Err(format!(
-                        "There is already an action named {effective}: give this one another name."
-                    ));
-                }
+        // Names are how actions are addressed (`<name>/<id>`), so every
+        // block gets one that stays when blocks move.
+        let taken = |n: &str, me: &Self| me.action_index(n).is_some_and(|i| Some(i) != index);
+        let name = if !name.is_empty() {
+            if taken(&name, self) {
+                return Err(format!(
+                    "There is already an action named {name}: give this one another name."
+                ));
             }
-        }
-        let t = self.entry("action", index, "name", None)?;
-        if name.is_empty() {
-            t.remove("name");
+            name
+        } else if let Some(now) = current {
+            now
         } else {
-            set_value(t, "name", Value::from(name));
-        }
+            let base = crate::config::action_name_for(plugin.as_deref(), command.as_deref());
+            let mut n = 1;
+            let mut candidate = base.clone();
+            while taken(&candidate, self) {
+                n += 1;
+                candidate = format!("{base}-{n}");
+            }
+            candidate
+        };
+        let t = self.entry("action", index, "name", None)?;
+        set_value(t, "name", Value::from(name));
         match plugin {
             Some(p) => {
                 set_value(t, "plugin", Value::from(p));

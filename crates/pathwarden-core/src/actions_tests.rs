@@ -173,7 +173,7 @@ fn bad_actions_are_left_out_with_why() {
             input(json!([
                 { "id": "n", "label": "N", "type": "text", "max": 3, "default": "abcd" }
             ])),
-            "actions[0].inputs[0].default must be text no longer than max",
+            "actions[0].inputs[0].default must be text no longer than max, without control characters",
         ),
         (
             input(json!([
@@ -491,7 +491,14 @@ fn findings_come_from_the_event_as_they_are() {
         json!(crate::guides::guide("PW-003"))
     );
     assert_eq!(fixed.severity, Some(Severity::High));
-    assert_eq!(finding_in_event(&e, "PW-004-dddd").unwrap().severity, None);
+    // What their event entry lacks comes from the rule catalog.
+    assert_eq!(fixed.category, Some(Category::AttackPath));
+    let held = finding_in_event(&e, "PW-004-dddd").unwrap();
+    assert_eq!(held.severity, Some(Severity::High));
+    assert_eq!(held.category, Some(Category::AttackPath));
+    assert_eq!(rule_category("PW-011"), Some(Category::Hygiene));
+    assert_eq!(rule_severity("PW-003"), Some(Severity::Critical));
+    assert_eq!(rule_category("PW-999"), None);
     assert!(finding_in_event(&e, "PW-999-x").is_none());
     let s = sample_finding();
     assert_eq!(s.status, FindingStatus::Open);
@@ -583,9 +590,12 @@ fn the_right_actions_in_config_order() {
     // Low and hygiene: below both minimums.
     let low = finding_in_event(&e, "PW-011-bbbb").unwrap();
     assert!(offered(&programs, &low, &[]).is_empty());
-    // A held finding has no severity, so a minimum doesn't pass.
+    // A held finding is rated as its rule is (PW-004: High).
     let held = finding_in_event(&e, "PW-004-dddd").unwrap();
-    assert!(offered(&programs, &held, &[]).is_empty());
+    assert_eq!(
+        addresses(&offered(&programs, &held, &[])),
+        ["service-desk/open", "teams-alert/alert"]
+    );
 
     // `once`: hidden while an open record from it is there.
     assert_eq!(
@@ -622,6 +632,29 @@ fn the_right_actions_in_config_order() {
     );
     assert!(follow_ups(&programs, &open, &rec("teams-alert/alert", true)).is_empty());
     assert!(follow_ups(&programs, &open, &rec("gone/open", true)).is_empty());
+}
+
+/// `when: "fixed"` behind a categories filter: a fixed finding takes its
+/// category from the rule, so it shows.
+#[test]
+fn a_fixed_finding_passes_a_category_filter() {
+    let c = Config::parse(
+        "[[action]]\nplugin = \"desk\"\ncategories = [\"attack_path\"]\nmin_severity = \"high\"\n",
+    )
+    .unwrap();
+    let d = described(
+        r#"{"schema":"pathwarden.action-describe.v1","actions":[
+          {"id":"done","label":"Say it's fixed","sends":"x","when":"fixed"}]}"#,
+    );
+    let programs = [Program {
+        config: &c.actions[0],
+        describe: &d,
+    }];
+    let e = event();
+    let fixed = finding_in_event(&e, "PW-003-cccc").unwrap();
+    assert_eq!(addresses(&offered(&programs, &fixed, &[])), ["desk/done"]);
+    let open = finding_in_event(&e, "PW-001-aaaa").unwrap();
+    assert!(offered(&programs, &open, &[]).is_empty());
 }
 
 #[test]
@@ -687,6 +720,31 @@ fn an_action_is_picked_and_its_request_built() {
         "No action applies to this finding."
     );
     assert_eq!(pick(&o[..1], None).unwrap().address, "service-desk/open");
+    // A bare word that is one block's name and another's action ID.
+    let c2 =
+        Config::parse("[[action]]\nplugin = \"alert\"\n[[action]]\nplugin = \"pager\"\n").unwrap();
+    let one = described(
+        r#"{"schema":"pathwarden.action-describe.v1","actions":[{"id":"send","label":"Send","sends":"x"}]}"#,
+    );
+    let two = described(
+        r#"{"schema":"pathwarden.action-describe.v1","actions":[{"id":"alert","label":"Alert","sends":"x"}]}"#,
+    );
+    let both = [
+        Program {
+            config: &c2.actions[0],
+            describe: &one,
+        },
+        Program {
+            config: &c2.actions[1],
+            describe: &two,
+        },
+    ];
+    let o2 = offered(&both, &open, &[]);
+    assert_eq!(
+        pick(&o2, Some("alert")).unwrap_err(),
+        "alert could be alert/send, pager/alert: give the action as name/id."
+    );
+    assert_eq!(pick(&o2, Some("send")).unwrap().address, "alert/send");
 
     // `prepare`: the request, with checked inputs and who asked.
     let ask = Ask {
@@ -744,7 +802,8 @@ fn action_blocks_are_checked() {
         e("[[action]]\nplugin = \"a\"\n[[action]]\nname = \"a\"\ncommand = [\"pwsh\"]\n")
             .contains("Two [[action]] blocks are named a: give one of them another name"),
     );
-    // Default names: plugin, else action-N.
+    // Default names: plugin, else action-N (by place: noted where blocks
+    // are listed).
     let c = Config::parse(
         "[[action]]\ncommand = [\"pwsh\"]\n[[action]]\nplugin = \"b\"\n[[action]]\ncommand = [\"sh\"]\n",
     )
@@ -755,6 +814,13 @@ fn action_blocks_are_checked() {
             .map(|a| a.name.as_str())
             .collect::<Vec<_>>(),
         ["action-1", "b", "action-3"]
+    );
+    assert_eq!(
+        c.actions
+            .iter()
+            .map(|a| a.positional_name)
+            .collect::<Vec<_>>(),
+        [true, false, true]
     );
     assert!(e(
         "[[action]]\ncommand = [\"pwsh\"]\nname = \"action-2\"\n[[action]]\ncommand = [\"sh\"]\n"
@@ -795,7 +861,7 @@ fn action_blocks_are_checked() {
         ),
         (
             "[[action]]\nplugin = \"t\"\ncategories = [\"paths\"]\n",
-            "unknown category 'paths'",
+            "'paths' isn't one of attack_path, hygiene",
         ),
         (
             "[[action]]\nplugin = \"t\"\nrules = [\"PW 1\"]\n",
@@ -805,21 +871,30 @@ fn action_blocks_are_checked() {
         let msg = e(text);
         assert!(msg.contains(why), "{text}: {msg}");
     }
-    // A near miss of the block's own keys is a typo, not a setting.
-    for (typo, meant) in [
+    // A singular or plural of a block key stays a setting, with a note;
+    // any other key is a setting, as programs may need any name.
+    for (key, block_key) in [
         ("rule", "rules"),
         ("category", "categories"),
+        ("names", "name"),
+        ("commands", "command"),
         ("timeout_second", "timeout_seconds"),
-        ("comand", "command"),
-        ("min_severities", "min_severity"),
     ] {
-        let msg = e(&format!("[[action]]\nplugin = \"t\"\n{typo} = \"x\"\n"));
-        assert!(
-            msg.contains(&format!(
-                "[[action]] 1: unknown key `{typo}`. Did you mean `{meant}`?"
-            )),
-            "{msg}"
+        let c = Config::parse(&format!("[[action]]\nplugin = \"t\"\n{key} = \"x\"\n")).unwrap();
+        assert_eq!(c.actions[0].settings[key], "x");
+        let notes: Vec<String> = c.warnings.iter().filter_map(|w| w.place.clone()).collect();
+        assert_eq!(
+            notes,
+            [format!(
+                "[[action]] 1: `{key}` is passed to the program as a setting; the block's own key is `{block_key}`."
+            )],
+            "{key}"
         );
+    }
+    for key in ["comand", "role", "group", "timeout"] {
+        let c = Config::parse(&format!("[[action]]\nplugin = \"t\"\n{key} = \"x\"\n")).unwrap();
+        assert_eq!(c.actions[0].settings[key], "x");
+        assert!(c.warnings.is_empty(), "{key}: {:?}", c.warnings);
     }
     // Any other key is a setting.
     let c = Config::parse(
@@ -860,16 +935,15 @@ fn actions_are_added_changed_and_removed_in_the_file() {
         command: Some(vec!["python".into(), script.into()]),
         timeout_seconds: Some(900),
         min_severity: Some("Medium".into()),
-        categories: Some(vec!["attack-path".into()]),
+        categories: Some(vec!["attack_path".into()]),
         set: vec![
             ("group".into(), Setting::Str("Identity".into())),
             ("token_env".into(), Setting::Str("DESK_TOKEN".into())),
         ],
         ..ActionEdit::default()
     };
-    d.upsert_action(None, None, &add).unwrap();
+    d.upsert_action(None, &add).unwrap();
     d.upsert_action(
-        None,
         None,
         &ActionEdit {
             plugin: Some("teams-alert".into()),
@@ -898,7 +972,6 @@ fn actions_are_added_changed_and_removed_in_the_file() {
     let e = d
         .upsert_action(
             None,
-            None,
             &ActionEdit {
                 name: "teams-alert".into(),
                 command: Some(vec!["sh".into()]),
@@ -911,13 +984,12 @@ fn actions_are_added_changed_and_removed_in_the_file() {
         "There is already an action named teams-alert: give this one another name."
     );
     assert_eq!(
-        d.upsert_action(Some(1), Some("service-desk"), &add)
+        d.upsert_action(Some((1, "service-desk")), &add)
             .unwrap_err(),
         crate::config_edit::CHANGED
     );
     let e = d
         .upsert_action(
-            None,
             None,
             &ActionEdit {
                 set: vec![("rules".into(), Setting::Int(1))],
@@ -928,8 +1000,7 @@ fn actions_are_added_changed_and_removed_in_the_file() {
         .unwrap_err();
     assert!(e.starts_with("Setting name \"rules\""), "{e}");
     assert_eq!(
-        d.upsert_action(None, None, &ActionEdit::default())
-            .unwrap_err(),
+        d.upsert_action(None, &ActionEdit::default()).unwrap_err(),
         "Name the program: a plugin or a command."
     );
     // Changed: a filter taken off, a setting removed.
@@ -939,8 +1010,7 @@ fn actions_are_added_changed_and_removed_in_the_file() {
         set: Vec::new(),
         ..add.clone()
     };
-    d.upsert_action(Some(0), Some("service-desk"), &change)
-        .unwrap();
+    d.upsert_action(Some((0, "service-desk")), &change).unwrap();
     let c = d.validate().unwrap();
     assert_eq!(c.actions[0].min_severity, None);
     assert!(!c.actions[0].settings.contains_key("group"));
@@ -957,8 +1027,88 @@ fn actions_are_added_changed_and_removed_in_the_file() {
     assert!(crate::config_edit::NEVER_SHARED.contains(&"action"));
 }
 
-/// Without --allow-destinations a page may change filters and settings,
-/// but not add a block, change its program or its `*_env`.
+/// Every block the editor writes has a name: given, kept, the plugin's, or
+/// the script's, made unique.
+#[test]
+fn blocks_always_get_a_name() {
+    use crate::config::action_name_for;
+    use crate::config_edit::{ActionEdit, ConfigDoc};
+    let argv = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    assert_eq!(action_name_for(Some("teams"), None), "teams");
+    assert_eq!(
+        action_name_for(
+            None,
+            Some(&argv(&["python", r"C:\Actions\Service_Desk.py"]))
+        ),
+        "service-desk"
+    );
+    assert_eq!(
+        action_name_for(
+            None,
+            Some(&argv(&["pwsh", "-File=/opt/a/Post To Teams.ps1", "-x"]))
+        ),
+        "post-to-teams"
+    );
+    assert_eq!(
+        action_name_for(None, Some(&argv(&["/opt/bin/alert"]))),
+        "alert"
+    );
+    assert_eq!(
+        action_name_for(None, Some(&argv(&["/opt/bin/.."]))),
+        "action"
+    );
+
+    let mut d = ConfigDoc::parse("[[action]]\ncommand = [\"sh\"]\n").unwrap();
+    let script = if cfg!(windows) {
+        r"C:\actions\desk.py"
+    } else {
+        "/opt/actions/desk.py"
+    };
+    let desk = ActionEdit {
+        command: Some(vec!["python".into(), script.into()]),
+        ..ActionEdit::default()
+    };
+    d.upsert_action(None, &desk).unwrap();
+    d.upsert_action(None, &desk).unwrap();
+    // An unnamed block keeps the name it had when changed.
+    d.upsert_action(
+        Some((0, "action-1")),
+        &ActionEdit {
+            command: Some(vec!["sh".into()]),
+            timeout_seconds: Some(60),
+            ..ActionEdit::default()
+        },
+    )
+    .unwrap();
+    let c = d.validate().unwrap();
+    assert_eq!(
+        c.actions
+            .iter()
+            .map(|a| a.name.as_str())
+            .collect::<Vec<_>>(),
+        ["action-1", "desk", "desk-2"]
+    );
+    assert!(c.actions.iter().all(|a| !a.positional_name));
+    // An explicit name a block has by its place is taken too.
+    let mut d = ConfigDoc::parse("[[action]]\ncommand = [\"sh\"]\n").unwrap();
+    let e = d
+        .upsert_action(
+            None,
+            &ActionEdit {
+                name: "action-1".into(),
+                command: Some(vec!["sh".into()]),
+                ..ActionEdit::default()
+            },
+        )
+        .unwrap_err();
+    assert_eq!(
+        e,
+        "There is already an action named action-1: give this one another name."
+    );
+}
+
+/// Without --allow-destinations a page may change only a block's name,
+/// time limit and filters: not add one, its program or any setting.
 #[test]
 fn programs_and_secrets_of_actions_need_the_flag() {
     use crate::config_edit::{ActionEdit, Setting};
@@ -981,12 +1131,15 @@ fn programs_and_secrets_of_actions_need_the_flag() {
     check_action(false, &mut e, Some(old)).unwrap();
     // Written back exactly as the file has it.
     assert_eq!(e.command, old.command);
+    // The filters, the time limit and the name; a setting set to what it
+    // is now is no change.
     let mut e = ActionEdit {
-        set: vec![
-            ("group".into(), Setting::Str("x".into())),
-            ("token_env".into(), Setting::Str("T".into())),
-        ],
+        name: "front-desk".into(),
+        set: vec![("token_env".into(), Setting::Str("T".into()))],
         min_severity: Some("high".into()),
+        rules: Some(vec!["PW-001".into()]),
+        categories: Some(vec!["hygiene".into()]),
+        timeout_seconds: Some(900),
         ..same()
     };
     check_action(false, &mut e, Some(old)).unwrap();
@@ -1010,6 +1163,22 @@ fn programs_and_secrets_of_actions_need_the_flag() {
         },
         ActionEdit {
             remove: vec!["token_env".into()],
+            ..same()
+        },
+        // Where it sends: any program setting.
+        ActionEdit {
+            set: vec![(
+                "instance".into(),
+                Setting::Str("https://evil.example".into()),
+            )],
+            ..same()
+        },
+        ActionEdit {
+            set: vec![("group".into(), Setting::Str("x".into()))],
+            ..same()
+        },
+        ActionEdit {
+            set: vec![("dry_run".into(), Setting::Bool(false))],
             ..same()
         },
     ] {
@@ -1187,28 +1356,46 @@ fn a_program_gets_the_request_and_its_result_is_read() {
 #[test]
 fn cancel_kills_the_whole_tree() {
     let dir = scratch("cancel");
+    // The grandchild writes `alive` at once and `marker` 8 s later: the
+    // cancel comes only once it is running, so a slow start can't make
+    // this pass.
+    let alive = dir.join("grandchild-is-running");
     let marker = dir.join("grandchild-was-here");
-    let m = marker.display().to_string().replace('\'', "''");
+    let q = |p: &Path| p.display().to_string().replace('\'', "''");
+    let (al, m) = (q(&alive), q(&marker));
     let a = script(
         &dir,
         &format!(
-            "Start-Process -WindowStyle Hidden powershell -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 5; Set-Content -LiteralPath ''{m}'' x'\n\
-             [Console]::Out.WriteLine('started'); [Console]::Out.Flush()\nStart-Sleep -Seconds 60\n"
+            "Start-Process -WindowStyle Hidden powershell -ArgumentList '-NoProfile','-Command','Set-Content -LiteralPath ''{al}'' x; Start-Sleep -Seconds 8; Set-Content -LiteralPath ''{m}'' x'\n\
+             [Console]::Error.WriteLine('working on it')\n\
+             [Console]::Out.WriteLine('started'); [Console]::Out.Flush()\nStart-Sleep -Seconds 120\n"
         ),
-        &format!("(sleep 5; touch '{m}') &\necho started\nsleep 60\n"),
-        120,
+        &format!(
+            "(touch '{al}'; sleep 8; touch '{m}') &\necho 'working on it' >&2\necho started\nsleep 120\n"
+        ),
+        300,
     );
     let cancel = CancelHandle::new();
-    let started = std::time::Instant::now();
     let c = cancel.clone();
+    let watched = alive.clone();
+    std::thread::spawn(move || {
+        let until = std::time::Instant::now() + Duration::from_secs(60);
+        while !watched.exists() && std::time::Instant::now() < until {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        c.cancel();
+    });
     let req = json!({ "schema": REQUEST_SCHEMA, "kind": "run", "dry_run": false });
-    let out = run(&a, &req, &mut |_| c.cancel(), &cancel).unwrap();
+    let out = run(&a, &req, &mut |_| {}, &cancel).unwrap();
+    let stopped = std::time::Instant::now();
+    assert!(alive.exists(), "the grandchild never started");
     assert_eq!(out.ended, Ended::Cancelled);
     assert!(!out.ok);
     assert_eq!(out.message, "Cancelled: it was stopped before it finished.");
     assert_eq!(out.progress, ["started"]);
-    assert!(started.elapsed() < Duration::from_secs(30));
-    std::thread::sleep(Duration::from_secs(8));
+    // What it wrote to stderr before the cancel is kept.
+    assert_eq!(out.details, "working on it");
+    std::thread::sleep(Duration::from_secs(12).saturating_sub(stopped.elapsed()));
     assert!(!marker.exists(), "the grandchild outlived the cancel");
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -1216,9 +1403,15 @@ fn cancel_kills_the_whole_tree() {
 #[test]
 fn a_slow_program_is_stopped_at_its_time_limit() {
     let dir = scratch("slow");
-    let a = script(&dir, "Start-Sleep -Seconds 60\n", "sleep 60\n", 2);
+    let a = script(
+        &dir,
+        "[Console]::Error.WriteLine('still signing in'); Start-Sleep -Seconds 60\n",
+        "echo 'still signing in' >&2; sleep 60\n",
+        2,
+    );
     let (out, _) = run_it(&a);
     assert_eq!(out.ended, Ended::TimedOut);
+    assert_eq!(out.details, "still signing in");
     assert_eq!(
         out.message,
         "It took longer than 2 seconds, its time limit, and was stopped."
@@ -1282,7 +1475,9 @@ fn describe_is_kept_until_the_script_changes() {
         "test didn't list its actions: actions must be a list of the actions the program offers"
     );
     let a = script(&dir, "exit 0\n", "exit 0\n", 60);
-    let e = describe_fresh(&a, &mut |_| {}).unwrap_err().to_string();
+    let e = describe_fresh(&a, &mut |_| {}, &CancelHandle::new())
+        .unwrap_err()
+        .to_string();
     assert_eq!(
         e,
         "test didn't list its actions: it wrote nothing to the file named in PATHWARDEN_ACTION_RESULT"
@@ -1310,5 +1505,74 @@ fn streamed_lines_are_cleaned_and_capped() {
     assert_eq!(out.progress[0], "line 53");
     assert_eq!(out.progress[198].chars().count(), plugins::MAX_LINE_CHARS);
     assert_eq!(out.progress[199], "bad[2Jend");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A broken describe isn't asked again for every finding shown.
+#[test]
+fn a_failed_describe_is_kept_a_while() {
+    let dir = scratch("failed-describe");
+    let count = dir.join("count.txt");
+    let c = count.display().to_string();
+    let a = script(
+        &dir,
+        &format!("Add-Content -LiteralPath '{c}' x\nexit 1\n"),
+        &format!("echo x >> '{c}'\nexit 1\n"),
+        60,
+    );
+    let e = describe(&a).unwrap_err().to_string();
+    assert_eq!(
+        e,
+        "test didn't list its actions: it stopped with exit code 1"
+    );
+    assert_eq!(describe(&a).unwrap_err().to_string(), e);
+    let runs = std::fs::read_to_string(&count).unwrap_or_default();
+    assert_eq!(runs.lines().count(), 1);
+    assert_eq!(FAILED_DESCRIBE_KEPT, Duration::from_secs(30));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn hidden_characters_in_defaults_and_field_names_are_refused() {
+    for default in ["a\u{7}b", "a\u{202e}b", "a\nb"] {
+        let (d, p) = one(json!({ "id": "a", "label": "A", "sends": "x",
+            "inputs": [{ "id": "n", "label": "N", "type": "text", "default": default }] }))
+        .unwrap();
+        assert!(d.actions.is_empty(), "{default:?}");
+        assert_eq!(
+            p,
+            ["actions[0].inputs[0].default must be text no longer than max, without control characters"]
+        );
+    }
+    // A textarea's default may have lines.
+    let (d, _) = one(json!({ "id": "a", "label": "A", "sends": "x",
+        "inputs": [{ "id": "n", "label": "N", "type": "textarea", "default": "a\nb" }] }))
+    .unwrap();
+    assert_eq!(d.actions.len(), 1);
+    let (res, p) = parse_result(
+        json!({ "schema": RESULT_SCHEMA, "ok": true, "records": [
+            { "id": "r", "fields": { "Queue": "a", "Queue\u{7}": "b" } } ] })
+        .to_string()
+        .as_bytes(),
+    )
+    .unwrap();
+    assert_eq!(res.records[0].fields.len(), 1);
+    assert_eq!(
+        p,
+        ["records[0].fields name 'Queue' is there twice once cleaned; the second was left out"]
+    );
+}
+
+/// A pipe in place of the result file is refused, not waited on.
+#[cfg(unix)]
+#[test]
+fn a_result_that_isnt_a_file_is_refused() {
+    let dir = scratch("fifo");
+    let a = script(&dir, "", "mkfifo \"$PATHWARDEN_ACTION_RESULT\"\n", 60);
+    let started = std::time::Instant::now();
+    let (out, _) = run_it(&a);
+    assert!(!out.ok);
+    assert_eq!(out.message, "The result file isn't a plain file.");
+    assert!(started.elapsed() < Duration::from_secs(20));
     let _ = std::fs::remove_dir_all(&dir);
 }

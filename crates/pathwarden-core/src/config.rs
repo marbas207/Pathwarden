@@ -440,6 +440,11 @@ pub struct ActionConfig {
     /// Every other key: the program's settings.
     #[serde(flatten)]
     pub settings: serde_json::Map<String, serde_json::Value>,
+    /// The block has neither `name` nor `plugin`, so its name is
+    /// `action-N`, which changes when blocks move. Set by
+    /// [`Config::parse`].
+    #[serde(skip)]
+    pub positional_name: bool,
 }
 
 /// An action's `timeout_seconds` when it sets none.
@@ -465,6 +470,60 @@ pub const ACTION_KEYS: &[&str] = &[
     "categories",
 ];
 
+/// The block key `key` is a singular or plural of (`rule` for `rules`),
+/// for a warning: it stays a setting for the program.
+pub fn action_key_like(key: &str) -> Option<&'static str> {
+    let plural = |a: &str, b: &str| {
+        b == format!("{a}s")
+            || b == format!("{a}es")
+            || a.strip_suffix('y').is_some_and(|s| b == format!("{s}ies"))
+    };
+    ACTION_KEYS
+        .iter()
+        .find(|k| plural(k, key) || plural(key, k))
+        .copied()
+}
+
+/// The name a new `[[action]]` block gets when none is given: its plugin's,
+/// else the file name of the script its command runs (the last argument
+/// ending in a script's extension), else of its program, as lowercase
+/// letters, digits and dashes; `action` when nothing is left.
+pub fn action_name_for(plugin: Option<&str>, command: Option<&[String]>) -> String {
+    if let Some(p) = plugin {
+        return p.to_string();
+    }
+    const SCRIPTS: &[&str] = &[
+        "ps1", "psm1", "py", "pyw", "sh", "bash", "js", "mjs", "cjs", "cmd", "bat", "rb", "pl",
+    ];
+    let file = |a: &str| a.rsplit(['/', '\\']).next().unwrap_or(a).to_string();
+    let argv = command.unwrap_or_default();
+    let pick = argv
+        .iter()
+        .rev()
+        .map(|a| file(a.split_once('=').map_or(a.as_str(), |(_, v)| v)))
+        .find(|f| {
+            f.rsplit_once('.')
+                .is_some_and(|(_, x)| SCRIPTS.contains(&x.to_ascii_lowercase().as_str()))
+        })
+        .or_else(|| argv.first().map(|p| file(p)))
+        .unwrap_or_default();
+    let stem = pick.rsplit_once('.').map_or(pick.as_str(), |(s, _)| s);
+    let mut out = String::new();
+    for c in stem.to_ascii_lowercase().chars() {
+        let c = if c.is_ascii_alphanumeric() { c } else { '-' };
+        if !(c == '-' && (out.is_empty() || out.ends_with('-'))) {
+            out.push(c);
+        }
+    }
+    let out: String = out.trim_end_matches('-').chars().take(64).collect();
+    let out = out.trim_end_matches('-').to_string();
+    if out.is_empty() {
+        "action".into()
+    } else {
+        out
+    }
+}
+
 /// A severity in any case ("Medium").
 fn severity_text<'de, D: serde::Deserializer<'de>>(
     d: D,
@@ -477,14 +536,19 @@ fn severity_text<'de, D: serde::Deserializer<'de>>(
     }
 }
 
-/// Categories in any spelling `Category` reads (`attack-path`, `hygiene`).
+/// Categories as the event writes them (`attack_path`, `hygiene`), or any
+/// spelling `Category` reads.
 fn category_list<'de, D: serde::Deserializer<'de>>(
     d: D,
 ) -> Result<Vec<crate::findings::Category>, D::Error> {
     use serde::de::Error;
     Vec::<String>::deserialize(d)?
         .iter()
-        .map(|s| s.trim().parse().map_err(D::Error::custom))
+        .map(|s| {
+            s.trim()
+                .parse()
+                .map_err(|_| D::Error::custom(format!("'{s}' isn't one of attack_path, hygiene")))
+        })
         .collect()
 }
 
@@ -527,6 +591,7 @@ fn check_actions(actions: &mut [ActionConfig]) -> Result<(), ConfigError> {
             _ => {}
         }
         let name = a.name.trim().to_string();
+        a.positional_name = name.is_empty() && a.plugin.is_none();
         a.name = if !name.is_empty() {
             name
         } else if let Some(p) = &a.plugin {
@@ -1557,8 +1622,9 @@ fn check_shared_keys(text: &str) -> Result<Vec<ConfigWarning>, ConfigError> {
     // This computer's own sections: a near miss is refused, any other
     // unknown key named and ignored.
     local_unknown(&raw, TOP_KEYS, "the top level", &mut warnings)?;
-    // `[[action]]`: every other key is a setting, but a near miss of its
-    // own keys is refused.
+    // `[[action]]`: every other key is a setting for the program, but a
+    // singular or plural of one of the block's own keys is named, as it
+    // may have been meant as the filter.
     for (i, t) in raw
         .get("action")
         .and_then(toml::Value::as_array)
@@ -1568,9 +1634,9 @@ fn check_shared_keys(text: &str) -> Result<Vec<ConfigWarning>, ConfigError> {
         .enumerate()
     {
         for key in t.keys().filter(|k| !ACTION_KEYS.contains(&k.as_str())) {
-            if let Some(k) = local_near_miss(key, ACTION_KEYS) {
-                return Err(ConfigError::Invalid(format!(
-                    "[[action]] {}: unknown key `{key}`. Did you mean `{k}`?",
+            if let Some(k) = action_key_like(key) {
+                warnings.push(ConfigWarning::message(&format!(
+                    "[[action]] {}: `{key}` is passed to the program as a setting; the block's own key is `{k}`.",
                     i + 1
                 )));
             }

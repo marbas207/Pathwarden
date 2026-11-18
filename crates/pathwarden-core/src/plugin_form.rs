@@ -764,19 +764,22 @@ pub fn check_command(
     Ok(())
 }
 
-/// The message for a page session that tries to add a finding action,
-/// change the program one runs, or the environment variables it reads.
-pub const ACTIONS_LOCKED: &str = "This page can't add a finding action or change the program one runs or the environment variables it reads. Edit pathwarden.toml, or start the UI with pathwarden ui --allow-destinations.";
+/// The message for a page session that tries to add a finding action, or
+/// change anything of one but its name, time limit and filters.
+pub const ACTIONS_LOCKED: &str = "This page can't add a finding action or change its program or settings, only its name, time limit and filters. Edit pathwarden.toml, or start the UI with pathwarden ui --allow-destinations.";
 
 /// [`check_command`]'s rule for an `[[action]]` block, shared by the app
-/// and `pathwarden action add`. Without `allow` (the app without
-/// `--allow-destinations`) a save may change a block's other settings and
-/// filters, but not add a block, change its `plugin` or `command`, or set
-/// or remove a `*_env` setting: a page session must never make Pathwarden
-/// run a program of its choosing, nor hand a program a secret. A command
-/// the file already has is written back exactly as it is. With `allow`
-/// (and always from the terminal), network paths and relative script paths
-/// are still refused ([`plugins::check_args`]).
+/// and `pathwarden action add`, stricter than for outputs. Without `allow`
+/// (the app without `--allow-destinations`) a save may change only a
+/// block's name, `timeout_seconds` and filters (`min_severity`, `rules`,
+/// `categories`): not add a block, change its `plugin` or `command`, or
+/// set or remove any program setting. A setting may be where the program
+/// sends the finding (a URL, an instance, a queue), or name a secret
+/// (`*_env`), and a page session must never choose those or the program.
+/// A command the file already has is written back exactly as it is, and
+/// a setting set to the value it has is no change. With `allow` (and
+/// always from the terminal), network paths and relative script paths are
+/// still refused ([`plugins::check_args`]).
 pub fn check_action(
     allow: bool,
     edit: &mut ActionEdit,
@@ -810,18 +813,17 @@ pub fn check_action(
     if let Some(was) = &old.command {
         edit.command = Some(was.clone());
     }
-    let env_changed = edit.set.iter().any(|(k, v)| {
-        k.ends_with("_env")
-            && old.settings.get(k).and_then(Value::as_str)
-                != match v {
-                    Setting::Str(s) => Some(s.trim()),
-                    _ => None,
-                }
-    }) || edit
-        .remove
+    let as_value = |v: &Setting| match v {
+        Setting::Str(s) => Value::from(s.trim()),
+        Setting::Int(n) => Value::from(*n),
+        Setting::Bool(b) => Value::from(*b),
+    };
+    let setting_changed = edit
+        .set
         .iter()
-        .any(|k| k.ends_with("_env") && old.settings.contains_key(k));
-    if env_changed {
+        .any(|(k, v)| old.settings.get(k) != Some(&as_value(v)))
+        || edit.remove.iter().any(|k| old.settings.contains_key(k));
+    if setting_changed {
         return Err(ACTIONS_LOCKED.into());
     }
     Ok(())
