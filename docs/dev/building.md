@@ -158,8 +158,8 @@ and `cargo install cargo-cyclonedx --locked` (SBOMs). The musl build also
 needs `rustup target add x86_64-unknown-linux-musl` and `musl-tools`.
 
 Archives land in `dist/`, for example
-`pathwarden-1.0.0-rc.1-windows-x64-full.zip` and
-`pathwarden-1.0.0-rc.1-windows-x64-lean.zip`. Each holds the three executables,
+`pathwarden-1.0.0-rc.2-windows-x64-full.zip` and
+`pathwarden-1.0.0-rc.2-windows-x64-lean.zip`. Each holds the three executables,
 `LICENSE`, `THIRD-PARTY-NOTICES.md`, `THIRD-PARTY-LICENSES.md` (every crate's
 license, from cargo-about), `sbom/` (a CycloneDX 1.5 SBOM per executable, from
 cargo-cyclonedx), the README, the example configuration and the collector
