@@ -544,7 +544,14 @@ fn a_plain_file_in_an_encrypted_history_is_only_imported_on_purpose() {
         .records("PW-003-cccc")
         .is_empty());
     // What it holds, for whoever decides.
-    let summary = action_log::read_plain(&s).unwrap().unwrap().summary(5);
+    let (shown, hash) = action_log::read_plain(&s).unwrap().unwrap();
+    let summary = shown.summary(5);
+    // Every record, with its number, status and the link's host (none
+    // here: the javascript: link is dropped).
+    assert_eq!(
+        summary.record_lines,
+        [("PW-003-cccc".to_string(), "T-1 · Open".to_string())]
+    );
     assert_eq!(
         (summary.findings, summary.records, summary.activity),
         (1, 1, 1)
@@ -555,8 +562,15 @@ fn a_plain_file_in_an_encrypted_history_is_only_imported_on_purpose() {
         "{:?}",
         summary.newest
     );
+    // Only what was shown is imported.
+    let e = action_log::import_plain(&s, true, "0000").unwrap_err();
+    assert_eq!(
+        format!("{e:#}"),
+        "The file changed since you were shown it; run the command again."
+    );
+    assert!(plain.exists());
     // Imported on purpose: merged as untrusted, encrypted, plain removed.
-    action_log::import_plain(&s, true).unwrap();
+    action_log::import_plain(&s, true, &hash).unwrap();
     assert!(!plain.exists());
     assert!(sealed.exists());
     assert!(!action_log::plain_left(&s));
@@ -565,7 +579,10 @@ fn a_plain_file_in_an_encrypted_history_is_only_imported_on_purpose() {
     assert_eq!(r.record.id, "t-p");
     assert_eq!(r.record.url, None, "the javascript: link is dropped");
     assert_eq!(log.records("PW-002-bbbb").len(), 2);
-    assert!(action_log::import_plain(&s, true).is_err(), "nothing left");
+    assert!(
+        action_log::import_plain(&s, true, &hash).is_err(),
+        "nothing left"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -624,7 +641,8 @@ fn a_planted_file_stays_in_git_until_imported() {
     )
     .unwrap();
     assert_eq!(git(&remote, &["show", "main:actions.json"]), forged);
-    action_log::import_plain(&a, true).unwrap();
+    let (_, hash) = action_log::read_plain(&a).unwrap().unwrap();
+    action_log::import_plain(&a, true, &hash).unwrap();
     assert!(git_command()
         .arg("-C")
         .arg(&remote)
@@ -846,4 +864,162 @@ fn a_quick_save_goes_with_the_next_push() {
     .is_err());
     let _ = std::fs::remove_dir_all(&dir);
     let _ = std::fs::remove_dir_all(&folder);
+}
+
+/// A file of the saves waiting for a push, as raw bytes.
+fn pending_bytes(work: &Path) -> Option<Vec<u8>> {
+    std::fs::read(work.join(".git").join("pathwarden-actions-pending.json")).ok()
+}
+
+/// The saves waiting for a push survive a change of passphrase and a
+/// decrypt (written again in the history's new form), and are pushed by
+/// the next save; an empty list leaves no file behind.
+#[test]
+fn waiting_saves_survive_a_storage_change() {
+    if !have_git() {
+        return;
+    }
+    let ks = std::env::temp_dir().join(format!("pathwarden-actionlog-ks-{}", std::process::id()));
+    pathwarden_core::keystore::use_test_store(&ks);
+    let dir = scratch("pending-rekey");
+    let remote = bare(&dir);
+    let work = dir.join("a");
+    let (a, _) = git_store(&remote, &work);
+    a.pull().unwrap();
+    a.write_state_file("last-run.json", b"{}").unwrap();
+    a.encrypt(&pass(PASS), true).unwrap();
+    pathwarden_core::crypt::give_passphrase(&a.dir, pass(PASS));
+    // A save whose push is refused: kept, sealed.
+    let refuse = remote.join("hooks").join("pre-receive");
+    hook(&refuse, "#!/bin/sh\nexit 1\n");
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    std::fs::remove_file(&refuse).unwrap();
+    assert_eq!(action_log::pending_count(&a), 1);
+    let sealed_before = pending_bytes(&work).unwrap();
+    // A new passphrase: the waiting save is sealed with the new key.
+    a.change_passphrase(&pass(OTHER), true).unwrap();
+    pathwarden_core::crypt::give_passphrase(&a.dir, pass(OTHER));
+    let sealed_after = pending_bytes(&work).unwrap();
+    assert!(sealed_after.starts_with(b"age-encryption.org/"));
+    assert_ne!(sealed_before, sealed_after);
+    assert_eq!(action_log::pending_count(&a), 1, "still readable");
+    // Hold the push again, then decrypt: written plain.
+    hook(&refuse, "#!/bin/sh\nexit 1\n");
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    std::fs::remove_file(&refuse).unwrap();
+    a.decrypt(true).unwrap();
+    let plain = pending_bytes(&work).unwrap();
+    assert!(plain.starts_with(b"{"));
+    assert_eq!(action_log::pending_count(&a), 2);
+    // The next save pushes them all, and the list is gone.
+    a.pull().unwrap();
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-3", "2026-11-18T16:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert_eq!(remote_log(&remote).records("PW-001-aaaa").len(), 3);
+    assert_eq!(pending_bytes(&work), None, "no empty file left behind");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A file of waiting saves that can't be opened is moved aside, said so,
+/// and saves go on.
+#[test]
+fn unreadable_waiting_saves_are_moved_aside() {
+    if !have_git() {
+        return;
+    }
+    let dir = scratch("pending-bad");
+    let remote = bare(&dir);
+    let work = dir.join("a");
+    let (a, _) = git_store(&remote, &work);
+    a.pull().unwrap();
+    let file = work.join(".git").join("pathwarden-actions-pending.json");
+    std::fs::write(&file, b"not json at all").unwrap();
+    let notes = action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert!(
+        notes.iter().any(|n| n.contains("were moved aside to")),
+        "{notes:?}"
+    );
+    let aside: Vec<String> = std::fs::read_dir(work.join(".git"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.starts_with("pathwarden-actions-pending.json.unreadable-"))
+        .collect();
+    assert_eq!(aside.len(), 1, "{aside:?}");
+    assert_eq!(
+        std::fs::read(work.join(".git").join(&aside[0])).unwrap(),
+        b"not json at all"
+    );
+    assert_eq!(remote_log(&remote).records("PW-001-aaaa").len(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Decrypting leaves a plain actions.json that sat, never read, beside the
+/// encrypted history out of it: moved aside, with a note.
+#[test]
+fn decrypting_leaves_a_planted_plain_file_out() {
+    let (dir, s) = folder_with_a_record("decrypt-planted");
+    encrypt(&s);
+    std::fs::remove_file(dir.join("actions.json.age")).unwrap();
+    let forged = "{\"version\":1,\"findings\":{\"PW-009-x\":{\"records\":[{\"action\":\"a/b\",\"id\":\"x\",\"open\":true}]}}}\n";
+    std::fs::write(dir.join("actions.json"), forged).unwrap();
+    let done = s.decrypt(true).unwrap();
+    assert!(
+        done.notes.iter().any(|n| n.contains("moved aside to")),
+        "{:?}",
+        done.notes
+    );
+    assert_eq!(
+        std::fs::read_to_string(dir.join(action_log::LEFTOVER_FILE)).unwrap(),
+        forged
+    );
+    assert!(action_log::load(&s).unwrap().findings.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// What the import shows: every record, at most 20 lines.
+#[test]
+fn the_import_summary_lists_the_records() {
+    let mut f = ActionsFile::default();
+    for i in 0..25 {
+        let mut c = opened(
+            &format!("PW-001-{i:04}"),
+            &format!("t-{i}"),
+            &format!("2026-11-18T14:{i:02}:00.000Z"),
+            "ned",
+        );
+        c.records[0].record.url = Some(format!("https://desk{i}.example.com/x"));
+        c.apply(&mut f);
+    }
+    let s = f.summary(3);
+    assert_eq!(s.records, 25);
+    assert_eq!(s.record_lines.len(), action_log::SUMMARY_RECORDS);
+    assert_eq!(s.more_records, 5);
+    assert_eq!(
+        s.record_lines[0],
+        (
+            "PW-001-0000".to_string(),
+            "T-0 · Open · desk0.example.com".to_string()
+        )
+    );
+    assert_eq!(s.newest.len(), 3);
 }

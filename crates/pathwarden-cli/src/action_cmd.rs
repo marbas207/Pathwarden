@@ -726,6 +726,7 @@ fn start(
             said.extend(s.notes.iter().cloned());
         }
         Some(Err(why)) => said.push(format!("Not saved on the finding: {why}")),
+        // (A save kept here but not pushed says so in its notes.)
         None => {}
     }
     if json {
@@ -1130,6 +1131,15 @@ fn import_log(t: &Target, yes: bool) -> Result<ExitCode> {
         pathwarden_core::text::count(s.findings, "finding", "findings"),
         pathwarden_core::text::count(s.activity, "entry of activity", "entries of activity"),
     );
+    if !s.record_lines.is_empty() {
+        println!("Its records:");
+        for (fp, line) in &s.record_lines {
+            println!("  {}  {}", ui::safe(fp), ui::safe(line));
+        }
+        if s.more_records > 0 {
+            println!("  and {} more", s.more_records);
+        }
+    }
     if !s.newest.is_empty() {
         println!("The latest:");
         for (fp, line) in &s.newest {
@@ -1142,7 +1152,7 @@ fn import_log(t: &Target, yes: bool) -> Result<ExitCode> {
     if !yes {
         confirm("Import it?")?;
     }
-    let notes = actions_ui::import_plain(ws).map_err(anyhow::Error::msg)?;
+    let notes = actions_ui::import_plain(ws, &s.hash).map_err(anyhow::Error::msg)?;
     println!(
         "Imported: what it holds is in the history, encrypted, and the plain copy is removed."
     );

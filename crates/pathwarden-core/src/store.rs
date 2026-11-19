@@ -3529,6 +3529,15 @@ impl Store {
         fs::read(self.dir.join(".git").join(name)).ok()
     }
 
+    /// Removes [`Store::read_local_file`]'s file; whether it was there.
+    /// Nothing for a folder.
+    pub fn remove_local_file(&self, name: &str) -> Result<bool> {
+        if self.git.is_none() || name.contains(['/', '\\']) || name.starts_with('.') {
+            return Ok(false);
+        }
+        remove_if_there(&self.dir.join(".git").join(name))
+    }
+
     /// Writes [`Store::read_local_file`]'s file (atomically). Nothing for a
     /// folder.
     pub fn write_local_file(&self, name: &str, bytes: &[u8]) -> Result<()> {
@@ -4010,6 +4019,20 @@ impl Store {
         } else {
             None
         };
+        // Decrypting: a plain actions.json beside the encrypted history was
+        // never read (anyone who can push could have put it there), so it
+        // must not become the plain history's log: moved aside.
+        if was && to.is_none() {
+            let plain = self.dir.join(crate::action_log::FILE);
+            if fs::symlink_metadata(&plain).is_ok_and(|m| m.is_file()) {
+                let aside = self.dir.join(crate::action_log::LEFTOVER_FILE);
+                fs::rename(&plain, &aside)
+                    .with_context(|| format!("moving {} aside", plain.display()))?;
+            }
+        }
+        // The saves waiting for a push, opened now while the old key is
+        // here, written again in the new form once the rewrite is done.
+        let pending = crate::action_log::pending_plain(self);
         let files = self.state_files()?;
         let key = to.map(crypt::new_key).transpose()?;
         let mut staged: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -4102,6 +4125,13 @@ impl Store {
                 // Only the stub was there.
                 remove_if_there(&self.dir.join("findings.json"))?;
             }
+        }
+        if let Some(plain) = pending {
+            let bytes = match &key {
+                Some((id, _)) => crypt::seal(id, &plain)?,
+                None => plain,
+            };
+            self.write_local_file(crate::action_log::PENDING_FILE, &bytes)?;
         }
         Ok(files.len() - kept.len())
     }
@@ -4226,7 +4256,16 @@ impl Store {
         }
         let _lock = self.lock_waiting(crate::settings_sync::lock_wait())?;
         let mut notes: Vec<String> = self.pull()?.into_iter().collect();
+        let leftover = self.dir.join(crate::action_log::LEFTOVER_FILE);
+        let aside_before = leftover.exists();
         let files = change(self)?;
+        if !aside_before && leftover.exists() {
+            notes.push(format!(
+                "A plain actions.json beside the encrypted history was never read, so it was \
+                 left out of the decrypted history and moved aside to {}.",
+                leftover.display()
+            ));
+        }
         // What finding actions did, left as it was when it couldn't be read.
         if let Err(e) = crate::action_log::load(self) {
             notes.push(format!(

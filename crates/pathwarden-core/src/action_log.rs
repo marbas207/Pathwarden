@@ -31,7 +31,7 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -61,7 +61,7 @@ pub const MAX_BYTES: u64 = 16 << 20;
 pub const LEFT_SEALED_WORDS: &str = "What finding actions did (actions.json.age) is still \
 encrypted in a history that isn't any more: an older Pathwarden turned encryption off without \
 rewriting it, and the key it needs is gone. The rest of the history works. To get it back, \
-restore the old .pathwarden-key from the repository's history; to start over, remove \
+restore the old .pathwarden-key.age from the repository's history; to start over, remove \
 actions.json.age.";
 /// What is said when the file can't be opened with the history's key.
 pub const UNREADABLE_WORDS: &str = "What finding actions did (actions.json) can't be opened with \
@@ -83,7 +83,12 @@ pub const MAX_OTHER_BYTES: usize = 8 * 1024;
 /// An activity entry's `outcome` for a run someone stopped.
 pub const CANCELLED: &str = "cancelled";
 /// The working copy's file of saves whose push failed ([`replay_pending`]).
-const PENDING_FILE: &str = "pathwarden-actions-pending.json";
+pub(crate) const PENDING_FILE: &str = "pathwarden-actions-pending.json";
+/// Where decrypting moves a plain actions.json that sat, never read,
+/// beside the encrypted history.
+pub const LEFTOVER_FILE: &str = "actions.json.leftover";
+/// What a save says when it is kept here but not pushed.
+pub const NOT_PUSHED_WORDS: &str = "Not pushed yet: it will be retried with the next sync.";
 
 /// The whole file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -530,16 +535,19 @@ pub fn plain_left(store: &Store) -> bool {
 }
 
 /// What a plain actions.json in an encrypted history holds, read as
-/// untrusted ([`parse`]); `None` when there is none.
-pub fn read_plain(store: &Store) -> Result<Option<ActionsFile>> {
+/// untrusted ([`parse`]), and the SHA-256 of its bytes (hex), so what is
+/// imported is what was shown; `None` when there is none.
+pub fn read_plain(store: &Store) -> Result<Option<(ActionsFile, String)>> {
     match crate::store::read_leftover(&store.dir, FILE, MAX_BYTES)? {
         None => Ok(None),
-        Some(bytes) => Ok(Some(parse(&bytes)?)),
+        Some(bytes) => Ok(Some((parse(&bytes)?, crypt::digest_hex(&bytes)))),
     }
 }
 
-/// A plain file's contents in a few numbers, for the person deciding
-/// whether to import it.
+/// Most record lines a [`Summary`] lists.
+pub const SUMMARY_RECORDS: usize = 20;
+
+/// A plain file's contents, for the person deciding whether to import it.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Summary {
     pub findings: usize,
@@ -547,6 +555,19 @@ pub struct Summary {
     pub activity: usize,
     /// The latest entries, newest first: (fingerprint, line).
     pub newest: Vec<(String, String)>,
+    /// Its records, at most [`SUMMARY_RECORDS`]: fingerprint, then
+    /// "RITM10816190 · Open · desk.example.com" (the link's host).
+    pub record_lines: Vec<(String, String)>,
+    /// How many records [`Summary::record_lines`] leaves out.
+    pub more_records: usize,
+    /// The SHA-256 (hex) of the bytes summarised ([`read_plain`]).
+    pub hash: String,
+}
+
+/// The host of `url`, for a line about it.
+fn host_of(url: &str) -> &str {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    rest.split(['/', '?', '#']).next().unwrap_or_default()
 }
 
 impl ActionsFile {
@@ -558,15 +579,31 @@ impl ActionsFile {
             .flat_map(|(fp, l)| l.activity.iter().map(move |a| (fp, a)))
             .collect();
         all.sort_by(|a, b| b.1.at.cmp(&a.1.at));
+        let records: Vec<(String, String)> = self
+            .findings
+            .iter()
+            .flat_map(|(fp, l)| {
+                l.records.iter().map(move |r| {
+                    let mut line = chip(&r.record, false);
+                    if let Some(u) = &r.record.url {
+                        line.push_str(&format!(" · {}", host_of(u)));
+                    }
+                    (fp.clone(), line)
+                })
+            })
+            .collect();
         Summary {
             findings: self.findings.len(),
-            records: self.findings.values().map(|l| l.records.len()).sum(),
+            records: records.len(),
             activity: all.len(),
             newest: all
                 .into_iter()
                 .take(newest)
                 .map(|(fp, a)| (fp.clone(), a.line()))
                 .collect(),
+            more_records: records.len().saturating_sub(SUMMARY_RECORDS),
+            record_lines: records.into_iter().take(SUMMARY_RECORDS).collect(),
+            hash: String::new(),
         }
     }
 }
@@ -576,7 +613,11 @@ impl ActionsFile {
 /// encrypted, and the plain copy removed, in one commit pushed when the
 /// history is in git and `push`. Hold the lock and pull first. Notes for
 /// the user.
-pub fn import_plain(store: &Store, push: bool) -> Result<Vec<String>> {
+///
+/// `shown` is the [`Summary::hash`] the person saw: a file that hashes
+/// otherwise (changed since, or on the remote another computer pushed
+/// first) is refused.
+pub fn import_plain(store: &Store, push: bool, shown: &str) -> Result<Vec<String>> {
     if store.is_git() && !push {
         bail!("This computer only reads the run history ([state] push = false), so it can't change it.");
     }
@@ -584,9 +625,12 @@ pub fn import_plain(store: &Store, push: bool) -> Result<Vec<String>> {
         bail!("The history isn't encrypted, so there is no plain actions.json to import.");
     }
     let take = || -> Result<bool> {
-        let Some(plain) = read_plain(store)? else {
+        let Some((plain, hash)) = read_plain(store)? else {
             return Ok(false);
         };
+        if hash != shown {
+            bail!("The file changed since you were shown it; run the command again.");
+        }
         let mut file = load(store)?;
         merge(&mut file, &plain);
         store.write_state_file(FILE, &file.to_bytes())?;
@@ -726,7 +770,13 @@ impl Change {
     /// later ones.
     fn is_in(&self, file: &ActionsFile) -> bool {
         file.findings.get(&self.fingerprint).is_some_and(|log| {
-            self.removed.iter().all(|t| log.removed.contains(t))
+            // Its removals are there, or the remembered removals are full
+            // of later ones (it was dropped as the oldest).
+            let removed = self.removed.iter().all(|t| {
+                log.removed.contains(t)
+                    || (log.removed.len() >= MAX_REMOVED && log.removed.iter().all(|x| x.at > t.at))
+            });
+            removed
                 && (log.activity.iter().any(|a| a.key() == self.activity.key())
                     || (log.activity.len() >= MAX_ACTIVITY
                         && log.activity.iter().all(|a| a.at > self.activity.at)))
@@ -885,20 +935,21 @@ pub fn save(store: &Store, change: &Change, push: bool) -> Result<Vec<String>> {
     let mut notes = write(store, change)?;
     // Written: kept here until a push carries it, whatever happens to this
     // push. (A refused write never gets here.)
-    if store.is_git() {
-        add_pending(store, change)?;
-    }
+    notes.extend(add_pending(store, change)?);
     if store.is_git() {
         match store.publish_with(MESSAGE, || {
             write(store, change)?;
             Ok(Some(MESSAGE.to_string()))
         }) {
             Ok(p) => notes.extend(p.notes),
-            Err(e) => {
-                let kept = e.downcast::<KeptUnpushed>()?;
-                notes.extend(kept.notes.clone());
-                notes.push(kept.sentence("It is saved"));
-            }
+            Err(e) => match e.downcast::<KeptUnpushed>() {
+                Ok(kept) => {
+                    notes.extend(kept.notes.clone());
+                    notes.push(kept.sentence("It is saved"));
+                }
+                // Kept here (the saves waiting for a push), so not lost.
+                Err(e) => notes.push(format!("{NOT_PUSHED_WORDS} ({e:#})")),
+            },
         }
     }
     Ok(crate::store::once_each(notes))
@@ -916,30 +967,63 @@ struct Pending {
 /// The start of an age file: a sealed pending file.
 const AGE_HEADER: &[u8] = b"age-encryption.org/";
 
-/// The saves kept here. An error when they are there but can't be read
-/// (sealed, and the history's key isn't at hand): then they are left as
-/// they are.
-fn try_read_pending(store: &Store) -> Result<Pending> {
+/// The saves kept here, as JSON, opened with the history's key when
+/// sealed: for a rewrite of the history to write them again in its new
+/// form ([`crate::store`]). `None` when there are none, or they can't be
+/// opened.
+pub(crate) fn pending_plain(store: &Store) -> Option<Vec<u8>> {
+    let bytes = store.read_local_file(PENDING_FILE)?;
+    if !bytes.starts_with(AGE_HEADER) {
+        return Some(bytes);
+    }
+    let key = crypt::key_for(&store.dir).ok()?;
+    crypt::open(&key, &bytes, PENDING_FILE).ok()
+}
+
+/// The saves kept here, and a note when the file couldn't be opened or
+/// read: it is then moved aside (never treated as empty in place), and
+/// the list starts again. An error only when the history's own key isn't
+/// at hand (then nothing of the history can be written either).
+fn try_read_pending(store: &Store) -> Result<(Pending, Option<String>)> {
     let Some(bytes) = store.read_local_file(PENDING_FILE) else {
-        return Ok(Pending::default());
+        return Ok((Pending::default(), None));
     };
     let plain = if bytes.starts_with(AGE_HEADER) {
         let key = crypt::key_for(&store.dir)?;
-        crypt::open(&key, &bytes, PENDING_FILE)?
+        crypt::open(&key, &bytes, PENDING_FILE).ok()
     } else {
-        bytes
+        Some(bytes)
     };
-    // A damaged file is of no use to anyone: started again.
-    Ok(serde_json::from_slice(&plain).unwrap_or_default())
+    if let Some(p) = plain.and_then(|b| serde_json::from_slice::<Pending>(&b).ok()) {
+        return Ok((p, None));
+    }
+    let stamp = now_at().replace([':', '-'], "");
+    let aside = format!("{PENDING_FILE}.unreadable-{}", &stamp[..15]);
+    let from = store.dir.join(".git").join(PENDING_FILE);
+    let to = store.dir.join(".git").join(&aside);
+    std::fs::rename(&from, &to).with_context(|| format!("moving {} aside", from.display()))?;
+    Ok((
+        Pending::default(),
+        Some(format!(
+            "The saves of finding actions waiting here for a push couldn't be opened (an \
+             older Pathwarden changed the history's storage, or the file was damaged), so \
+             they were moved aside to {}; new saves are kept again from now on.",
+            to.display()
+        )),
+    ))
 }
 
 fn read_pending(store: &Store) -> Pending {
-    try_read_pending(store).unwrap_or_default()
+    try_read_pending(store).map(|(p, _)| p).unwrap_or_default()
 }
 
 /// Writes the saves kept here: encrypted with the history's key when the
 /// history is encrypted, as its own files are.
 fn write_pending(store: &Store, p: &Pending) -> Result<()> {
+    if p.changes.is_empty() {
+        store.remove_local_file(PENDING_FILE)?;
+        return Ok(());
+    }
     let plain = serde_json::to_vec(p)?;
     let bytes = if crypt::is_encrypted(&store.dir) {
         let key = crypt::key_for(&store.dir)?;
@@ -971,7 +1055,24 @@ fn with_pending_lock<T>(store: &Store, f: impl FnOnce() -> Result<T>) -> Result<
                     .and_then(|t| t.elapsed().ok())
                     .is_some_and(|age| age > std::time::Duration::from_secs(30));
                 if stale {
-                    let _ = std::fs::remove_file(&path);
+                    // Taken over by one process only: moved aside first,
+                    // and removed only if the one moved is still stale.
+                    let aside = path.with_extension(format!("stale-{}", std::process::id()));
+                    if std::fs::rename(&path, &aside).is_ok() {
+                        let still = std::fs::metadata(&aside)
+                            .and_then(|m| m.modified())
+                            .ok()
+                            .and_then(|t| t.elapsed().ok())
+                            .is_some_and(|age| age > std::time::Duration::from_secs(30));
+                        if still {
+                            let _ = std::fs::remove_file(&aside);
+                        } else if !path.exists() {
+                            // Another process's fresh lock: put back.
+                            let _ = std::fs::rename(&aside, &path);
+                        } else {
+                            let _ = std::fs::remove_file(&aside);
+                        }
+                    }
                     continue;
                 }
                 if start.elapsed() > std::time::Duration::from_secs(2) {
@@ -989,17 +1090,19 @@ fn with_pending_lock<T>(store: &Store, f: impl FnOnce() -> Result<T>) -> Result<
     out
 }
 
-/// Keeps `change` until a push carries it.
-fn add_pending(store: &Store, change: &Change) -> Result<()> {
+/// Keeps `change` until a push carries it. A note when the saves kept
+/// before couldn't be opened and were moved aside.
+fn add_pending(store: &Store, change: &Change) -> Result<Option<String>> {
     if !store.is_git() {
-        return Ok(());
+        return Ok(None);
     }
     with_pending_lock(store, || {
-        let mut p = try_read_pending(store)?;
+        let (mut p, note) = try_read_pending(store)?;
         if !p.changes.contains(change) {
             p.changes.push(change.clone());
         }
-        write_pending(store, &p)
+        write_pending(store, &p)?;
+        Ok(note)
     })
 }
 
@@ -1008,7 +1111,13 @@ fn add_pending(store: &Store, change: &Change) -> Result<()> {
 /// the next commit carries them. Nothing when there are none; a note when
 /// they can't be made (the log can't be read), and they are kept.
 pub fn replay_pending(store: &Store) -> Option<String> {
-    let p = read_pending(store);
+    let (p, aside) = match with_pending_lock(store, || try_read_pending(store)) {
+        Ok(read) => read,
+        Err(_) => return None,
+    };
+    if aside.is_some() {
+        return aside;
+    }
     if p.changes.is_empty() {
         return None;
     }
@@ -1042,7 +1151,7 @@ pub fn prune_pending(store: &Store) {
         return;
     };
     let _ = with_pending_lock(store, || {
-        let mut p = try_read_pending(store)?;
+        let (mut p, _) = try_read_pending(store)?;
         let before = p.changes.len();
         p.changes.retain(|c| !c.is_in(&file));
         if p.changes.len() != before {
@@ -1065,7 +1174,7 @@ pub fn pending_count(store: &Store) -> usize {
 ///
 /// A log that can't be saved to (a newer, damaged or unreadable file) is
 /// refused, and nothing is kept for later.
-pub fn save_here(store: &Store, change: &Change, locked: bool) -> Result<()> {
+pub fn save_here(store: &Store, change: &Change, locked: bool) -> Result<Vec<String>> {
     if locked {
         write(store, change)?;
     } else if store.is_git() {
@@ -1074,7 +1183,7 @@ pub fn save_here(store: &Store, change: &Change, locked: bool) -> Result<()> {
     } else {
         bail!("the run history is in use, so the cancelled run wasn't saved");
     }
-    add_pending(store, change)
+    Ok(add_pending(store, change)?.into_iter().collect())
 }
 
 /// Sets what actions did on each of `findings` and `resolved` from `file`

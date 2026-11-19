@@ -675,3 +675,33 @@ fn a_waiting_removal_is_made_only_when_its_removal_is_there() {
     assert!(removal.is_in(&f));
     assert!(f.findings[FP].records.is_empty());
 }
+
+/// A waiting removal that dropped off the remembered removals (all of them
+/// later) counts as made, so it isn't made again forever.
+#[test]
+fn a_removal_past_the_remembered_ones_counts_as_made() {
+    let ned = who("ned", "WS");
+    let mut f = ActionsFile::default();
+    opened(&f, "2026-11-18T14:00:00.000Z", &ned).apply(&mut f);
+    let r = f.findings[FP].records[0].clone();
+    let old = remove_change(FP, &r, &ned, "2026-11-18T14:30:00.000Z");
+    old.apply(&mut f);
+    for i in 0..MAX_REMOVED {
+        let t = Tombstone {
+            action: "a/b".into(),
+            id: format!("r-{i}"),
+            at: at_of_ms(1_795_017_600_000 + i as i64 * 1000),
+            by: None,
+            record_at: String::new(),
+        };
+        add_removed(f.findings.get_mut(FP).unwrap(), &t);
+    }
+    assert_eq!(f.findings[FP].removed.len(), MAX_REMOVED);
+    assert!(!f.findings[FP].removed.contains(&old.removed[0]));
+    assert!(old.is_in(&f));
+}
+
+#[test]
+fn the_left_sealed_words_name_the_key_file() {
+    assert!(LEFT_SEALED_WORDS.contains(crate::crypt::KEY_FILE));
+}
