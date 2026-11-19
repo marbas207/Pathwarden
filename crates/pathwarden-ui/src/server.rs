@@ -263,8 +263,10 @@ pub fn router(state: Shared) -> Router {
         // Evidence packs, findings files and the signing key.
         .merge(crate::evidence_ui::routes())
         .merge(crate::progress::routes())
-        // Automate: Schedule, Ticketing and alerts, History storage.
+        // Automate: Schedule, Plugins and actions, History storage.
         .merge(crate::automate::routes())
+        // Finding actions: the run page's dialog and its jobs.
+        .merge(crate::actions_app::routes())
         .merge(crate::history_ui::routes())
         .route(
             "/static/config.js",
@@ -723,6 +725,7 @@ async fn run_page(
     } else {
         env_note
     };
+    let env_note = format!("{env_note}{}", parts.note);
     Html(pages::run(
         &pages::Ctx::new(&st, &st.ws().runs()),
         &summary,

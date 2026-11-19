@@ -21,7 +21,7 @@ use pathwarden_core::config::ActionConfig;
 use pathwarden_core::config_edit::{ActionEdit, Setting};
 use pathwarden_core::plugin_form;
 use pathwarden_ui::actions_ui;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 
 use crate::config_cmd::{self, Target, Where};
 use crate::{emit_json, exit, ui};
@@ -732,12 +732,8 @@ fn start(
         None => {}
     }
     if json {
-        let mut v = serde_json::to_value(&out)?;
-        v["action"] = json!(o.address);
-        v["fingerprint"] = json!(f.fingerprint);
-        v["run"] = json!(ready.run.id);
-        v["saved"] = json!(matches!(&saved, Some(Ok(s)) if s.saved));
-        v["pushed"] = json!(matches!(&saved, Some(Ok(s)) if s.saved && s.pushed));
+        // What the app's result card reads too.
+        let v = actions_ui::outcome_json(ready, &out, saved.as_ref());
         for line in &said {
             eprintln!("{}", ui::safe(line));
         }
@@ -835,42 +831,8 @@ fn test(
         );
     };
     let ws = workspace(t)?;
-    let described = actions::describe(block).map_err(|e| anyhow::anyhow!("{e}"))?;
-    let Some((run, findings)) = actions_ui::latest_findings(ws) else {
-        bail!("Testing needs one analysis first. Analyze a collection or try the demo.");
-    };
-    let programs = [actions::Program {
-        config: block,
-        describe: &described.describe,
-    }];
-    let wanted = |o: &actions::Offered| {
-        action
-            .as_deref()
-            .is_none_or(|id| o.id.eq_ignore_ascii_case(id))
-    };
-    let Some((finding, offered)) = findings.iter().find_map(|f| {
-        let records = actions_ui::records_for(ws, &f.fingerprint);
-        actions::offered(&programs, f, &records)
-            .into_iter()
-            .find(|o| wanted(o))
-            .map(|o| (f, o))
-    }) else {
-        bail!(
-            "{} applies to no finding of the latest run ({}).",
-            match &action {
-                Some(id) => format!("{}/{id}", block.name),
-                None => block.name.clone(),
-            },
-            run.id
-        );
-    };
-    let ask = Ask {
-        action: Some(offered.address.clone()),
-        inputs: Map::new(),
-        dry_run: true,
-        record: None,
-    };
-    let ready = actions_ui::prepare(ws, blocks, Some(&run.id), &finding.fingerprint, &ask)
+    // The app's Test runs the same ([`actions_ui::test_target`]).
+    let ready = actions_ui::test_target(ws, blocks, &block.name, action.as_deref())
         .map_err(anyhow::Error::msg)?;
     start(ws, &ready, yes, false)
 }

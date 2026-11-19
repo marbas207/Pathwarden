@@ -4,7 +4,7 @@
 //!   task or timer on this computer, and the scheduled runs in the history),
 //!   then the generator for the nightly files, from any run of your own data
 //!   ([`crate::collect`]'s `schedule.rs`).
-//! - **Ticketing and alerts** (`/automate/ticketing`): the output plugins
+//! - **Plugins and actions** (`/automate/ticketing`): the output plugins
 //!   ([`crate::plugins_ui`]).
 //! - **History storage** (`/automate/history`): where the run history is
 //!   kept ([`crate::history_ui`]).
@@ -385,7 +385,7 @@ fn status(
             steps.push(r#"Scheduled runs appear in <a href="/runs">Runs</a> and <a href="/progress">Progress</a>, next to the runs you start here."#.into());
         }
     }
-    steps.push(r#"Open a ticket per finding in ServiceNow or Jira after each run: <a href="/automate/ticketing">Ticketing and alerts</a>."#.into());
+    steps.push(r#"Open a ticket per finding in ServiceNow or Jira after each run: <a href="/automate/ticketing">Plugins and actions</a>."#.into());
     b.push_str(r#"<h3 class="form-title">Next steps</h3><ol class="sched-next">"#);
     for s in steps {
         let _ = write!(b, "<li>{s}</li>");

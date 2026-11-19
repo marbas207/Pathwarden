@@ -17,6 +17,7 @@
 //! - [`explore_ui`]: the graph explorer (a run's objects, paths and zone
 //!   suggestions)
 
+pub mod actions_app;
 pub mod actions_ui;
 pub mod add_data;
 pub mod auto_pull;

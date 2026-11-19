@@ -1,7 +1,8 @@
 // What the Pathwarden app adds to a report it shows in its run page: on
 // each open finding a Retest button (on the row) and an action bar (Retest,
-// Accept risk, Open in Explore, Copy ID), on each accepted finding a bar
-// with Add a note, retest results per finding and per rule, and the frame's
+// Accept risk, Open in Explore, Copy ID, then the finding actions set up),
+// the records finding actions keep with their follow-ups and Activity, on
+// each accepted finding a bar with Add a note, retest results per finding and per rule, and the frame's
 // height and scroll requests so the page scrolls as one. The app adds this script, and a "pathwarden-retest" meta (its origin,
 // and per open finding whether a targeted retest is possible and the latest
 // result), only when it embeds a report; a downloaded report has neither.
@@ -408,6 +409,296 @@
     if (accepted[fp]) markAccepted(fp);
   });
 
+  // ---------------------------------------------------- finding actions
+  // The app's actions on each finding (data.ac, actions_ui::page_data):
+  // a button per action after the built-in ones, behind a divider (past
+  // three, More actions); the records' chips under the title; and one box
+  // with the records, their follow-ups and the latest Activity. All of it
+  // text. A click only asks the app, which checks it and opens its dialog.
+  var ac = data.ac && typeof data.ac === "object" ? data.ac : null;
+  var acActs = ac && ac.acts && typeof ac.acts === "object" ? ac.acts : {};
+  var acFindings = ac && ac.f && typeof ac.f === "object" ? ac.f : {};
+  var acRows = Object.create(null); // fingerprint -> its details.finding
+  var AC_ICONS = {
+    bolt: ["M13 3 5.5 13.5H11l-1 7.5 7.5-10.5H12z"],
+    chev: ["m6 9 6 6 6-6"],
+    ticket: ["M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5V10a2 2 0 0 0 0 4v2.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5V14a2 2 0 0 0 0-4z"],
+    ext: ["M14 4h6v6", "M20 4 11 13", "M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"],
+    check: ["m5 12.5 4.5 4.5L19 7.5"]
+  };
+  Object.keys(AC_ICONS).forEach(function (k) { if (!ICONS[k]) ICONS[k] = AC_ICONS[k]; });
+  function text(tag, cls, t) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (t != null) e.textContent = String(t);
+    return e;
+  }
+  function actLabel(addr) {
+    var a = own.call(acActs, addr) ? acActs[addr] : null;
+    return a && typeof a.label === "string" ? a.label : addr;
+  }
+  function ask(fp, addr, recordId) {
+    var m = { type: "pathwarden:action", fingerprint: fp, action: addr };
+    if (recordId) m.record = recordId;
+    send(m);
+  }
+  function https(u) { return typeof u === "string" && /^https:\/\/\S+$/i.test(u) && u.length <= 2048; }
+  // A record's chip: "RITM10816190 · Open"; on a fixed finding whose record
+  // is still open, "Fixed — RITM10816190 still Open".
+  function chip(rv, fixed) {
+    var r = rv || {};
+    var name = r.number || r.label || r.id || "";
+    var status = r.status || (r.open ? "Open" : "Closed");
+    var stale = fixed && r.open;
+    var c = text("span", "ac-chip" + (stale ? " stale" : r.open ? "" : " closed"));
+    c.title = typeof rv.chip === "string" ? rv.chip : name;
+    c.appendChild(icon("ticket"));
+    if (stale) c.appendChild(document.createTextNode("Fixed — "));
+    c.appendChild(text("span", "num", name));
+    c.appendChild(document.createTextNode(stale ? " still " + status : " · " + status));
+    return c;
+  }
+  function mini(cls, name, label, title, onClick) {
+    var b = button("ac-mini" + (cls ? " " + cls : ""), name, label, title || label, onClick);
+    return b;
+  }
+  function views(fp) {
+    var f = own.call(acFindings, fp) ? acFindings[fp] : null;
+    return f && f.view && typeof f.view === "object" ? f.view : null;
+  }
+  function list(v, k) { return v && Array.isArray(v[k]) ? v[k] : []; }
+
+  function renderActions(fp) {
+    var d = acRows[fp];
+    var v = views(fp);
+    if (!d || !v) return;
+    var fixed = acFindings[fp].status === "fixed";
+    var summary = d.querySelector(":scope > summary");
+    var title = summary && summary.querySelector(".title");
+    var body = d.querySelector(":scope > .body");
+    if (!body) return;
+    var bar = body.querySelector(":scope > .fa-bar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.className = "fa-bar";
+      bar.setAttribute("role", "group");
+      bar.setAttribute("aria-label", "Actions for this finding");
+      body.insertBefore(bar, body.firstChild);
+    }
+    // The report's own copies (from its analysis) give way to these.
+    if (title) {
+      var old = title.querySelectorAll(".ac-rowchips");
+      for (var i = 0; i < old.length; i++) old[i].remove();
+    }
+    var stat = body.querySelectorAll(":scope > .ac-static, :scope > .ac-box");
+    for (var j = 0; j < stat.length; j++) stat[j].remove();
+    var prev = bar.querySelector(".fa-acts");
+    if (prev) prev.remove();
+
+    // The buttons: three, then More actions.
+    var offered = list(v, "offered").filter(function (a) { return typeof a === "string" && own.call(acActs, a); });
+    if (offered.length) {
+      var grp = text("span", "fa-acts");
+      grp.setAttribute("role", "group");
+      grp.setAttribute("aria-label", "Actions");
+      var sep = text("span", "fa-sep");
+      sep.setAttribute("aria-hidden", "true");
+      grp.appendChild(sep);
+      var shown = offered.length > 3 ? offered.slice(0, 3) : offered;
+      shown.forEach(function (addr) {
+        grp.appendChild(button("fa-btn fa-act", "bolt", actLabel(addr), acActs[addr].description || actLabel(addr),
+          function () { ask(fp, addr, null); }));
+      });
+      if (offered.length > 3) {
+        var more = text("details", "fa-more");
+        var sum = text("summary", "fa-btn", "More actions ");
+        var chev = icon("chev");
+        chev.setAttribute("class", "ic chev");
+        sum.appendChild(chev);
+        more.appendChild(sum);
+        var menu = text("div", "fa-menu");
+        menu.setAttribute("role", "menu");
+        offered.slice(3).forEach(function (addr) {
+          var b = button("", "bolt", actLabel(addr), acActs[addr].description || actLabel(addr), function () {
+            more.open = false;
+            ask(fp, addr, null);
+          });
+          b.setAttribute("role", "menuitem");
+          menu.appendChild(b);
+        });
+        more.appendChild(menu);
+        more.addEventListener("click", function (e) { e.stopPropagation(); });
+        grp.appendChild(more);
+      }
+      var note = bar.querySelector(".fa-note");
+      bar.insertBefore(grp, note || null);
+    }
+
+    var records = list(v, "records");
+    // On the row, under the title: the first record's chip, and how many more.
+    if (title && records.length) {
+      var rc = text("span", "ac-rowchips");
+      rc.appendChild(chip(records[0], fixed));
+      if (records.length > 1) {
+        var n = text("span", "ac-more", "+" + (records.length - 1));
+        n.title = "And " + (records.length - 1) + " more " + (records.length === 2 ? "record" : "records");
+        rc.appendChild(n);
+      }
+      // After "first seen …", so the title keeps its width.
+      (title.querySelector(".seen") || title).appendChild(rc);
+    }
+    d.setAttribute("data-records", String(records.length));
+
+    var activity = list(v, "activity");
+    if (records.length || activity.length) {
+      var box = text("div", "ac-box");
+      if (records.length) {
+        var recs = text("div", "ac-recs");
+        records.forEach(function (rv) {
+          var r = rv || {};
+          var row = text("div", "ac-rec");
+          row.appendChild(chip(rv, fixed));
+          if (r.kind) row.appendChild(text("span", "ac-what", r.kind));
+          var fu = text("span", "ac-follow");
+          // A fixed finding's follow-up (Close request) first, then Open,
+          // then the others, then Copy.
+          var follow = list(rv, "follow_ups").filter(function (addr) { return own.call(acActs, addr); });
+          var urgent = function (addr) { return fixed && acActs[addr].fixed === true; };
+          var add = function (addr) {
+            var warn = urgent(addr);
+            fu.appendChild(mini(warn ? "warn" : "", warn ? "check" : "retest", actLabel(addr), acActs[addr].description,
+              function () { ask(fp, addr, r.id); }));
+          };
+          follow.filter(urgent).forEach(add);
+          if (https(r.url)) {
+            var a = text("a", "ac-mini");
+            a.href = r.url;
+            a.target = "_blank";
+            a.rel = "noopener noreferrer";
+            a.title = r.url;
+            a.appendChild(icon("ext"));
+            a.appendChild(text("span", null, "Open"));
+            a.addEventListener("click", function (e) { e.stopPropagation(); });
+            fu.appendChild(a);
+          }
+          follow.filter(function (addr) { return !urgent(addr); }).forEach(add);
+          var name = r.number || r.label || r.id || "";
+          fu.appendChild(mini("", "copy", "Copy", "Copy " + name, function (b, label) {
+            copy(String(name), function (ok) {
+              label.textContent = ok ? "Copied" : name;
+              setTimeout(function () { label.textContent = "Copy"; }, 1600);
+            });
+          }));
+          row.appendChild(fu);
+          recs.appendChild(row);
+        });
+        box.appendChild(recs);
+      }
+      if (activity.length) {
+        var act = text("div", "ac-act");
+        act.appendChild(text("h5", null, "Activity"));
+        var ol = text("ol");
+        var total = Number(v.activity_count) || activity.length;
+        var all = false;
+        var drawList = function () {
+          ol.textContent = "";
+          (all ? activity : activity.slice(0, 3)).forEach(function (e) {
+            var li = text("li", e.ok === false ? "bad" : "");
+            var st = text("span", "st");
+            st.setAttribute("aria-hidden", "true");
+            li.appendChild(st);
+            var line = text("span");
+            line.appendChild(text("span", "what", e.summary || e.line || ""));
+            var who = [e.by, e.on, typeof e.at_unix === "number" ? when(e.at_unix) : e.at].filter(function (x) { return typeof x === "string" && x; });
+            if (who.length) line.appendChild(text("span", "who", " — " + who.join(", ")));
+            var full = typeof e.message === "string" ? e.message.trim() : "";
+            if (e.ok === false && full && full !== e.summary) {
+              var more = text("span", "ac-full", full);
+              more.hidden = true;
+              var b = text("button", "ac-link", "Show details");
+              b.type = "button";
+              b.addEventListener("click", function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                more.hidden = !more.hidden;
+                b.textContent = more.hidden ? "Show details" : "Hide details";
+              });
+              line.appendChild(b);
+              line.appendChild(more);
+            }
+            li.appendChild(line);
+            ol.appendChild(li);
+          });
+          if (all && total > activity.length) {
+            ol.appendChild(text("li", "ac-earlier", "and " + (total - activity.length) + " earlier"));
+          }
+        };
+        drawList();
+        act.appendChild(ol);
+        if (total > 3) {
+          var showAll = text("button", "ac-all", "Show all (" + total + ")");
+          showAll.type = "button";
+          showAll.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            all = !all;
+            showAll.textContent = all ? "Show fewer" : "Show all (" + total + ")";
+            drawList();
+          });
+          act.appendChild(showAll);
+        }
+        box.appendChild(act);
+      }
+      bar.parentNode.insertBefore(box, bar.nextSibling);
+    }
+  }
+
+  // Has a record / No record, and "N findings have records" on the
+  // Overview's Open findings tile (only with a report that has the filter).
+  var recFilter = document.querySelector(".f-recs");
+  var ovRecs = null;
+  function recordCounts() {
+    if (!recFilter) return;
+    var n = 0;
+    Object.keys(acFindings).forEach(function (fp) { if (list(views(fp), "records").length) n++; });
+    if (ac && (ac.on === true || n > 0)) recFilter.hidden = false;
+    if (!ovRecs) {
+      var cards = document.querySelectorAll(".ov-card");
+      for (var i = 0; i < cards.length; i++) {
+        var l = cards[i].querySelector(".ov-label");
+        if (l && /^Open findings/.test(l.textContent)) {
+          var sub = cards[i].querySelector(".ov-sub");
+          if (!sub) break;
+          ovRecs = text("a", "ov-recs");
+          ovRecs.href = "#findings";
+          ovRecs.setAttribute("data-records-only", "");
+          ovRecs.title = "Show the findings with a record";
+          sub.appendChild(document.createElement("br"));
+          sub.appendChild(ovRecs);
+          break;
+        }
+      }
+    }
+    if (ovRecs) {
+      ovRecs.hidden = n === 0;
+      ovRecs.previousSibling.hidden = n === 0;
+      ovRecs.textContent = n + (n === 1 ? " finding has records" : " findings have records");
+    }
+    // The list follows the records as they change.
+    var picked = document.querySelector('input[name="f-records"]:checked');
+    if (picked && picked.value) picked.dispatchEvent(new Event("change"));
+  }
+
+  if (ac) {
+    document.querySelectorAll("details.finding").forEach(function (d) {
+      if (d.id.indexOf("f-") !== 0) return;
+      var fp = d.id.slice(2);
+      if (!own.call(acFindings, fp)) return;
+      acRows[fp] = d;
+      renderActions(fp);
+    });
+    recordCounts();
+  }
+
   // A new path (Findings, Introduced) opens its start in Explore.
   if (data.x === 1) {
     document.querySelectorAll("button.ip-xp[data-node]").forEach(function (b) {
@@ -518,6 +809,15 @@
     if (m.type === "pathwarden:viewport") {
       var shift = Number(m.shift);
       if (isFinite(shift)) pin(shift);
+      return;
+    }
+    if (m.type === "pathwarden:action-view") {
+      // What an action did, just now: the finding's buttons, chips and box.
+      if (typeof m.fingerprint !== "string" || !acRows[m.fingerprint] ||
+          !m.view || typeof m.view !== "object") return;
+      acFindings[m.fingerprint].view = m.view;
+      renderActions(m.fingerprint);
+      recordCounts();
       return;
     }
     if (typeof m.fingerprint !== "string" || !badges[m.fingerprint]) return;

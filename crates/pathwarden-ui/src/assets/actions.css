@@ -1,0 +1,97 @@
+/* Finding actions on the app's pages (actions_app.rs): the dialog with its
+   progress and result (beside retest.css's .rt-dialog), and the Finding
+   actions section of Plugins and actions. The app's own tokens. */
+.ac-dialog { width: min(600px, calc(100vw - 32px)); }
+.ac-eyebrow { margin: 0 0 8px; padding-right: 30px; font-size: 0.95rem; color: var(--ink); }
+.ac-dialog h2.sub { margin: 0 0 6px; }
+.ac-desc { margin: 0 0 16px; }
+.ac-desc[hidden] { display: none; }
+.ac-form { gap: 14px; }
+.ac-inputs { display: grid; gap: 14px; }
+.ac-inputs:empty { display: none; }
+.ac-field { display: grid; gap: 6px; font-size: 0.84rem; font-weight: 600; }
+.ac-field > label { display: block; font-weight: 600; }
+.ac-field.ac-check label { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.ac-field textarea, .ac-field input:not([type="checkbox"]), .ac-select {
+  font: inherit; font-size: 0.92rem; font-weight: 400; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--page); color: var(--ink);
+}
+.ac-field textarea { resize: vertical; }
+.ac-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--card); border: 1px solid var(--line); width: max-content; max-width: 100%; flex-wrap: wrap; }
+.ac-seg button { border: 0; background: transparent; color: var(--muted); font-family: inherit; font-size: 0.84rem; font-weight: 600; line-height: 1; padding: 7px 14px; border-radius: 7px; cursor: pointer; }
+.ac-seg button[aria-checked="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--ink); }
+.ac-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ac-sends { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 0.84rem; background: var(--chip); }
+.ac-sends > .ic { width: 18px; height: 18px; color: var(--muted); margin-top: 1px; }
+.ac-sends p { margin: 0; }
+.ac-linkbtn { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; white-space: nowrap; }
+.ac-linkbtn .chev { width: 13px; height: 13px; vertical-align: -2px; transition: transform 0.15s; }
+.ac-linkbtn[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.ac-json { margin: 8px 0 0; max-height: 210px; overflow: auto; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--page); font: 0.76rem/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+.ac-json .k { color: var(--accent); }
+.ac-json-note { margin: 6px 0 0; }
+.ac-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+.ac-foot .grow { flex: 1; }
+.ac-foot [hidden] { display: none !important; }
+.ac-saved:empty { display: none; }
+/* Test only: a switch. */
+.ac-switch { position: relative; display: inline-flex; align-items: center; gap: 10px; font-size: 0.88rem; font-weight: 600; cursor: pointer; }
+.ac-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ac-switch .track { position: relative; width: 34px; height: 20px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 35%, transparent); transition: background 0.15s; flex: none; }
+.ac-switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); transition: transform 0.15s; }
+.ac-switch input:checked + .track { background: var(--accent); }
+.ac-switch input:checked + .track::after { transform: translateX(14px); }
+.ac-switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Running: the program's lines, newest last. */
+.ac-run { display: grid; gap: 12px; padding: 14px 16px; border-radius: 12px; background: var(--chip); }
+.ac-run[hidden] { display: none; }
+.ac-run-head { display: flex; align-items: center; gap: 12px; }
+.ac-run-head > div { flex: 1; min-width: 0; }
+.ac-run-head strong { display: block; font-weight: 650; overflow-wrap: anywhere; }
+.ac-run-head .elapsed { font: 600 0.95rem var(--display); font-variant-numeric: tabular-nums; color: var(--muted); }
+.ac-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 0.88rem; max-height: 220px; overflow: auto; }
+.ac-lines:empty { display: none; }
+.ac-lines li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: center; color: var(--muted); overflow-wrap: anywhere; }
+.ac-lines li .ic { width: 15px; height: 15px; color: var(--good); stroke-width: 2.2; justify-self: center; }
+.ac-lines li.now { color: var(--ink); font-weight: 600; }
+.ac-lines li.now .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); justify-self: center; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent); }
+.ac-test-tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 6px; font: 700 0.68rem var(--sans, inherit); text-transform: uppercase; letter-spacing: 0.06em; color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); vertical-align: 2px; }
+/* The result card (retest.css's .rt-result), with the records' chips. */
+.ac-res { margin-top: 0; display: grid; gap: 10px; }
+.ac-res > p { margin: 0; overflow-wrap: anywhere; }
+.ac-res .ac-rec { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ac-res .ac-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; font-size: 0.86rem; font-weight: 650; white-space: nowrap; color: var(--ink); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.ac-res .ac-chip.closed { color: var(--muted); background: var(--chip); }
+.ac-res .ac-chip .ic { width: 15px; height: 15px; color: var(--accent); }
+.ac-res .ac-chip .num { font-family: var(--mono); font-weight: 600; }
+.ac-res .ac-link { width: max-content; font-weight: 600; }
+.ac-res details > summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.86rem; width: max-content; }
+.ac-res pre { margin: 8px 0 0; max-height: 200px; overflow: auto; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--page); font: 0.76rem/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.btn.small-btn { padding: 6px 11px; font-size: 0.84rem; border-radius: 8px; gap: 6px; }
+.btn.small-btn .ic { width: 15px; height: 15px; }
+.ac-copy-area { position: fixed; opacity: 0; }
+.ac-note { margin: 0 0 14px; }
+.ac-confirm { width: min(440px, calc(100vw - 32px)); }
+
+/* ---- Plugins and actions: the sections, and Finding actions ---------- */
+.ac-sect { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px 24px; flex-wrap: wrap; margin: 26px 0 12px; }
+.ac-sect h2.sub { margin: 0 0 4px; }
+.ac-sect p { margin: 0; }
+.ac-section { margin-bottom: 18px; }
+.ac-prog { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 6px 16px; padding: 15px 18px 6px; }
+.ac-list { margin: 0 18px 0 74px; padding: 0 0 8px; }
+.ac-list .ac-act { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: start; padding: 12px 0; border-top: 1px solid var(--line); }
+.ac-list .ac-act strong { font-weight: 650; }
+.ac-list .ac-d { color: var(--muted); font-size: 0.88rem; }
+.ac-meta { display: grid; grid-template-columns: 6.2rem minmax(0, 1fr); gap: 3px 14px; margin: 6px 0 0; font-size: 0.84rem; }
+.ac-meta .ac-mrow { display: contents; }
+.ac-meta dt { color: var(--muted); }
+.ac-meta dd { margin: 0; overflow-wrap: anywhere; }
+.ac-meta .opt { color: var(--muted); }
+.ac-fu { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; margin-right: 4px; border-radius: 6px; background: var(--chip); font-size: 0.8rem; font-weight: 600; }
+.ac-fu .when { color: var(--muted); font-weight: 400; }
+.ac-problem { margin: 8px 0; display: flex; gap: 8px; align-items: baseline; color: var(--muted); font-size: 0.86rem; }
+.ac-problem .ic { width: 15px; height: 15px; color: var(--warn); flex: none; }
+.pluglist.ac-progs > .ac-progwrap + .ac-progwrap { border-top: 1px solid var(--line); }
+.ac-progs + .after-list { margin-bottom: 18px; }
+/* A lock note: what is turned off in this app, with its (i). */
+.note.locked .tip-text a { color: inherit; font-weight: 600; text-decoration: underline; }

@@ -1,4 +1,4 @@
-//! `pathwarden plugins`: the Ticketing and alerts page from the terminal.
+//! `pathwarden plugins`: the Plugins and actions page from the terminal.
 //! The forms' rules are core's (`pathwarden_core::plugin_form`): a
 //! plugin added here is checked, refused and written exactly as the page's
 //! Save does (`ConfigDoc::upsert_output`), and `test` is the page's Test, a

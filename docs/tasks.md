@@ -144,6 +144,30 @@ pathwarden config risk accept --finding PW-006-5ca8fbd0a56628a3 --reason "Servic
 
 More: [Actions on a finding](ui.md#actions-on-a-finding).
 
+## Run a finding action
+
+### In the app
+
+1. On **Findings**, open the finding.
+2. Click the action (after the built-in buttons; past three, under **More
+   actions**).
+3. Fill in what it asks for. **See exactly what's sent** shows the
+   request; **Test only** makes it a dry run.
+4. Click **Run**, then **Done**. The record's chip shows under the
+   finding's title, and the run is in the finding's **Activity**.
+
+### On the command line
+
+```powershell
+pathwarden action list --fingerprint PW-006-5ca8fbd0a56628a3 --env Demo
+pathwarden action run PW-006-5ca8fbd0a56628a3 --action service-desk/open --input note="DBA team owns it" --env Demo
+```
+
+Set up the programs on **Plugins and actions** (**Finding actions**) or
+with `pathwarden action add`.
+
+More: [Finding actions](ui.md#finding-actions).
+
 ## Set a rule's severity
 
 ![Setting a rule's severity in the app](images/rule-severity.gif)
@@ -209,8 +233,8 @@ More: [Run on a schedule](running.md#run-on-a-schedule).
 
 ### In the app
 
-1. Under **Automate**, click **Ticketing and alerts**, then **Add
-   ServiceNow** or **Add Jira**.
+1. Under **Automate**, click **Plugins and actions**, then, under **After
+   each run**, **Add ServiceNow** or **Add Jira**.
 2. Fill in the address and what to create:
    - ServiceNow: **Instance URL**, **Create** and **Open tickets for**.
    - Jira: **Jira address**, **Jira** (Cloud or Data Center), **Project

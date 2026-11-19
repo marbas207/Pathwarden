@@ -108,6 +108,41 @@ ID**. After the review date an accepted risk counts as open again. A
 downloaded report has no actions. Your own buttons, such as **Open a
 ticket**, are finding actions: [Writing an action](actions.md).
 
+### Finding actions
+
+Finding actions you set up on **Plugins and actions** come after those
+buttons, behind a thin line; past three, the rest are under **More
+actions**. A button that makes a record once (such as a ticket) is hidden
+while that record is open.
+
+1. Click the action. The dialog shows what it asks for and one line of
+   what **Leaves this computer**; **See exactly what's sent** shows the
+   request the program gets, with your inputs.
+2. Turn on **Test only** for a dry run: the program is asked to change
+   nothing, and nothing is saved.
+3. Click **Run**. The program's lines show as it writes them, with the
+   time so far; **Cancel** stops it.
+4. The result shows each record it made (`RITM10816190 · Open`) with
+   **Open** and **Copy**; a failure has **Show details** with the
+   program's output.
+
+What it did is saved on the finding in the run history, for everyone who
+shares it: a run that couldn't be shared yet says it is saved on this
+computer and goes with the next sync. A cancelled run shows as cancelled.
+
+The record's chip sits under the finding's title. In the finding, one box
+holds its records with their follow-ups (such as **Check status**) and
+the latest three entries of **Activity** (**Show all** for the rest).
+Once a finding is fixed, its chip turns amber (`Fixed — RITM10816190
+still Open`) and a follow-up meant for that (such as **Close request**)
+comes first.
+
+On **Findings**, **Records** (**Any**, **Has a record**, **No record**)
+filters by records; on the Overview, the **Open findings** tile links
+"N findings have records" to that filter. One action runs at a time, and
+none during a collection or an analysis. `pathwarden action` does the
+same from the command line.
+
 ### Retesting a finding
 
 Make the change, then:
@@ -127,10 +162,16 @@ administrator copies them and runs the commands shown
 ([Schedule nightly runs](tasks.md#schedule-nightly-runs)). The page then
 shows the last scheduled run and says when it is late.
 
-**Ticketing and alerts** sends results to ServiceNow, Jira or a script.
-ServiceNow and Jira each have a form, with **Safety limits** on how many
-tickets one run may open or close. Give the name of an environment variable
-for each secret, never the secret.
+**Plugins and actions** has two sections. **After each run** sends results
+to ServiceNow, Jira or a script. ServiceNow and Jira each have a form, with
+**Safety limits** on how many tickets one run may open or close. Give the
+name of an environment variable for each secret, never the secret.
+**Finding actions** lists each action program, its actions with their
+inputs, what they send and which findings they apply to, and **Test** (a
+dry run on the first matching finding of the latest analysis). **Add an
+action program** and **Remove** need `--allow-destinations`
+([Safety locks](#safety-locks)); without it the name, time limit and
+filters can still change.
 
 ### History storage
 
@@ -176,6 +217,24 @@ where the copies are. The CLI does the same (`pathwarden env create
 --from-git`, `pathwarden config sync`); `pathwarden config sync
 --keep-local` on a first sync keeps this computer's settings instead and
 shares them.
+
+## Safety locks
+
+Some changes would let a page choose a program for Pathwarden to run, or
+where findings and runs go. The app makes them only when it was started
+with `pathwarden ui --allow-destinations`; otherwise the page says the
+change is turned off in this app, with an (i) that links here:
+
+- adding or changing a plugin's program;
+- a plugin's destination: its instance, Jira `project`, ServiceNow
+  `table`, `allow_insecure_http` and the environment variables it reads;
+- turning the ticket close limit off (100%);
+- **Connect to a run history**, and moving the run history;
+- adding, changing or removing a finding action's program or settings.
+
+The command line can make all of these (`pathwarden plugins`,
+`pathwarden action`, `pathwarden history storage set`, `pathwarden env
+create --from-git`), as can editing `pathwarden.toml`.
 
 ## Where your data goes
 

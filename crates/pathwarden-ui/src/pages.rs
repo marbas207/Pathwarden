@@ -24,7 +24,7 @@ pub enum Nav {
     Collect,
     // Automate (`automate`, `plugins_ui`, `history_ui`).
     Schedule,
-    /// Ticketing and alerts: the output plugins.
+    /// Plugins and actions: the output plugins and finding actions.
     Plugins,
     History,
     // Configuration (`settings`, `zones_ui`, `environments`).
@@ -638,7 +638,7 @@ pub(crate) fn shell(
             Nav::Plugins,
             "/automate/ticketing",
             "i-plug",
-            "Ticketing and alerts",
+            "Plugins and actions",
             None
         ),
         history = item(
@@ -1215,6 +1215,25 @@ pub(crate) fn tip(id: &str, about: &str, body: &str) -> String {
         about = esc(about),
         body = esc(body),
         i = icon("i-info"),
+    )
+}
+
+/// What a safety lock is, behind the (i) of each lock note
+/// ([`lock_note`]).
+pub(crate) const LOCK_ABOUT: &str = "A safety lock: it keeps a page from choosing a program for Pathwarden to run, or where findings and runs go.";
+
+/// A lock note: `words` (fixed text: what is turned off in this app and
+/// what still works), with an (i) that says it is a safety lock and links
+/// to the docs on turning it off. The page names no command.
+pub(crate) fn lock_note(id: &str, words: &str) -> String {
+    format!(
+        r#"<div class="note locked" data-lock="{id}">{lock}<p>{words} <span class="tip"><button type="button" class="tip-btn" aria-label="About: safety lock" aria-describedby="{id}-tip">{i}</button><span class="tip-text" role="tooltip" id="{id}-tip">{about} {docs}</span></span></p></div>"#,
+        id = esc(id),
+        lock = icon("i-lock"),
+        words = esc(words),
+        i = icon("i-info"),
+        about = esc(LOCK_ABOUT),
+        docs = repo_link("docs/ui.md#safety-locks", "How to turn it off"),
     )
 }
 

@@ -90,7 +90,15 @@ fn fake_action() -> PathBuf {
 /// A scratch folder with a workspace `ws` holding one saved analysis of
 /// the forest fixture, and the IDs of a critical and a high finding.
 fn workspace() -> (PathBuf, String, String, String) {
-    let dir = std::env::temp_dir().join(format!("pathwarden-cli-actions-{}", std::process::id()));
+    workspace_named("")
+}
+
+/// [`workspace`] in a folder of its own, for tests that run beside it.
+fn workspace_named(name: &str) -> (PathBuf, String, String, String) {
+    let dir = std::env::temp_dir().join(format!(
+        "pathwarden-cli-actions{name}-{}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let forest = repo("testdata/forest");
@@ -651,5 +659,113 @@ fn interrupting_a_run_cancels_it() {
     assert_eq!(act[0]["message"], "Cancelled");
     std::thread::sleep(std::time::Duration::from_secs(10));
     assert!(!mark.exists(), "the action's process outlived the cancel");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The app and `pathwarden action` give the same results (CLI/UI parity):
+/// what applies to a finding (the run page's buttons and `list
+/// --fingerprint`), what a run returns (the app's result card and `run
+/// --json`), and which finding Test runs on (Plugins and actions and
+/// `action test`). The app's side is the shared code its pages call.
+#[test]
+fn the_app_and_the_command_line_give_the_same_results() {
+    let (dir, ws_path, critical, _) = workspace_named("-parity");
+    let ws_arg = ws_path.as_str();
+    let call = |args: &[&str]| {
+        let full: Vec<&str> = ["action", "--workspace", ws_arg]
+            .iter()
+            .copied()
+            .chain(args.iter().copied())
+            .collect();
+        run(&dir, &full)
+    };
+    let command = command_of(&fake_action());
+    let mut add = vec!["add", "--name", "desk", "--"];
+    add.extend(command.iter().map(String::as_str));
+    ok(&call(&add));
+    let ws = pathwarden_ui::workspace::Workspace::open(&ws_path).unwrap();
+    let config = ws.config().unwrap();
+
+    // What applies to the finding.
+    let on = json(&call(&["list", "--fingerprint", &critical, "--json"]));
+    let cli: Vec<String> = on["actions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a["address"].as_str().unwrap().to_string())
+        .collect();
+    let blocks = pathwarden_ui::actions_ui::described(&config.actions);
+    let run_id = on["run"].as_str().unwrap();
+    let summary = ws.summary(run_id).unwrap();
+    let page = pathwarden_ui::actions_ui::page_data(&ws, &blocks, &summary).unwrap();
+    let app: Vec<String> = page["f"][&critical]["view"]["offered"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|a| a.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(cli, app);
+    assert_eq!(cli, ["desk/open", "desk/ping"]);
+
+    // What a run returns (a dry run, so the history is the same for both).
+    let cli = json(&call(&[
+        "run",
+        &critical,
+        "--action",
+        "desk/open",
+        "--input",
+        "note=Please look",
+        "--dry-run",
+        "--json",
+        "--yes",
+    ]));
+    let ask = pathwarden_core::actions::Ask {
+        action: Some("desk/open".into()),
+        inputs: [("note".to_string(), serde_json::json!("Please look"))]
+            .into_iter()
+            .collect(),
+        dry_run: true,
+        record: None,
+    };
+    let ready =
+        pathwarden_ui::actions_ui::prepare(&ws, &config.actions, None, &critical, &ask).unwrap();
+    let (out, saved) = pathwarden_ui::actions_ui::run_and_save(
+        &ws,
+        &ready,
+        &mut |_| {},
+        &pathwarden_core::actions::CancelHandle::new(),
+    )
+    .unwrap();
+    let app = pathwarden_ui::actions_ui::outcome_json(&ready, &out, saved.as_ref());
+    for key in [
+        "ok",
+        "message",
+        "records",
+        "links",
+        "dry_run",
+        "action",
+        "label",
+        "fingerprint",
+        "run",
+        "record",
+        "saved",
+        "pushed",
+        "ended",
+        "status",
+        "problems",
+    ] {
+        assert_eq!(cli[key], app[key], "{key}: {cli} / {app}");
+    }
+    assert_eq!(app["message"], "Would open a ticket (dry run).");
+
+    // Which finding Test runs on.
+    let text = ok(&call(&["test", "desk", "--action", "open", "--yes"]));
+    let ready =
+        pathwarden_ui::actions_ui::test_target(&ws, &config.actions, "desk", Some("open")).unwrap();
+    assert!(
+        text.contains(&format!("on {}", ready.finding.fingerprint)),
+        "{text}"
+    );
+    assert!(text.contains("Would open a ticket (dry run)."), "{text}");
     let _ = std::fs::remove_dir_all(&dir);
 }

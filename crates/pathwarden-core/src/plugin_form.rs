@@ -1,4 +1,4 @@
-//! The plugin forms' rules, shared by the app's Ticketing and alerts page
+//! The plugin forms' rules, shared by the app's Plugins and actions page
 //! and `pathwarden plugins`: what a ServiceNow, Jira or script plugin may be set
 //! to ([`PluginForm::edit`], turned into a [`ConfigDoc`] edit), which
 //! environment variables a plugin reads, and "Test", a dry run of the
@@ -32,15 +32,15 @@ pub const TEST_TIMEOUT: Duration = Duration::from_secs(120);
 pub const MAX_TEST_OUTPUT: usize = 64 * 1024;
 
 /// The message for a page session that tries to choose a program.
-pub const COMMANDS_LOCKED: &str = "This page can't add or change the program a plugin runs. Edit pathwarden.toml, or start the UI with pathwarden ui --allow-destinations.";
+pub const COMMANDS_LOCKED: &str = "Adding or changing plugin programs is turned off in this app. You can still change the name and settings, and use plugin programs from the plugins folder.";
 
 /// The message for a page session that tries to change where a plugin
 /// sends findings or its credentials, or which secrets it reads.
-pub const DESTINATION_LOCKED: &str = "This page can't change where a plugin sends findings: its instance, project, table, allow_insecure_http or the environment variables it reads. Edit pathwarden.toml, or start the UI with pathwarden ui --allow-destinations.";
+pub const DESTINATION_LOCKED: &str = "Changing where a plugin sends findings is turned off in this app: its instance, project, table, allow_insecure_http and the environment variables it reads. You can still change its other settings, ticket fields and safety limits.";
 
 /// The message for a page session that tries to turn off the ticketing
 /// plugins' check on how many open tickets one run may close.
-pub const GUARD_LOCKED: &str = "This page can't turn off the limit on how many open tickets one run may close (max_resolve_percent 100). Edit pathwarden.toml, or start the UI with pathwarden ui --allow-destinations.";
+pub const GUARD_LOCKED: &str = "Removing the limit on how many open tickets one run may close (100%) is turned off in this app. You can still set it anywhere below 100%.";
 
 /// The Jira plugin shipped with Pathwarden, which gets its own form too.
 pub const JIRA: &str = "jira";
@@ -766,7 +766,7 @@ pub fn check_command(
 
 /// The message for a page session that tries to add a finding action, or
 /// change anything of one but its name, time limit and filters.
-pub const ACTIONS_LOCKED: &str = "This page can't add a finding action or change its program or settings, only its name, time limit and filters. Edit pathwarden.toml, or start the UI with pathwarden ui --allow-destinations.";
+pub const ACTIONS_LOCKED: &str = "Adding or changing action programs is turned off in this app. You can still change the name, time limit and filters.";
 
 /// [`check_command`]'s rule for an `[[action]]` block, shared by the app
 /// and `pathwarden action add`, stricter than for outputs. Without `allow`

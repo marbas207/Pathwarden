@@ -538,7 +538,12 @@ details.guide > .body { border-left: 2px solid var(--accent); margin: 0 22px 14p
 .ar-text { white-space: pre-line; unicode-bidi: isolate; }
 .ar-meta { display: block; color: var(--muted); font-size: 0.78rem; }
 .ar-tag { margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; color: var(--muted); background: var(--chip); white-space: nowrap; vertical-align: 1px; unicode-bidi: isolate; }
-.ac-chip { margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; color: var(--ink); background: var(--chip); white-space: nowrap; vertical-align: 1px; unicode-bidi: isolate; }
+.ac-rowchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.ac-chip { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 7px; font-size: 0.72rem; font-weight: 650; color: var(--ink); background: color-mix(in srgb, var(--accent) 13%, transparent); white-space: nowrap; unicode-bidi: isolate; }
+.ac-chip.closed { color: var(--muted); background: var(--chip); }
+.f-recs { display: inline-flex; align-items: center; gap: 8px; }
+.f-recs[hidden] { display: none; }
+.f-recs > .muted { font-size: 0.86rem; }
 .ac-activity { list-style: none; margin: 4px 0 0; padding: 0 0 0 12px; border-left: 2px solid var(--chip); display: grid; gap: 4px; font-size: 0.88rem; }
 .ac-activity .ac-who { color: var(--muted); }
 .ac-activity .ac-failed { color: var(--muted); }

@@ -623,7 +623,7 @@ not new, and does not fail --fail-on new."
     /// app's Mappings page).
     Mappings(mappings_cmd::MappingsArgs),
     /// Output plugins that run after each run: ServiceNow, Jira, your own script;
-    /// add, remove, test (the app's Ticketing and alerts page).
+    /// add, remove, test (the app's Plugins and actions page).
     Plugins(plugins_cmd::PluginsArgs),
     /// Finding actions: your own program for one finding, run when you ask
     /// (open a ticket, alert a team); list, run, add, remove, test, and

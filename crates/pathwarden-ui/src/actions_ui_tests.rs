@@ -69,7 +69,8 @@ fn a_fixed_findings_view_offers_its_follow_ups() {
     assert!(v.offered.is_empty(), "{:?}", v.offered);
     assert_eq!(v.records.len(), 1);
     assert_eq!(v.records[0].chip, "Fixed — RITM10816190 still Open");
-    assert_eq!(v.records[0].follow_ups, ["desk/status", "desk/close"]);
+    // The follow-up meant for a fixed finding comes first.
+    assert_eq!(v.records[0].follow_ups, ["desk/close", "desk/status"]);
     assert_eq!(v.activity_count, 1);
     assert!(
         v.activity[0]

@@ -614,13 +614,14 @@ pub const EARLIER_REPORT_SCRIPTS: &[&str] = &[
     "eozet0KsewtfI4XMXQD6uSLmQ90V8AgDM9XCUNqyUCc=",
     "KUQ9qAmctZuO6WKtzQLSb5E6ck/b3stgi8XU+RvnNng=",
     "lXJbStW1yOKg02kmMsyEXLKKEq48frcwW0swkENLVTw=",
+    "BaJqGQMyfGUD4uGLGHtGjUjW1YZCJxRmr9Jk2oW+LaY=",
 ];
 
 /// The hash of today's `report.js`. A test holds it to the script, so a
 /// change to the script can't go in without its old hash in
 /// [`EARLIER_REPORT_SCRIPTS`] and this one updated.
 #[cfg(test)]
-const REPORT_SCRIPT: &str = "BaJqGQMyfGUD4uGLGHtGjUjW1YZCJxRmr9Jk2oW+LaY=";
+const REPORT_SCRIPT: &str = "MlCUNENbgU13e0VaRlD4GESD7HYvDWOlgOyiVhSIMNw=";
 
 /// The CSP hash of a report's own script: its last `<script>`.
 fn own_script_hash(html: &str) -> Option<String> {
@@ -783,12 +784,45 @@ pub fn report_meta(st: &AppState, r: &RunSummary, origin: &str) -> String {
                 .collect()
         })
         .unwrap_or_default();
-    let data =
+    let mut data =
         serde_json::json!({ "origin": origin, "f": f, "acc": acc, "a": notable, "x": u8::from(x) });
+    // Finding actions: the buttons, records and activity per finding
+    // (their texts, which the frame shows as text), and the actions by
+    // address. Only when an action is set up or a finding has a record.
+    if let Some(ac) = actions_meta(st, r) {
+        data["ac"] = ac;
+    }
     format!(
         r#"<meta name="pathwarden-retest" content="{}">"#,
         crate::pages::json_attr(&data.to_string())
     )
+}
+
+/// What the embedded report shows of finding actions
+/// ([`crate::actions_ui::page_data`]), without the titles the report has
+/// already; `None` when no action is set up and no finding has a record.
+fn actions_meta(st: &AppState, r: &RunSummary) -> Option<serde_json::Value> {
+    let ws = st.workspace.for_run(r);
+    let config = ws.config().unwrap_or_default();
+    let any = crate::actions_ui::log(&ws).is_ok_and(|l| {
+        l.findings
+            .values()
+            .any(|f| !f.records.is_empty() || !f.activity.is_empty())
+    });
+    if config.actions.is_empty() && !any {
+        return None;
+    }
+    let blocks = crate::actions_ui::described(&config.actions);
+    let mut data = crate::actions_ui::page_data(&ws, &blocks, r)?;
+    if let Some(f) = data["f"].as_object_mut() {
+        for v in f.values_mut() {
+            if let Some(o) = v.as_object_mut() {
+                o.remove("title");
+            }
+        }
+    }
+    data["on"] = serde_json::Value::from(!config.actions.is_empty());
+    Some(data)
 }
 
 /// Accepted risks in the workspace config: they apply from the next
@@ -860,6 +894,9 @@ pub struct PageParts {
     /// The Download menu: the report, an evidence pack, a findings file
     /// ([`crate::evidence_ui::download_menu`]).
     pub download: String,
+    /// One note above the report about what finding actions did, when it
+    /// can't all be read ([`crate::actions_app::run_parts`]).
+    pub note: String,
 }
 
 /// The run page's dialogs, hidden until a finding's button in the report
@@ -918,9 +955,11 @@ pub fn page_parts(st: &AppState, r: &RunSummary) -> PageParts {
         }
     }
     let blocked = crate::evidence_ui::pack_blocked(&st.workspace, r);
+    let (actions, note) = crate::actions_app::run_parts(st, r);
     PageParts {
-        dialogs: dialogs(r, data, notes) + &crate::evidence_ui::dialogs(r),
+        dialogs: dialogs(r, data, notes) + &crate::evidence_ui::dialogs(r) + &actions,
         download: crate::evidence_ui::download_menu(r, blocked),
+        note,
         retested,
         targeted,
         fixed,

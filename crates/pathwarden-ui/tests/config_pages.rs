@@ -162,7 +162,7 @@ async fn pages_render_without_a_config_or_a_run() {
         assert!(!body.contains("<script>"), "{uri}: no inline scripts");
         assert!(!body.contains(" style=\""), "{uri}: no inline styles");
     }
-    // Plugins moved to Automate › Ticketing and alerts.
+    // Plugins moved to Automate › Plugins and actions.
     let (s, _) = a.get("/plugins").await;
     assert_eq!(s, StatusCode::PERMANENT_REDIRECT);
     let (s, _) = a.get("/zones/0/edit").await;
@@ -1278,14 +1278,17 @@ async fn plugin_commands_need_the_flag() {
         v["error"]
             .as_str()
             .unwrap()
-            .contains("--allow-destinations"),
+            .contains("Adding or changing plugin programs is turned off in this app."),
         "{v}"
     );
     assert!(a.config().is_none());
-    // The form says why, and offers only a plugin program.
+    // The form says why in plain words (an (i) links to the docs), and
+    // offers only a plugin program.
     let (s, body) = a.get("/plugins/new?kind=command").await;
     assert_eq!(s, StatusCode::OK);
-    assert!(body.contains("start the app with plugin programs allowed"));
+    assert!(body.contains("Adding or changing plugin programs is turned off in this app."));
+    assert!(body.contains("docs/ui.md#safety-locks"));
+    assert!(!body.contains("--allow-destinations"));
     assert!(body.contains(r#"value="command" disabled"#), "{body}");
     assert!(body.contains(r#"value="named" checked"#), "{body}");
     // A plugin program by name is fine.
@@ -1389,7 +1392,7 @@ async fn plugin_commands_refuse_network_paths() {
     assert!(a.config().is_none());
     // The form has no lock note.
     let (_, body) = a.get("/plugins/new?kind=command").await;
-    assert!(!body.contains("--allow-destinations"));
+    assert!(!body.contains("docs/ui.md#safety-locks"));
     assert!(body.contains(r#"value="command" checked"#));
 }
 

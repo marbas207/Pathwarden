@@ -144,17 +144,23 @@ export PATHWARDEN_SN_PASSWORD="••••••••"</pre>"#
     )
 }
 
-/// Ticketing and alerts (`/automate/ticketing`, in the Automate area).
+/// The page's title and rail entry: the output plugins (After each run)
+/// and finding actions.
+pub const PAGE_TITLE: &str = "Plugins and actions";
+
+/// Plugins and actions (`/automate/ticketing`, in the Automate area): the
+/// output plugins (After each run) and finding actions.
 pub(crate) async fn list_page(State(st): State<Shared>) -> Html<String> {
     let runs = st.ws().runs();
     let ctx = pages::Ctx::new(&st, &runs);
     let loaded = settings::load(&st);
     let latest = run_data::latest_with(&st.ws(), run_data::EVENT_FILE);
     let mut b = format!(
-        r#"<div class="page-head"><div><p class="eyebrow">Automate</p><h1 class="panel-title">Ticketing and alerts</h1>
-<p class="lead">After each scheduled run (set up on <a href="/automate/schedule">Schedule</a>), Pathwarden can hand the results to other systems through plugins: a ticket per finding in ServiceNow or Jira, or a plugin of your own.</p></div>
-<div class="rh-actions"><a class="btn primary" href="/plugins/new?kind=servicenow">{plus} Add ServiceNow</a><a class="btn primary" href="/plugins/new?kind=jira">{plus} Add Jira</a><a class="btn" href="/plugins/new?kind=command">{plus} {other}</a></div></div>
-{file}"#,
+        r#"<div class="page-head"><div><p class="eyebrow">Automate</p><h1 class="panel-title">{PAGE_TITLE}</h1>
+<p class="lead">Hand each scheduled run's results to other systems (set up on <a href="/automate/schedule">Schedule</a>), and add your own buttons to findings.</p></div></div>
+{file}
+<div class="ac-sect" id="after-each-run"><div><h2 class="sub">After each run</h2><p class="muted">A ticket per finding in ServiceNow or Jira, or a plugin of your own.</p></div>
+<div class="rh-actions"><a class="btn primary" href="/plugins/new?kind=servicenow">{plus} Add ServiceNow</a><a class="btn primary" href="/plugins/new?kind=jira">{plus} Add Jira</a><a class="btn" href="/plugins/new?kind=command">{plus} {other}</a></div></div>"#,
         plus = icon("i-plus"),
         other = esc(other_title(st.allow_destinations)),
         file = settings::file_line_if_there(&st, &loaded),
@@ -208,14 +214,19 @@ pub(crate) async fn list_page(State(st): State<Shared>) -> Html<String> {
             }
         );
     }
+    b.push_str(&crate::actions_app::settings_section(
+        &st,
+        &loaded.config.actions,
+    ));
     b.push_str(&where_note());
     b.push_str(&env_help());
     b.push_str(&settings::after_save(&st));
     b.push_str(r#"<script src="/static/config.js" defer></script>"#);
+    b.push_str(crate::actions_app::SCRIPTS);
     Html(pages::shell(
         &ctx,
         Some(Nav::Plugins),
-        "Ticketing and alerts",
+        PAGE_TITLE,
         "config",
         &b,
     ))
@@ -328,13 +339,14 @@ fn form_page(st: &AppState, index: Option<usize>, o: &OutputConfig, kind: Kind) 
         (Some(_), _) => format!("Edit {}", o.plugin),
     };
     let head = format!(
-        r#"<div class="page-head"><div><p class="eyebrow"><a href="/automate/ticketing">Ticketing and alerts</a></p><h1 class="panel-title">{}</h1></div></div>"#,
+        r#"<div class="page-head"><div><p class="eyebrow"><a href="/automate/ticketing">{PAGE_TITLE}</a></p><h1 class="panel-title">{}</h1></div></div>"#,
         esc(&title)
     );
     let meta = serde_json::json!({ "index": index, "expect": o.plugin, "kind": kind.name() });
+    let locked = !st.allow_destinations;
     let body = match kind {
-        Kind::ServiceNow => servicenow_form(o),
-        Kind::Jira => jira_form(o),
+        Kind::ServiceNow => servicenow_form(o, locked),
+        Kind::Jira => jira_form(o, locked),
         Kind::Command => command_form(o, st.allow_destinations),
     };
     let page = format!(
@@ -356,7 +368,7 @@ fn form_page(st: &AppState, index: Option<usize>, o: &OutputConfig, kind: Kind) 
     ))
 }
 
-fn servicenow_form(o: &OutputConfig) -> String {
+fn servicenow_form(o: &OutputConfig, locked: bool) -> String {
     let table = match setting_str(o, "table") {
         "" => "incident",
         t => t,
@@ -417,7 +429,7 @@ fn servicenow_form(o: &OutputConfig) -> String {
         .filter(|k| !shown.contains(k))
         .collect();
     format!(
-        r#"<input type="hidden" id="pl-name" value="servicenow">
+        r#"<input type="hidden" id="pl-name" value="servicenow">{lock}
 <p class="muted">One ticket per finding: new findings get a ticket, fixed ones are resolved, and findings that come back reopen theirs. {docs} lists every option.</p>
 <div class="fields2">
   <div class="field"><label for="sn-instance">Instance URL</label><input class="input mono" id="sn-instance" value="{instance}" placeholder="https://example.service-now.com" autocomplete="off" spellcheck="false" required><p class="hint">Must start with <code>https://</code>: credentials are sent to it.</p></div>
@@ -453,9 +465,20 @@ fn servicenow_form(o: &OutputConfig) -> String {
         token_env = crate::pages::attr(&env_or("token_env", SN_TOKEN)),
         fields = kv_rows(&fields),
         plus = icon("i-plus"),
-        limits = limits_html(o, "tickets"),
+        limits = limits_html(o, "tickets", locked),
         other = kept_note(&other),
+        lock = destination_lock(locked),
     )
+}
+
+/// The lock note on the ServiceNow and Jira forms without
+/// `--allow-destinations`: where findings go can't be changed here.
+fn destination_lock(locked: bool) -> String {
+    if locked {
+        pages::lock_note("lock-destinations", plugin_form::DESTINATION_LOCKED)
+    } else {
+        String::new()
+    }
 }
 
 /// "Also set in the file and kept as written: ...", for settings the form
@@ -517,19 +540,24 @@ fn number_text(o: &OutputConfig, key: &str, default: &str) -> String {
 
 /// The ServiceNow and Jira plugins' safety limits (`max_create`,
 /// `max_resolve_percent`); `noun` is "tickets" or "issues".
-fn limits_html(o: &OutputConfig, noun: &str) -> String {
+fn limits_html(o: &OutputConfig, noun: &str, locked: bool) -> String {
     format!(
         r#"<h3 class="form-title">Safety limits</h3>
 <div class="fields2">
   <div class="field"><label for="pl-max-create">Most new {noun} in one run</label><input class="input" id="pl-max-create" type="number" min="1" max="100000" step="1" value="{create}" placeholder="100" inputmode="numeric"><p class="hint">A run that would open more opens none of them and says why, so a first run on a big domain can't flood the queue. Default 100.</p></div>
   <div class="field"><label for="pl-max-resolve">Most open {noun} closed in one run (%)</label><input class="input" id="pl-max-resolve" type="number" min="1" max="100" step="1" value="{resolve}" placeholder="50" inputmode="numeric"><p class="hint">A run that would close more closes none of them and says why, for example after a collection that missed a domain. Default 50; 100 turns this off.</p></div>
-</div>"#,
+</div>{guard}"#,
         create = crate::pages::attr(&number_text(o, "max_create", "100")),
         resolve = crate::pages::attr(&number_text(o, "max_resolve_percent", "50")),
+        guard = if locked {
+            pages::lock_note("lock-close-limit", plugin_form::GUARD_LOCKED)
+        } else {
+            String::new()
+        },
     )
 }
 
-fn jira_form(o: &OutputConfig) -> String {
+fn jira_form(o: &OutputConfig, locked: bool) -> String {
     let data_center = matches!(setting_str(o, "deployment"), "data_center" | "server");
     let pat = o.settings.contains_key("pat_env");
     let or = |key: &str, default: &str| match setting_str(o, key) {
@@ -602,7 +630,7 @@ fn jira_form(o: &OutputConfig) -> String {
         .collect();
     let attr = |s: &str| crate::pages::attr(s);
     format!(
-        r#"<input type="hidden" id="pl-name" value="jira">
+        r#"<input type="hidden" id="pl-name" value="jira">{lock}
 <p class="muted">One issue per finding: new findings get an issue, fixed ones are closed, and findings that come back reopen theirs. {docs} lists every option.</p>
 <div class="fields2">
   <div class="field"><label for="j-instance">Instance URL</label><input class="input mono" id="j-instance" value="{instance}" placeholder="https://example.atlassian.net" autocomplete="off" spellcheck="false" required><p class="hint">Must start with <code>https://</code>: credentials are sent to it.</p></div>
@@ -659,7 +687,8 @@ fn jira_form(o: &OutputConfig) -> String {
         prio_off = if priority_off { " selected" } else { "" },
         fields = kv_rows(&fields),
         plus = icon("i-plus"),
-        limits = limits_html(o, "issues"),
+        limits = limits_html(o, "issues", locked),
+        lock = destination_lock(locked),
         adv_open = if advanced { " open" } else { "" },
         close_tr = attr(setting_str(o, "close_transition")),
         reopen_tr = attr(setting_str(o, "reopen_transition")),
@@ -668,12 +697,9 @@ fn jira_form(o: &OutputConfig) -> String {
     )
 }
 
-/// Why the page can't change a plugin's program, and how to allow it.
+/// Why the page can't change a plugin's program.
 fn commands_locked_note() -> String {
-    format!(
-        r#"<div class="note commands-locked">{}<p><strong>The program can't be changed here.</strong> Choosing which program a plugin runs means choosing a program for Pathwarden to run as you, so by default only <code>pathwarden.toml</code> can do it. Edit that file, or start the app with plugin programs allowed. You can still change the name and settings, test plugins already in the file, and use plugin programs from the plugins folder.</p></div>"#,
-        icon("i-lock")
-    )
+    pages::lock_note("lock-programs", plugin_form::COMMANDS_LOCKED)
 }
 
 fn command_form(o: &OutputConfig, allow_commands: bool) -> String {

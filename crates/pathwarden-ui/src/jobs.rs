@@ -53,6 +53,12 @@ pub enum JobStatus {
         /// "FABRIKAM.LOCAL matches Lab; WOODGROVE.LOCAL is new."
         reason: String,
     },
+    /// A finding action running ([`ActionProgress`]): not an analysis,
+    /// so it never holds up a collection or an analysis.
+    Acting,
+    /// A finding action that ended: its result is in
+    /// [`ActionProgress::result`].
+    Acted,
 }
 
 impl JobStatus {
@@ -86,7 +92,34 @@ pub struct Job {
     /// Collection jobs: set to stop the collector.
     #[serde(skip)]
     pub cancel: Option<Arc<AtomicBool>>,
+    /// Finding actions: the program's progress lines and, once it ended,
+    /// the result ([`crate::actions_app`]).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<ActionProgress>,
+    /// Finding actions: stops the program.
+    #[serde(skip)]
+    pub stop: Option<pathwarden_core::actions::CancelHandle>,
 }
+
+/// A finding action's run, as the progress view shows it: the program's
+/// lines as they come (text only), and once it ended, what it did.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ActionProgress {
+    /// The action's label: "Open a service request".
+    pub label: String,
+    /// A dry run (Test only, or Test on the settings page).
+    pub dry_run: bool,
+    /// The program's latest lines ([`ACTION_LINES`]).
+    pub lines: Vec<String>,
+    /// Lines so far (`lines` keeps only the last ones).
+    pub lines_total: usize,
+    /// What it did ([`crate::actions_ui::outcome_json`]), once it ended.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<serde_json::Value>,
+}
+
+/// Lines of a finding action's output kept for the progress view.
+pub const ACTION_LINES: usize = 40;
 
 /// A collection's progress, as the Collect page shows it. Holds no secrets:
 /// only phases, counts, collector output lines and warnings.
@@ -317,6 +350,74 @@ impl Jobs {
         self.lock().values().find(|j| j.status.is_active()).cloned()
     }
 
+    /// The finding action running, if any: one runs at a time.
+    pub fn acting(&self) -> Option<Job> {
+        self.lock()
+            .values()
+            .find(|j| matches!(j.status, JobStatus::Acting))
+            .cloned()
+    }
+
+    /// Registers a finding action's run, unless one is running already
+    /// (false then). An action runs beside nothing else of its kind, and
+    /// never during a collection or an analysis: the caller checks
+    /// [`Jobs::running`] first.
+    pub fn try_begin_action(
+        &self,
+        id: &str,
+        progress: ActionProgress,
+        stop: pathwarden_core::actions::CancelHandle,
+    ) -> bool {
+        let mut jobs = self.lock();
+        if jobs
+            .values()
+            .any(|j| j.status.is_active() || matches!(j.status, JobStatus::Acting))
+        {
+            return false;
+        }
+        if jobs.len() > 50 {
+            jobs.retain(|_, j| j.status.is_active() || matches!(j.status, JobStatus::Acting));
+        }
+        jobs.insert(
+            id.to_string(),
+            Job {
+                id: id.to_string(),
+                status: JobStatus::Acting,
+                started_at: analyze::now(),
+                source: progress.label.clone(),
+                collect: None,
+                reading: None,
+                earlier: None,
+                cancel: None,
+                action: Some(progress),
+                stop: Some(stop),
+            },
+        );
+        true
+    }
+
+    /// Adds a line of a running finding action's output.
+    pub fn action_line(&self, id: &str, line: &str) {
+        if let Some(p) = self.lock().get_mut(id).and_then(|j| j.action.as_mut()) {
+            if p.lines.len() == ACTION_LINES {
+                p.lines.remove(0);
+            }
+            p.lines.push(line.to_string());
+            p.lines_total += 1;
+        }
+    }
+
+    /// A finding action ended: its result, and the job is done.
+    pub fn action_done(&self, id: &str, result: serde_json::Value) {
+        if let Some(j) = self.lock().get_mut(id) {
+            if let Some(p) = j.action.as_mut() {
+                p.result = Some(result);
+            }
+            j.status = JobStatus::Acted;
+            j.stop = None;
+        }
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Job>> {
         // A panic while holding the lock leaves the map usable.
         self.jobs.lock().unwrap_or_else(|e| e.into_inner())
@@ -363,6 +464,14 @@ impl Jobs {
                 flag.store(true, Ordering::SeqCst);
                 true
             }
+            Some(Job {
+                status: JobStatus::Acting,
+                stop: Some(stop),
+                ..
+            }) => {
+                stop.cancel();
+                true
+            }
             _ => false,
         }
     }
@@ -380,6 +489,8 @@ impl Jobs {
             reading: None,
             earlier: None,
             cancel: None,
+            action: None,
+            stop: None,
         })
     }
 
@@ -400,6 +511,8 @@ impl Jobs {
             reading: None,
             earlier: None,
             cancel: Some(cancel),
+            action: None,
+            stop: None,
         })
     }
 

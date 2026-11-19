@@ -407,3 +407,5 @@ pre.code { margin: 8px 0 0; max-height: 340px; overflow: auto; font: 0.8rem/1.5 
 .keep-warn { position: relative; margin-top: 14px; }
 .keep-warn .keep-confirm { margin-top: 8px; }
 @media (max-width: 760px) { .cmp, .choice.keep-choice { grid-template-columns: 1fr; } }
+/* A lock note (pages::lock_note): its (i) links to the docs. */
+.note.locked .tip-text a { color: inherit; font-weight: 600; text-decoration: underline; }

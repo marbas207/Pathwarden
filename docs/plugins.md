@@ -21,8 +21,8 @@ example, leave out findings that already have a ticket.
 
 ### In the app
 
-1. In the rail, under **Automate**, click **Ticketing and alerts**.
-2. Click **Add ServiceNow**, **Add Jira**, or **Add a plugin program**
+1. In the rail, under **Automate**, click **Plugins and actions**.
+2. Under **After each run**, click **Add ServiceNow**, **Add Jira**, or **Add a plugin program**
    (**Add a script or program** when the app was started with
    `--allow-destinations`).
 3. Fill in the form and click **Save plugin**.
@@ -34,7 +34,9 @@ as a percentage (default 50). A run that would go over a limit does none of
 those creates or closes and says why, so a first run on a big domain or a
 collection that missed a domain can't flood or empty the queue.
 
-Some changes in the app need `pathwarden ui --allow-destinations`:
+Some changes in the app need `pathwarden ui --allow-destinations`
+([Safety locks](ui.md#safety-locks)); without it the page says the change
+is turned off in this app:
 
 - adding a script or program;
 - a plugin's instance, its Jira `project` or ServiceNow `table`,
@@ -48,8 +50,22 @@ environment variables, never their values.
 
 The same flag is needed to change where the run history is kept on
 **History storage** (another repository, branch or folder), to keep
-full runs and settings in a history that isn't encrypted, and to use
-**Connect to a run history**.
+full runs and settings in a history that isn't encrypted, to use
+**Connect to a run history**, and to add or remove a finding action's
+program under **Finding actions** on the same page.
+
+### Finding actions in the app
+
+The **Finding actions** section of **Plugins and actions** lists each
+`[[action]]` block: its program (and whether it is found), the
+environment variables it names, and each action it offers with its
+inputs, what it sends, which findings it applies to (with how many of the
+latest run's) and its follow-ups. **Test** runs one as a dry run on the
+first matching finding of the latest analysis, in the same progress view
+as on a finding; nothing is sent for real or saved
+(`pathwarden action test NAME --action ID` does the same). Each action is
+then a button on the findings it applies to
+([Finding actions](ui.md#finding-actions)).
 
 ### On the command line
 

@@ -56,3 +56,59 @@
    frame can leave Chromium (WebView2) treating the next focus as keyboard
    focus. report-retest.js marks pointer use (.pw-pointer) until a key. */
 .pw-pointer .tablist a:focus-visible { outline: none; }
+/* Finding actions (actions_app.rs): the buttons after the built-in ones,
+   behind a thin divider, and More actions past three. */
+.fa-acts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fa-sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--line); }
+.fa-btn.fa-act .ic { color: var(--accent); }
+.fa-more { position: relative; }
+.fa-more > summary { list-style: none; }
+.fa-more > summary::-webkit-details-marker { display: none; }
+.fa-more > summary .chev { width: 14px; height: 14px; color: var(--muted); transition: transform 0.15s; }
+.fa-more[open] > summary .chev { transform: rotate(180deg); }
+.fa-menu { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; min-width: 230px; padding: 6px; border-radius: 11px; border: 1px solid var(--line); background: var(--card); box-shadow: 0 10px 28px rgb(0 0 0 / 0.16); display: grid; gap: 2px; }
+.fa-menu button { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-size: 0.86rem; font-weight: 600; text-align: left; cursor: pointer; white-space: nowrap; }
+.fa-menu button .ic { width: 16px; height: 16px; color: var(--accent); }
+.fa-menu button:hover { background: var(--hover); }
+/* A record: a chip under the title and in the box. */
+.ac-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 7px; font-size: 0.74rem; font-weight: 650; white-space: nowrap; color: var(--ink); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.ac-chip .ic { width: 13px; height: 13px; color: var(--accent); stroke-width: 2; }
+.ac-chip .num { font-family: var(--mono); font-weight: 600; letter-spacing: -0.01em; }
+.ac-chip.closed { color: var(--muted); background: var(--chip); }
+.ac-chip.closed .ic { color: var(--muted); }
+/* Fixed, but the record is still open: it needs closing. */
+.ac-chip.stale { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+.ac-chip.stale .ic { color: var(--warn); }
+.ac-more { color: var(--muted); font-size: 0.74rem; font-weight: 650; }
+.title .ac-rowchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 3px 0 0; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.title .seen .ac-rowchips { display: inline-flex; margin: 0 0 0 8px; vertical-align: 1px; }
+.title .ac-rowchips .ac-chip { font-size: 0.72rem; padding: 1px 7px; }
+/* The box between the action bar and the facts: records, then Activity. */
+.ac-box { display: grid; gap: 12px; margin: -4px 0 16px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); }
+.ac-recs { display: grid; gap: 8px; }
+.ac-rec { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.ac-rec .ac-chip { font-size: 0.8rem; padding: 3px 9px; }
+.ac-rec .ac-what { color: var(--muted); font-size: 0.84rem; }
+.ac-rec .ac-follow { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.ac-mini { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; text-decoration: none; }
+.ac-mini .ic { width: 14px; height: 14px; color: var(--muted); }
+.ac-mini:hover { border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); }
+.ac-mini:hover .ic { color: var(--accent); }
+.ac-mini:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ac-mini.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.ac-mini.warn .ic { color: var(--warn); }
+.ac-box .ac-act h5 { margin: 0 0 4px; color: var(--muted); font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+.ac-box .ac-act ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ac-box .ac-act li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 0.86rem; overflow-wrap: anywhere; }
+.ac-box .ac-act li .st { width: 8px; height: 8px; border-radius: 50%; background: var(--good); justify-self: center; transform: translateY(-1px); }
+.ac-box .ac-act li.bad .st { background: var(--critical); }
+.ac-box .ac-act li .who { color: var(--muted); }
+.ac-box .ac-act li.bad .what { color: var(--critical); font-weight: 600; }
+.ac-box .ac-act li.ac-earlier { display: block; padding-left: 24px; color: var(--muted); }
+.ac-box .ac-link { border: 0; background: none; padding: 0; margin-left: 6px; font: inherit; font-size: 0.82rem; color: var(--accent); cursor: pointer; }
+.ac-box .ac-full { display: block; margin-top: 2px; white-space: pre-wrap; color: var(--muted); font-size: 0.82rem; }
+.ac-box .ac-full[hidden] { display: none; }
+.ac-box .ac-all { margin-top: 4px; border: 0; background: none; padding: 0; font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--accent); cursor: pointer; }
+.ov-recs { display: inline-block; margin-top: 2px; }
+.ov-recs[hidden] { display: none; }
+@media print { .fa-sep, .fa-more, .ac-follow { display: none !important; } }

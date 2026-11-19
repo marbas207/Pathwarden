@@ -24,12 +24,73 @@ fn runs_newest_first(ws: &Workspace) -> Vec<RunSummary> {
 }
 
 /// The findings of run `r` from its event document; `None` when it has
-/// none this version reads.
+/// none this version reads. An open or held finding found fixed since
+/// ([`fixed_since`]) stands as fixed: that is what an action is offered
+/// on, and what it is told.
 fn findings_of(ws: &Workspace, r: &RunSummary) -> Option<Vec<FindingContext>> {
     let dir = ws.run_dir(&r.id)?;
-    let text = crate::run_data::event_text(&dir)?;
+    let mut all = event_findings(&dir)?;
+    let fixed = fixed_since(ws, r, &dir);
+    for f in all.iter_mut() {
+        if matches!(
+            f.status,
+            actions::FindingStatus::Open | actions::FindingStatus::Held
+        ) && fixed.contains(&f.fingerprint)
+        {
+            f.status = actions::FindingStatus::Fixed;
+            if let Some(o) = f.finding.as_object_mut() {
+                o.insert("status".into(), Value::from("fixed"));
+            }
+        }
+    }
+    Some(all)
+}
+
+/// The findings of the event document in run folder `dir`.
+fn event_findings(dir: &std::path::Path) -> Option<Vec<FindingContext>> {
+    let text = crate::run_data::event_text(dir)?;
     let event: Value = serde_json::from_str(&text).ok()?;
     Some(actions::findings_in_event(&event))
+}
+
+/// The findings of run `r` (folder `dir`) found fixed since it ran: those
+/// whose latest targeted retest says fixed, and those the newest run of
+/// the environment lists as fixed (unless a later retest says otherwise).
+fn fixed_since(
+    ws: &Workspace,
+    r: &RunSummary,
+    dir: &std::path::Path,
+) -> std::collections::HashSet<String> {
+    use pathwarden_core::retest::Verdict;
+    let mut latest: std::collections::HashMap<String, (i64, bool)> =
+        std::collections::HashMap::new();
+    for x in crate::retest_ui::load_log(dir).results {
+        let e = latest.entry(x.fingerprint.clone()).or_insert((x.at, false));
+        if x.at >= e.0 {
+            *e = (x.at, x.verdict == Verdict::Fixed);
+        }
+    }
+    if let Some(newest) = runs_newest_first(ws)
+        .into_iter()
+        .find(|x| x.id != r.id && x.newer_than(r))
+    {
+        if let Some(later) = ws.run_dir(&newest.id).and_then(|d| event_findings(&d)) {
+            for f in later {
+                let fixed = f.status == actions::FindingStatus::Fixed;
+                match latest.get(&f.fingerprint) {
+                    Some((at, _)) if *at >= newest.created_at => {}
+                    _ => {
+                        latest.insert(f.fingerprint.clone(), (newest.created_at, fixed));
+                    }
+                }
+            }
+        }
+    }
+    latest
+        .into_iter()
+        .filter(|(_, (_, fixed))| *fixed)
+        .map(|(fp, _)| fp)
+        .collect()
 }
 
 /// Finding `fingerprint` (any case) in run `run` (its folder ID or
@@ -466,9 +527,24 @@ pub struct ActivityView {
     /// "Opened RITM10816190 — NORTH\eddard.stark, SECOPS-WS02, Nov 18,
     /// 2026, 2:02 PM" ([`Activity::line`]).
     pub line: String,
+    /// What happened, in a few words ([`Activity::summary`]): a page
+    /// writes who and when itself, in its own date format.
+    pub summary: String,
+    /// When, as Unix time, for the page's date format.
+    pub at_unix: Option<i64>,
 }
 
-/// [`FindingView`] of finding `f`.
+/// Whether action `def` is meant for a fixed finding: its `when` lists
+/// `fixed` (a follow-up such as Close request).
+pub fn for_fixed(def: &actions::ActionDef) -> bool {
+    def.when
+        .as_ref()
+        .is_some_and(|w| w.contains(&actions::FindingStatus::Fixed))
+}
+
+/// [`FindingView`] of finding `f`. On a fixed finding, the follow-ups
+/// meant for a fixed one (`when: fixed`, such as Close request) come
+/// first.
 pub fn view(file: &ActionsFile, programs: &[Program], f: &FindingContext) -> FindingView {
     let records = file.records(&f.fingerprint);
     let activity = file.activity(&f.fingerprint);
@@ -480,13 +556,17 @@ pub fn view(file: &ActionsFile, programs: &[Program], f: &FindingContext) -> Fin
             .collect(),
         records: records
             .iter()
-            .map(|r| RecordView {
-                chip: action_log::chip(&r.record, fixed),
-                follow_ups: actions::follow_ups(programs, f, r)
-                    .into_iter()
-                    .map(|o| o.address)
-                    .collect(),
-                record: r.clone(),
+            .map(|r| {
+                let mut follow = actions::follow_ups(programs, f, r);
+                if fixed {
+                    // Stable: the program's order otherwise.
+                    follow.sort_by_key(|o| !for_fixed(&o.def));
+                }
+                RecordView {
+                    chip: action_log::chip(&r.record, fixed),
+                    follow_ups: follow.into_iter().map(|o| o.address).collect(),
+                    record: r.clone(),
+                }
             })
             .collect(),
         activity_count: activity.len(),
@@ -495,10 +575,202 @@ pub fn view(file: &ActionsFile, programs: &[Program], f: &FindingContext) -> Fin
             .take(action_log::REPORT_ACTIVITY)
             .map(|e| ActivityView {
                 line: e.line(),
+                summary: e.summary(),
+                at_unix: pathwarden_core::time::parse_rfc3339(&e.at),
                 entry: e,
             })
             .collect(),
     }
+}
+
+/// What a page says once a run's outcome was saved on the finding, for
+/// everyone who shares the run history.
+pub const SAVED_PAGE_WORDS: &str = "Saved on this finding for everyone on this history.";
+/// What a page says when it was saved on this computer only, for now
+/// ([`SavedOutcome::pushed`] false).
+pub const SAVED_HERE_PAGE_WORDS: &str =
+    "Saved on this computer, not shared yet: the next sync shares it.";
+/// What a page says of a dry run.
+pub const DRY_RUN_PAGE_WORDS: &str = "A test: nothing was sent for real or saved.";
+
+/// What a run of `ready`'s action did, as `pathwarden action run --json`
+/// prints it and the app's result card reads it: the outcome, which
+/// action on which finding of which run, and whether it was saved (a dry
+/// run isn't) and shared (`pushed`). `notes` are what the save said.
+pub fn outcome_json(
+    ready: &Ready,
+    out: &Outcome,
+    saved: Option<&Result<SavedOutcome, String>>,
+) -> Value {
+    let mut v = serde_json::to_value(out).unwrap_or_default();
+    v["action"] = Value::from(ready.prepared.offered.address.clone());
+    v["label"] = Value::from(ready.prepared.offered.def.label.clone());
+    v["fingerprint"] = Value::from(ready.finding.fingerprint.clone());
+    v["run"] = Value::from(ready.run.id.clone());
+    v["record"] = ready
+        .prepared
+        .record
+        .as_ref()
+        .map_or(Value::Null, |r| Value::from(r.record.id.clone()));
+    let ok_saved = saved.and_then(|s| s.as_ref().ok());
+    v["saved"] = Value::from(ok_saved.is_some_and(|s| s.saved));
+    v["pushed"] = Value::from(ok_saved.is_some_and(|s| s.saved && s.pushed));
+    v["notes"] = Value::from(ok_saved.map(|s| s.notes.clone()).unwrap_or_default());
+    v["not_saved"] = saved
+        .and_then(|s| s.as_ref().err())
+        .map_or(Value::Null, |e| Value::from(e.clone()));
+    v
+}
+
+/// Runs a prepared action and saves what it did ([`save_outcome`]; for a
+/// run someone stopped, [`save_outcome_quick`], so Cancel stays quick):
+/// what the app's job does with the program's lines going to `on_line`.
+/// `Err` when the program couldn't start.
+pub fn run_and_save(
+    ws: &Workspace,
+    ready: &Ready,
+    on_line: &mut dyn FnMut(&str),
+    cancel: &actions::CancelHandle,
+) -> Result<(Outcome, Option<Result<SavedOutcome, String>>), String> {
+    let out = actions::run(
+        &ready.prepared.config,
+        &ready.prepared.request,
+        on_line,
+        cancel,
+    )
+    .map_err(|e| e.to_string())?;
+    let saved = if out.dry_run {
+        None
+    } else if out.ended == actions::Ended::Cancelled {
+        Some(save_outcome_quick(ws, ready, &out))
+    } else {
+        Some(save_outcome(ws, ready, &out))
+    };
+    Ok((out, saved))
+}
+
+/// A test of block `name` ([`actions::Ask::dry_run`]): its action `action`
+/// (its ID; else the first that applies) on the first finding of the
+/// latest run it applies to, with the inputs' defaults. What `pathwarden
+/// action test` and the app's Test run. The error says why in words.
+pub fn test_target(
+    ws: &Workspace,
+    blocks: &[ActionConfig],
+    name: &str,
+    action: Option<&str>,
+) -> Result<Ready, String> {
+    if pathwarden_core::store::unattended() {
+        return Err(actions::ActionError::Unattended.to_string());
+    }
+    let block = blocks
+        .iter()
+        .find(|a| a.name.eq_ignore_ascii_case(name.trim()))
+        .ok_or_else(|| format!("There is no finding action {}.", name.trim()))?;
+    let described = actions::describe(block).map_err(|e| e.to_string())?;
+    let Some((run, findings)) = latest_findings(ws) else {
+        return Err(
+            "Testing needs one analysis first. Analyze a collection or try the demo.".into(),
+        );
+    };
+    let programs = [Program {
+        config: block,
+        describe: &described.describe,
+    }];
+    let wanted = |o: &Offered| action.is_none_or(|id| o.id.eq_ignore_ascii_case(id.trim()));
+    let log = log(ws).unwrap_or_default();
+    let Some((finding, offered)) = findings.iter().find_map(|f| {
+        let records = log.records(&f.fingerprint);
+        actions::offered(&programs, f, &records)
+            .into_iter()
+            .find(|o| wanted(o))
+            .map(|o| (f, o))
+    }) else {
+        return Err(format!(
+            "{} applies to no finding of the latest run ({}).",
+            match action {
+                Some(id) => format!("{}/{}", block.name, id.trim()),
+                None => block.name.clone(),
+            },
+            run.id
+        ));
+    };
+    let ask = Ask {
+        action: Some(offered.address.clone()),
+        inputs: serde_json::Map::new(),
+        dry_run: true,
+        record: None,
+    };
+    prepare(ws, blocks, Some(&run.id), &finding.fingerprint, &ask)
+}
+
+/// An action as a page shows it: its button's label, its dialog, and
+/// whether it runs on a record or is meant for a fixed finding.
+fn act_json(o: &Offered) -> Value {
+    let d = &o.def;
+    serde_json::json!({
+        "label": d.label,
+        "description": d.description,
+        "sends": d.sends,
+        "inputs": d.inputs,
+        "once": d.once,
+        "record": d.for_ == Some(actions::For::Record),
+        "fixed": for_fixed(d),
+    })
+}
+
+/// What the run page and its report show of finding actions for run `r`
+/// ([`FindingView`] per finding): `acts`, every action offered here by
+/// address (its label, description, what it sends, its inputs), and `f`,
+/// per finding with actions offered, records or activity, its title,
+/// where it stands and its view. `None` when the run has no findings this
+/// version reads. Built from the history's file read once and the blocks
+/// described once.
+pub fn page_data(ws: &Workspace, blocks: &Blocks, r: &RunSummary) -> Option<Value> {
+    let findings = findings_of(ws, r)?;
+    let file = log(ws).unwrap_or_default();
+    let programs = blocks.programs();
+    let mut acts = serde_json::Map::new();
+    let mut f = serde_json::Map::new();
+    for p in &programs {
+        for def in &p.describe.actions {
+            let o = Offered {
+                name: p.config.name.clone(),
+                id: def.id.clone(),
+                address: format!("{}/{}", p.config.name, def.id),
+                def: def.clone(),
+            };
+            acts.insert(o.address.clone(), act_json(&o));
+        }
+    }
+    for c in &findings {
+        let v = view(&file, &programs, c);
+        if v.offered.is_empty() && v.records.is_empty() && v.activity.is_empty() {
+            continue;
+        }
+        f.insert(
+            c.fingerprint.clone(),
+            serde_json::json!({
+                "title": c.title,
+                "status": c.status,
+                "view": v,
+            }),
+        );
+    }
+    Some(serde_json::json!({ "acts": acts, "f": f }))
+}
+
+/// [`FindingView`] of finding `fingerprint` in run `run` now, for a page
+/// to show after an action ran on it. `None` when it can't be read.
+pub fn view_now(
+    ws: &Workspace,
+    actions: &[ActionConfig],
+    run: &str,
+    fingerprint: &str,
+) -> Option<FindingView> {
+    let (_, finding) = find_finding(ws, Some(run), fingerprint).ok()?;
+    let blocks = described(actions);
+    let file = log(ws).unwrap_or_default();
+    Some(view(&file, &blocks.programs(), &finding))
 }
 
 #[cfg(test)]

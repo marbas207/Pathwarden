@@ -149,6 +149,9 @@ fn render(st: &AppState, q: &PageQuery) -> String {
     let Some(session) = session else {
         // Step 1, or a probe that is gone (connected, cancelled).
         b.push_str(&steps(1));
+        if !st.allow_destinations {
+            b.push_str(&crate::pages::lock_note("lock-connect", CONNECT_LOCKED));
+        }
         b.push_str(&where_card(q));
         b.push_str(r#"<div class="cx-msg" id="cx-msg" aria-live="polite"></div>"#);
         b.push_str(r#"<script src="/static/connect.js" defer></script>"#);
@@ -610,7 +613,7 @@ fn error(status: StatusCode, message: impl Into<String>) -> Response {
 /// Why Connect refuses without `--allow-destinations`: looking at a history
 /// makes Pathwarden reach (and maybe sign in to) the place the page named,
 /// and connecting sends this computer's runs there.
-pub const CONNECT_LOCKED: &str = "This page can't connect to a run history. Run pathwarden env create --from-git or --from-folder, or start the UI with pathwarden ui --allow-destinations.";
+pub const CONNECT_LOCKED: &str = "Connecting to a run history is turned off in this app. You can still open the runs this computer has, and add a history on the command line.";
 
 /// [`CONNECT_LOCKED`] unless the UI was started with the flag.
 fn locked(st: &AppState) -> Option<Response> {

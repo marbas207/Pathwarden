@@ -1052,16 +1052,23 @@ fn accepted_tag(f: &Finding) -> String {
 /// The chips of a finding's records on its row ("RITM10816190 · Open"),
 /// as text ([`crate::action_log::chip`]).
 fn action_chips(f: &Finding) -> String {
-    f.actions
+    let chips: String = f
+        .actions
         .iter()
         .flat_map(|a| &a.records)
         .map(|r| {
             format!(
-                r#"<span class="ac-chip">{}</span>"#,
+                r#"<span class="ac-chip{}">{}</span>"#,
+                if r.record.open { "" } else { " closed" },
                 esc(&crate::action_log::chip(&r.record, false))
             )
         })
-        .collect()
+        .collect();
+    if chips.is_empty() {
+        chips
+    } else {
+        format!(r#"<span class="ac-rowchips">{chips}</span>"#)
+    }
 }
 
 /// A finding's Activity list, newest first, as text: "Opened RITM10816190
@@ -1071,7 +1078,7 @@ fn action_activity(f: &Finding) -> String {
     let Some(a) = f.actions.as_ref().filter(|a| !a.activity.is_empty()) else {
         return String::new();
     };
-    let mut h = String::from(r#"<h4>Activity</h4><ul class="ac-activity">"#);
+    let mut h = String::from(r#"<div class="ac-static"><h4>Activity</h4><ul class="ac-activity">"#);
     for e in &a.activity {
         let _ = write!(
             h,
@@ -1088,7 +1095,7 @@ fn action_activity(f: &Finding) -> String {
             num(a.activity_count - a.activity.len())
         );
     }
-    h.push_str("</ul>");
+    h.push_str("</ul></div>");
     h
 }
 
@@ -2947,6 +2954,7 @@ fn findings_section(h: &mut String, r: &ReportInput, links: &PlanLinks) {
   <span class="segmented" role="radiogroup" aria-label="Category"><label><input type="radio" name="f-category" value="" checked>All</label><label><input type="radio" name="f-category" value="attack_path">Attack path</label><label><input type="radio" name="f-category" value="hygiene">Hygiene</label></span>
   {intro}<input id="f-search" type="search" placeholder="Search findings" aria-label="Search findings">
   <label class="check"><input id="f-suppressed" type="checkbox"> Show accepted risks</label>
+  <span class="f-recs"{recs_hidden}><span class="muted">Records</span><span class="segmented" role="radiogroup" aria-label="Records"><label><input type="radio" name="f-records" value="" checked>Any</label><label><input type="radio" name="f-records" value="yes">Has a record</label><label><input type="radio" name="f-records" value="no">No record</label></span></span>
   <button id="f-expand" type="button">Expand all</button>
   {group_by}<span id="f-count" class="muted" aria-live="polite"></span>
 </div>
@@ -2967,6 +2975,17 @@ fn findings_section(h: &mut String, r: &ReportInput, links: &PlanLinks) {
         },
         intro = r.introduced.map(intro_picker).unwrap_or_default(),
         intro_more = r.introduced.map(intro_panel).unwrap_or_default(),
+        // Only when a finding has a record (the app shows it whenever
+        // actions are set up).
+        recs_hidden = if r
+            .findings
+            .iter()
+            .any(|f| f.actions.as_ref().is_some_and(|a| !a.records.is_empty()))
+        {
+            ""
+        } else {
+            " hidden"
+        },
     );
 
     // Group by rule, most severe groups first.
@@ -3591,7 +3610,7 @@ fn finding_row(
     let _ = write!(
         h,
         r#"<details class="row finding" id="f-{fp}" data-sev="{sev}" data-cat="{category}" data-suppressed="{sup}" data-objects="{objects}" data-records="{records}" data-text="{search}"{intro_data}>
-<summary>{badge}<span class="title">{intro_badge}{title}{ar_tag}{ac_chips}{set_tag}{seen_line}</span>{exp}</summary>
+<summary>{badge}<span class="title">{intro_badge}{title}{ar_tag}{set_tag}{seen_line}{ac_chips}</span>{exp}</summary>
 <div class="body">
 <dl class="facts">{sevfact}<div><dt>Category</dt><dd>{cat}</dd></div>{expfact}<div><dt>Domain</dt><dd>{domain}</dd></div>{seen_fact}<div><dt>Finding ID</dt><dd><code>{id}</code></dd></div>{supfact}</dl>
 {note}{activity}<h4>Why it matters</h4><p>{summary}</p>

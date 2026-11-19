@@ -165,6 +165,9 @@
   var categories = Array.prototype.slice.call(document.querySelectorAll('input[name="f-category"]'));
   var search = document.getElementById("f-search");
   var showSuppressed = document.getElementById("f-suppressed");
+  // Has a record / No record: what finding actions keep on each finding
+  // (data-records; the app updates it as actions run).
+  var recordRadios = Array.prototype.slice.call(document.querySelectorAll('input[name="f-records"]'));
   var expand = document.getElementById("f-expand");
   var count = document.getElementById("f-count");
   if (!cards.length || !categories.length) return;
@@ -420,6 +423,17 @@
     var cat = "";
     categories.forEach(function (c) { if (c.checked) cat = c.value; });
     var q = search.value.trim().toLowerCase();
+    var rec = "";
+    recordRadios.forEach(function (c) { if (c.checked) rec = c.value; });
+    // A row of the remediation path's list counts its finding's records.
+    function records(d) {
+      if (!d.hasAttribute("data-records")) {
+        var a = d.querySelector('a[href^="#f-"]');
+        d = a && document.getElementById(a.getAttribute("href").slice(1));
+        if (!d) return 0;
+      }
+      return +d.getAttribute("data-records") || 0;
+    }
     introNow = period();
     introduce(introNow);
     function matches(d) {
@@ -427,6 +441,7 @@
         (!cat || d.getAttribute("data-cat") === cat) &&
         (showSuppressed.checked || d.getAttribute("data-suppressed") !== "true") &&
         (!q || d.getAttribute("data-text").indexOf(q) !== -1) &&
+        (!rec || (rec === "yes") === (records(d) > 0)) &&
         introOk(d);
     }
     var shown = 0;
@@ -504,8 +519,22 @@
     categories.forEach(function (c) { c.checked = c.value === ""; });
     search.value = "";
     showSuppressed.checked = false;
+    recordRadios.forEach(function (c) { c.checked = c.value === ""; });
     apply();
   }, true);
+  // "N findings have records" (the app adds it on the Overview): the
+  // findings with a record, every other filter back to its default.
+  document.addEventListener("click", function (e) {
+    var link = e.target.closest && e.target.closest("a[data-records-only]");
+    if (!link || !recordRadios.length) return;
+    chips.forEach(function (c) { c.checked = true; });
+    categories.forEach(function (c) { c.checked = c.value === ""; });
+    search.value = "";
+    showSuppressed.checked = false;
+    recordRadios.forEach(function (c) { c.checked = c.value === "yes"; });
+    apply();
+  }, true);
+  recordRadios.forEach(function (c) { c.addEventListener("change", apply); });
   categories.forEach(function (c) { c.addEventListener("change", apply); });
   // A category pill on a rule row filters to that category (click it again
   // for all), without opening the row.

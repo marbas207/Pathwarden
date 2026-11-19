@@ -1626,7 +1626,7 @@ impl NewPlaceRefused {
 
 /// The message for a page session that tries to change where the run
 /// history is kept, or to start sharing full runs without encryption.
-pub const HISTORY_LOCKED: &str = "This page can't change where the run history is kept, or share full runs and settings without encryption. Edit pathwarden.toml, or start the UI with pathwarden ui --allow-destinations.";
+pub const HISTORY_LOCKED: &str = "Moving the run history, or sharing full runs and settings without encryption, is turned off in this app. You can still sync it and encrypt it.";
 
 /// What a page session may save to `[state]` without
 /// `--allow-destinations` ([`HISTORY_LOCKED`]): not another repository,
