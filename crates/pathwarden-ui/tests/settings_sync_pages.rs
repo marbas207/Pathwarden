@@ -142,10 +142,13 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         d.set_tier_zero(&["VAULT01$".into(), "SRV-ADSYNC$".into()])
     })
     .unwrap();
-    assert!(note.unwrap().contains("pushed"), "the other machine shares");
+    assert!(
+        note.unwrap().contains("Shared with this history"),
+        "the other machine shares"
+    );
 
-    // This workspace joins: the first Pull now takes the repository's, and
-    // saves this computer's pathwarden.toml first.
+    // This workspace joins: the first Pull now takes the repository's. It
+    // had none of its own, so nothing is saved beside pathwarden.toml.
     let ws_dir = dir.join("ws");
     let ws = Workspace::open(&ws_dir).unwrap();
     std::fs::write(ws.config_path(), state(&ws.env_dir())).unwrap();
@@ -153,11 +156,11 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     assert!(
         note.contains(
             "Tier Zero additions, accepted risks and mapping packs were taken from the run \
-             history. This computer's earlier settings are saved in \
-             pathwarden.toml.before-connect-"
+             history."
         ),
         "{note}"
     );
+    assert!(!note.contains("saved in"), "nothing of its own: {note}");
     // These pages set where the history is kept: as `pathwarden ui --allow-destinations`.
     let mut st = AppState::new(ws.clone(), Token::generate().unwrap(), 4251);
     st.allow_destinations = true;
@@ -173,9 +176,9 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         page.contains("Shared through") && page.contains("up to date"),
         "{page}"
     );
+    assert!(!page.contains("nav-dot"), "nothing differs: no dot");
     assert!(
-        page.contains("were taken from the run history. This computer&#39;s earlier settings")
-            || page.contains("were taken from the run history. This computer's earlier settings"),
+        page.contains("mapping packs were taken from the run history."),
         "the note after a pull: {page}"
     );
     let (_, page) = a.get("/settings").await;
@@ -234,7 +237,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         assert_ne!(shared["problem"], true, "{shared}");
         notes.push(shared["note"].as_str().unwrap_or_default().to_string());
     }
-    assert!(notes[0].contains("pushed"), "{notes:?}");
+    assert!(notes[0].contains("Shared with this history"), "{notes:?}");
     assert!(
         !notes.iter().any(|n| n.contains("pathwarden config")),
         "no commands on pages: {notes:?}"
@@ -303,6 +306,69 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
             && page.contains(">Review</a>"),
         "{page}"
     );
+
+    // The rail's dot on Settings, on every page; the footer says only how
+    // the sync went.
+    let dot = |page: &str| page.contains(r#"class="nav-dot""#);
+    let (_, page) = a.get("/runs").await;
+    assert!(dot(&page), "{page}");
+    assert!(
+        page.contains(r#"<span class="sr-only">: settings differ from the shared ones</span>"#),
+        "a name for screen readers: {page}"
+    );
+    let foot = page
+        .split(r#"<div class="rail-foot">"#)
+        .nth(1)
+        .unwrap_or_default();
+    assert!(
+        !foot.contains("differ") && !foot.contains("choice"),
+        "the footer: {foot}"
+    );
+    // Dismiss: no dot, the note on one line, the comparison stays.
+    let (_, page) = a.get("/settings").await;
+    let key = page
+        .split(r#"data-sync-dismiss=""#)
+        .nth(1)
+        .and_then(|r| r.split('"').next())
+        .unwrap_or_else(|| panic!("a Dismiss button: {page}"))
+        .to_string();
+    let (s, r) = a
+        .post("/api/settings/dismiss", json!({ "key": "stale" }))
+        .await;
+    assert_eq!(s, StatusCode::CONFLICT, "{r}");
+    let (s, r) = a.post("/api/settings/dismiss", json!({ "key": key })).await;
+    assert_eq!(s, StatusCode::OK, "{r}");
+    let (_, page) = a.get("/runs").await;
+    assert!(!dot(&page), "dismissed: {page}");
+    let (_, page) = a.get("/settings").await;
+    assert!(!dot(&page), "{page}");
+    assert!(
+        page.contains("Settings differ from the shared ones: Tier Zero additions.</p>"),
+        "the note on one line: {page}"
+    );
+    assert!(!page.contains("data-sync-dismiss"), "{page}");
+    assert!(
+        page.contains("CASTELBLACK$") && page.contains("Keep this computer"),
+        "the comparison stays: {page}"
+    );
+    // The same difference after a restart: still dismissed.
+    {
+        let st2 = Arc::new(AppState::new(ws.clone(), Token::generate().unwrap(), 4251));
+        let b = App {
+            router: router(st2.clone()),
+            state: st2,
+            dir: std::env::temp_dir().join("pathwarden-ui-sync-unused"),
+        };
+        let (_, page) = b.get("/runs").await;
+        assert!(!dot(&page), "after a restart: {page}");
+    }
+    // Either side changing again is a new difference: the dot is back.
+    apply(ws.config_path(), |d| {
+        d.set_tier_zero(&["WINTERFELL$".into(), "HIGHGARDEN$".into()])
+    })
+    .unwrap();
+    let (_, page) = a.get("/runs").await;
+    assert!(dot(&page), "a changed difference: {page}");
     // Keep this computer's: shared, up to date again.
     let (s, r) = a
         .post(
@@ -314,6 +380,15 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     let (_, page) = a.get("/settings").await;
     assert!(page.contains("up to date"), "{page}");
     assert!(!page.contains("Keep this computer"));
+    assert!(!dot(&page), "resolved: {page}");
+    // Resolved: the dismissal is gone, so the next difference shows.
+    {
+        let loc = pathwarden_ui::history_ui::locate(&ws, None).unwrap();
+        assert_eq!(
+            pathwarden_core::settings_sync::dismissed_key(&loc.store),
+            None
+        );
+    }
     let (s, r) = a
         .post(
             "/api/settings/sync",

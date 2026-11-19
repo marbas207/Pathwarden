@@ -302,7 +302,7 @@ pub fn sync_settings_of(
 }
 
 /// [`sync_settings_of`]: the note, the sections applied here (by key),
-/// and whether some section waits for a choice.
+/// and whether some section differs from the shared settings.
 pub fn sync_settings_detail(
     config_path: &Path,
     env_name: Option<&str>,
@@ -1294,7 +1294,7 @@ pub struct Pulled {
     /// Runs loaded from the history earlier and removed here now, by
     /// folder ID.
     pub removed: Vec<String>,
-    /// Some shared section waits for a choice.
+    /// Some section differs from the shared settings.
     pub conflict: bool,
     /// Encrypted, with no passphrase here: pulled, nothing loaded.
     pub locked: bool,

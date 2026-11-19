@@ -90,7 +90,9 @@ shared, and the line under each page's title says whether they are **up to
 date**. When this computer's and the shared ones both changed since this
 computer last synced, the page shows both sides: **Use the shared settings**
 or **Keep this computer's**. Until you choose, runs here use this
-computer's. The CLI equivalents are `pathwarden config sync --use-repo` and
+computer's. An amber dot beside **Settings** in the sidebar marks it on
+every page; **Dismiss** on the note hides the dot on this computer until
+something else differs. The CLI equivalents are `pathwarden config sync --use-repo` and
 `--keep-local` (`--status` shows each section).
 
 ## Act on a finding
@@ -160,10 +162,16 @@ This needs `pathwarden ui --allow-destinations` (see above).
 With **Full runs and settings**, the first sync takes the history's shared
 settings (rules, Tier Zero additions, accepted risks, zones, management
 planes, mapping packs). Settings only this computer has are kept and
-shared. This computer's `pathwarden.toml` is saved first, next to it, as
-`pathwarden.toml.before-connect-<date>`. Runs shows one line saying what was
-taken. The CLI does the same (`pathwarden env create --from-git`,
-`pathwarden config sync`).
+shared; on a **Read only** computer they stay, and a shared version that
+arrives later shows as differing from the shared ones. When the history's replace settings
+this computer had, its `pathwarden.toml` is saved first, next to it, as
+`pathwarden.toml.before-connect-<date>`, and so is each mapping pack it
+replaces (`packs/<name>.toml.before-connect-<date>`). If a copy can't be
+saved, nothing is replaced. Runs shows one line saying what was taken and
+where the copies are. The CLI does the same (`pathwarden env create
+--from-git`, `pathwarden config sync`); `pathwarden config sync
+--keep-local` on a first sync keeps this computer's settings instead and
+shares them.
 
 ## Where your data goes
 

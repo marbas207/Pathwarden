@@ -24,10 +24,13 @@
 //!   here) has nothing to compare against: every section the repository
 //!   holds is applied here, whatever this computer had (a new install's
 //!   default `[rules]` among them), and sections only this computer has are
-//!   kept and pushed. Before anything is replaced, this computer's
-//!   `pathwarden.toml` is saved beside it as
-//!   `pathwarden.toml.before-connect-<date>`, and one line says so
-//!   ([`first_sync_words`]). After that, a change on one side is a change.
+//!   kept and pushed (on a reader, kept and recorded as absent, so a shared
+//!   version later differs from the shared ones until someone chooses). Before anything of this computer's
+//!   is replaced, its `pathwarden.toml` and the mapping packs replaced are
+//!   saved beside them as `<file>.before-connect-<date>`; a copy that fails
+//!   changes nothing. One line says what was taken and where the copies are
+//!   ([`first_sync_words`]). After that, a change on one side is a change;
+//!   a base file that can't be read is not a first sync.
 //! - **A machine that only reads** (`[state] push = false`) may change the
 //!   shared settings here: those sections are reported as changed here, not
 //!   in the repository, and stay; the other sections follow the
@@ -65,6 +68,10 @@ const BASE_FILE: &str = "pathwarden-settings-base.json";
 
 /// In `.git`: what the last sync applied here, for the app to say once.
 const APPLIED_FILE: &str = "pathwarden-settings-applied.json";
+
+/// In `.git`: the differences this computer's app was told about and
+/// dismissed ([`dismiss`]), by [`Status::differs_key`]. Never committed.
+const DISMISSED_FILE: &str = "pathwarden-settings-dismissed.json";
 
 /// Largest `settings/pathwarden.toml` read.
 const MAX_SETTINGS_BYTES: usize = 4 << 20;
@@ -549,9 +556,53 @@ struct BaseSection {
     value: Option<serde_json::Value>,
 }
 
+/// The digest a section has in a base file that can't be read: it matches
+/// neither side, so a section that differs is changed on both, never
+/// taken as a first sync.
+const UNKNOWN: &str = "unknown: the base file could not be read";
+
 impl Base {
+    /// The base, `None` when there is none (never synced here). One that is
+    /// there but can't be read or parsed is not a first sync: every section
+    /// is [`UNKNOWN`] in it, so one that differs is shown as differing from the shared ones.
     fn read(store: &Store) -> Option<Self> {
-        serde_json::from_slice(&store.read_local_file(BASE_FILE)?).ok()
+        let parsed = match store.read_local_file(BASE_FILE) {
+            Some(bytes) => serde_json::from_slice::<Base>(&bytes).ok(),
+            None if store.dir.join(".git").join(BASE_FILE).exists() => None,
+            None => return None,
+        };
+        Some(parsed.unwrap_or_else(Base::unknown))
+    }
+
+    /// Every section [`UNKNOWN`].
+    fn unknown() -> Self {
+        Base {
+            sections: SHARED_SECTIONS
+                .iter()
+                .map(|(k, _)| {
+                    (
+                        k.to_string(),
+                        BaseSection {
+                            digest: Some(UNKNOWN.into()),
+                            value: None,
+                        },
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    /// Records `key` as absent at this sync: a section kept only on this
+    /// computer, so a shared version that arrives later is a change on
+    /// both sides, never a first sync.
+    fn set_absent(&mut self, key: &str) {
+        self.sections.insert(
+            key.to_string(),
+            BaseSection {
+                digest: None,
+                value: None,
+            },
+        );
     }
 
     fn write(&self, store: &Store) -> Result<()> {
@@ -638,19 +689,52 @@ pub fn names_in_a_sentence(names: &[&str], first: bool) -> String {
 
 /// The one line a first sync leaves: "Rule settings and zones were taken
 /// from the run history. This computer's earlier settings are saved in
-/// pathwarden.toml.before-connect-2026-11-18." `backup` is the copy's file
-/// name, `None` when there was no `pathwarden.toml` to save.
-pub fn first_sync_words(sections: &[&str], backup: Option<&str>) -> String {
+/// pathwarden.toml.before-connect-2026-11-18." `backups` are the copies'
+/// names (from the folder of `pathwarden.toml`); none when nothing of this
+/// computer's was replaced.
+pub fn first_sync_words(sections: &[&str], backups: &[&str]) -> String {
     let mut s = format!(
         "{} were taken from the run history.",
         names_in_a_sentence(sections, true)
     );
-    if let Some(b) = backup {
+    let files = match backups {
+        [] => String::new(),
+        [one] => (*one).to_string(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    };
+    if !files.is_empty() {
         s.push_str(&format!(
-            " This computer's earlier settings are saved in {b}."
+            " This computer's earlier settings are saved in {files}."
         ));
     }
     s
+}
+
+/// A note that may hold the first-sync line ([`first_sync_words`]) among
+/// other sentences: (that line, the rest). The command line says the line
+/// as a note, the rest as it says any other.
+pub fn split_first_sync(note: &str) -> (Option<String>, String) {
+    const TAKEN: &str = " were taken from the run history.";
+    const SAVED: &str = " This computer's earlier settings are saved in ";
+    let Some(at) = note.find(TAKEN) else {
+        return (None, note.to_string());
+    };
+    // The line starts after the sentence before it (section names hold no
+    // full stops); it ends with "taken ... history.", or after the copies'
+    // names (which hold full stops, never one before a space).
+    let start = note[..at].rfind(". ").map_or(0, |i| i + 2);
+    let mut end = at + TAKEN.len();
+    if note[end..].starts_with(SAVED) {
+        let names = end + SAVED.len();
+        end = note[names..]
+            .find(". ")
+            .map_or(note.len(), |i| names + i + 1);
+    }
+    let line = note[start..end].trim().to_string();
+    let rest = format!("{} {}", note[..start].trim(), note[end..].trim())
+        .trim()
+        .to_string();
+    (Some(line), rest)
 }
 
 /// "This computer's rule settings differ from the shared ones.": the
@@ -716,7 +800,8 @@ pub struct Status {
     pub encrypted: bool,
     /// Whether this computer pushes (`[state] push`).
     pub pushes: bool,
-    /// No sync has happened here yet.
+    /// Some section was never synced here (with no base, every one): the
+    /// next sync takes the history's for it.
     pub first_sync: bool,
     /// The Pathwarden that last wrote the repository's settings.
     pub written_by_version: Option<String>,
@@ -726,6 +811,10 @@ pub struct Status {
     /// What is left out, and why: packs that don't travel, sections a newer
     /// version wrote.
     pub notes: Vec<String>,
+    /// The sections that differ from the shared settings (changed on both
+    /// sides), with what each side holds, as one digest: `None` when none
+    /// does. A dismissal holds for this exact set ([`dismiss`]).
+    pub differs_key: Option<String>,
 }
 
 impl Status {
@@ -1023,6 +1112,7 @@ fn read_all_or(p: &Place, refused: Option<anyhow::Error>) -> Result<Read> {
         })
         .collect();
     let state = overall(&sections);
+    let differs_key = key_of_differences(&sections, &local, &repo);
     let status = Status {
         state,
         sections,
@@ -1030,10 +1120,14 @@ fn read_all_or(p: &Place, refused: Option<anyhow::Error>) -> Result<Read> {
         unreadable,
         unreadable_page,
         damaged: damaged_file,
+        differs_key,
         newer_format: newer_file,
         encrypted: p.store.is_encrypted(),
         pushes: p.pushes,
-        first_sync: base.is_none(),
+        // As each section is judged: some section was never synced here.
+        first_sync: SHARED_SECTIONS
+            .iter()
+            .any(|(k, _)| never_synced(base.as_ref(), k)),
         written_by_version,
         newer_writer,
         last_change: if is_refused {
@@ -1051,6 +1145,11 @@ fn read_all_or(p: &Place, refused: Option<anyhow::Error>) -> Result<Read> {
         base,
         status,
     })
+}
+
+/// Whether section `key` was never synced here: no base, or none for it.
+fn never_synced(base: Option<&Base>, key: &str) -> bool {
+    base.and_then(|b| b.get(key)).is_none()
 }
 
 /// One section: `base` is `None` when it was never synced, `Some(None)`
@@ -1084,6 +1183,85 @@ fn overall(sections: &[Section]) -> Changed {
         Changed::Repository
     } else {
         Changed::InStep
+    }
+}
+
+/// [`Status::differs_key`]: each section changed on both sides, with both
+/// sides' digests.
+fn key_of_differences(sections: &[Section], local: &Side, repo: &Side) -> Option<String> {
+    let mut h = Sha256::new();
+    let mut any = false;
+    for s in sections.iter().filter(|s| s.state == Changed::Both) {
+        any = true;
+        h.update(format!(
+            "{}={}|{}\n",
+            s.key,
+            local.get(s.key).unwrap_or("-"),
+            repo.get(s.key).unwrap_or("-")
+        ));
+    }
+    any.then(|| format!("{:x}", h.finalize()))
+}
+
+/// [`Status::differs_key`] for the working copy as the last pull left it,
+/// without the rest of [`status`] (no git is run): what a page's rail asks
+/// on every page. `None` when nothing differs, or the settings can't be read.
+pub fn differs_key(p: &Place) -> Option<String> {
+    if p.store.check_expected().is_err() {
+        return None;
+    }
+    let (local, _, _) = local_side(&read_local(p).ok()?, p.dir()).ok()?;
+    let repo = repo_side(&read_repo(p.store).ok()??).ok()?.0;
+    let base = Base::read(p.store);
+    let sections: Vec<Section> = SHARED_SECTIONS
+        .iter()
+        .map(|(key, name)| Section {
+            key,
+            name,
+            state: compare(
+                local.get(key),
+                repo.get(key),
+                base.as_ref().and_then(|b| b.get(key)),
+            ),
+        })
+        .collect();
+    key_of_differences(&sections, &local, &repo)
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct Dismissed {
+    #[serde(default)]
+    key: Option<String>,
+}
+
+/// The differences this computer's app was told about and dismissed:
+/// [`Status::differs_key`] then, if any.
+pub fn dismissed_key(store: &Store) -> Option<String> {
+    serde_json::from_slice::<Dismissed>(&store.read_local_file(DISMISSED_FILE)?)
+        .ok()?
+        .key
+}
+
+/// Dismisses the rail's notice of these differences (`key`, a
+/// [`Status::differs_key`]) on this computer, for this history: kept in the
+/// clone's `.git`, never shared. A new difference, or either side changing
+/// again, is another key and shows again.
+pub fn dismiss(store: &Store, key: &str) -> Result<()> {
+    store.write_local_file(
+        DISMISSED_FILE,
+        &serde_json::to_vec_pretty(&Dismissed {
+            key: Some(key.to_string()),
+        })?,
+    )
+}
+
+/// Forgets a dismissal: once nothing differs, the next difference shows.
+pub fn clear_dismissed(store: &Store) {
+    if dismissed_key(store).is_some() {
+        let _ = store.write_local_file(
+            DISMISSED_FILE,
+            &serde_json::to_vec_pretty(&Dismissed::default()).unwrap_or_default(),
+        );
     }
 }
 
@@ -1294,9 +1472,16 @@ pub struct Done {
     /// Of [`Done::applied`], those taken on this computer's first sync of
     /// them: the history's replaced whatever was here.
     pub first: Vec<&'static str>,
-    /// Where this computer's `pathwarden.toml` was saved before the first
-    /// sync replaced anything in it.
-    pub backup: Option<PathBuf>,
+    /// Of [`Done::applied`], every section never synced here: those of
+    /// [`Done::first`], and those this computer had nothing of. The
+    /// first-sync line names them.
+    pub taken: Vec<&'static str>,
+    /// Where this computer's files were saved before the first sync
+    /// replaced them: `pathwarden.toml`, and mapping packs it overwrote.
+    pub backups: Vec<PathBuf>,
+    /// [`Done::backups`] as the first-sync line names them, from the
+    /// folder of `pathwarden.toml` (`packs/acme.toml.before-connect-…`).
+    pub backup_names: Vec<String>,
     /// Sections pushed from here.
     pub pushed: Vec<&'static str>,
     /// The commit's first line, when something was committed.
@@ -1367,19 +1552,15 @@ impl Outcome {
         }
         out.extend(d.skipped.iter().cloned());
         out.extend(d.notes.iter().cloned());
-        if !d.first.is_empty() {
-            let backup = d
-                .backup
-                .as_ref()
-                .and_then(|b| b.file_name())
-                .map(|n| n.to_string_lossy().into_owned());
-            out.push(first_sync_words(&d.first, backup.as_deref()));
+        if !d.taken.is_empty() {
+            let names: Vec<&str> = d.backup_names.iter().map(String::as_str).collect();
+            out.push(first_sync_words(&d.taken, &names));
         }
         let updates: Vec<&str> = d
             .applied
             .iter()
             .copied()
-            .filter(|a| !d.first.contains(a))
+            .filter(|a| !d.taken.contains(a))
             .collect();
         if !updates.is_empty() {
             out.push(format!(
@@ -1389,14 +1570,16 @@ impl Outcome {
         }
         if let (Some(s), Some(p)) = (&d.summary, &d.published) {
             if p.pushed {
-                out.push(format!(
-                    "Shared settings pushed to the repository{} ({s}).",
-                    if self.status.encrypted {
-                        ""
-                    } else {
-                        ", in plain text (not encrypted)"
-                    }
-                ));
+                let plain = if self.status.encrypted {
+                    ""
+                } else {
+                    ", in plain text (not encrypted)"
+                };
+                // The first share says no more than that it is shared.
+                out.push(match s.strip_prefix("pathwarden settings: ").unwrap_or(s) {
+                    "shared from this environment" => format!("Shared with this history{plain}."),
+                    what => format!("Shared with this history{plain}: {what}."),
+                });
             }
         }
         if let Some(k) = &d.kept {
@@ -1505,8 +1688,7 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
         // repository changed alone, which keeping would undo.
         // On a first sync, this computer's own section may be kept too
         // when it is named: the history's would replace it otherwise.
-        let unsynced_here =
-            |k: &str| r.base.as_ref().and_then(|b| b.get(k)).is_none() && r.local.get(k).is_some();
+        let unsynced_here = |k: &str| never_synced(r.base.as_ref(), k) && r.local.get(k).is_some();
         for k in keys {
             let s = r.status.sections.iter().find(|s| s.key == k.as_str());
             let keepable = |s: &&Section| {
@@ -1526,13 +1708,21 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
             }
         }
     }
+    let keep_local = matches!(resolve, Resolve::KeepLocal(_));
     let mut take_repo: Vec<&'static str> = Vec::new();
     let mut take_local: Vec<&'static str> = Vec::new();
     let mut done = Done::default();
     for s in &r.status.sections {
         let named = chosen.iter().any(|k| k == s.key);
+        // Keeping this computer's on a first sync keeps what it had of the
+        // sections never synced here, rather than taking the history's.
+        let unsynced_here = s.state == Changed::Repository
+            && never_synced(r.base.as_ref(), s.key)
+            && r.local.get(s.key).is_some();
         let by_default = chosen.is_empty()
-            && (s.state == Changed::Both || (use_repo && s.state == Changed::Here && !p.pushes));
+            && (s.state == Changed::Both
+                || (use_repo && s.state == Changed::Here && !p.pushes)
+                || (keep_local && unsynced_here));
         let picked = resolve != Resolve::Auto && (named || by_default);
         match s.state {
             Changed::InStep => {}
@@ -1549,20 +1739,30 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
         if s.state == Changed::InStep {
             base.set(s.key, &r.local);
         }
+        // Kept only on this computer, never synced: absent at this sync,
+        // so a shared version that arrives later differs from it, never replaces it.
+        if s.state == Changed::Here
+            && done.here_only.contains(&s.name)
+            && never_synced(r.base.as_ref(), s.key)
+        {
+            base.set_absent(s.key);
+        }
     }
     if !take_repo.is_empty() {
         // Never synced here: the history's replace this computer's, which
         // are saved first.
-        let first: Vec<&'static str> = take_repo
+        let unsynced: Vec<&'static str> = take_repo
             .iter()
             .copied()
-            .filter(|k| r.base.as_ref().and_then(|b| b.get(k)).is_none())
+            .filter(|k| never_synced(r.base.as_ref(), k))
             .collect();
-        let (applied, skipped, backup) = apply_repo(p, &r, &take_repo, &first)?;
-        done.applied = applied;
-        done.first = first.iter().map(|k| section_name(k)).collect();
-        done.backup = backup;
-        done.skipped = skipped;
+        let applied = apply_repo(p, &r, &take_repo, &unsynced)?;
+        done.applied = applied.names;
+        done.first = applied.first.iter().map(|k| section_name(k)).collect();
+        done.taken = unsynced.iter().map(|k| section_name(k)).collect();
+        done.backups = applied.backups;
+        done.backup_names = applied.backup_names;
+        done.skipped = applied.skipped;
         for k in &take_repo {
             base.set(k, &r.repo);
         }
@@ -1593,22 +1793,27 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
     } else {
         r.status
     };
+    // Nothing differs any more: a dismissal of the last difference goes.
+    if status.differs_key.is_none() && status.unreadable.is_none() {
+        clear_dismissed(p.store);
+    }
     Ok(Outcome { done, status })
 }
 
 /// Replaces the sections `keys` here with the repository's, under the save
 /// lock, and writes the packs that come with them. A pack that can't be
 /// written here is left out, with its `[[mapping]]` entry, and named.
-/// `first`: those of `keys` never synced here; when there are any,
-/// `pathwarden.toml` is saved beside it before anything is replaced
-/// ([`save_before_connect`]). Returns the sections' plain words, the packs
-/// left out, and where the copy is.
+/// `unsynced`: those of `keys` never synced here. Those this computer had
+/// its own (non-empty) version of are a first sync's ([`Applied::first`]):
+/// before anything is replaced, `pathwarden.toml` and every pack file it
+/// overwrites are saved beside them ([`save_before_connect`]), and if a
+/// copy fails nothing is replaced.
 fn apply_repo(
     p: &Place,
     r: &Read,
     keys: &[&'static str],
-    first: &[&'static str],
-) -> Result<(Vec<&'static str>, Vec<String>, Option<PathBuf>)> {
+    unsynced: &[&'static str],
+) -> Result<ApplyDone> {
     let repo_text = r.repo_text.as_deref().unwrap_or_default();
     let dir = p.dir().to_path_buf();
     let state_dir = std::fs::canonicalize(&p.store.dir).unwrap_or_else(|_| p.store.dir.clone());
@@ -1617,7 +1822,7 @@ fn apply_repo(
     let lower = |p: &Path| PathBuf::from(p.to_string_lossy().replace('\\', "/").to_lowercase());
     let last = last_change(p.store);
     let mut skipped: Vec<String> = Vec::new();
-    let backup = config_edit::with_lock(p.config_path, || {
+    let done = config_edit::with_lock(p.config_path, || {
         let original = std::fs::read_to_string(p.config_path).unwrap_or_default();
         let (now, _, _) = local_side(&original, &dir).map_err(|e| format!("{e:#}"))?;
         if keys.iter().any(|k| now.get(k) != r.local.get(k)) {
@@ -1632,6 +1837,9 @@ fn apply_repo(
         let mut files: Vec<(PathBuf, String)> = Vec::new();
         let mut origins = crate::pack_origin::load(&dir).unwrap_or_default();
         let mut bad: Vec<String> = Vec::new();
+        // Pack files here the repository's replace: (file, its name from
+        // this folder).
+        let mut overwritten: Vec<(PathBuf, String)> = Vec::new();
         if keys.contains(&"mapping") {
             let canon_dir = std::fs::canonicalize(&dir).unwrap_or_else(|_| dir.clone());
             let packs = r
@@ -1683,6 +1891,17 @@ fn apply_repo(
                             added_at: last.as_ref().map(|c| c.at.clone()),
                             ..Default::default()
                         });
+                        // A pack file here the repository's replaces: noted,
+                        // for a first sync's copy.
+                        if std::fs::read_to_string(&target)
+                            .is_ok_and(|e| crate::pack_origin::normalize(&e) != text)
+                        {
+                            let rel = target
+                                .strip_prefix(&canon_dir)
+                                .map(|r| r.to_string_lossy().replace('\\', "/"))
+                                .unwrap_or_else(|_| target.to_string_lossy().into_owned());
+                            overwritten.push((target.clone(), rel));
+                        }
                         files.push((target, text));
                     }
                     Err(why) => {
@@ -1718,28 +1937,91 @@ fn apply_repo(
             files.push((dir.join(crate::pack_origin::FILE), o));
         }
         files.push((p.config_path.to_path_buf(), text));
+        // A first sync's: sections never synced here that this computer had
+        // its own version of, packs it had among them.
+        let packs_replaced = unsynced.contains(&"mapping") && !overwritten.is_empty();
+        let first: Vec<&'static str> = unsynced
+            .iter()
+            .copied()
+            .filter(|k| now.get(k).is_some() || (*k == "mapping" && packs_replaced))
+            .collect();
         // Saved before anything is replaced: no copy, no change.
-        let backup = if !first.is_empty() {
-            save_before_connect(p.config_path)?
-        } else {
-            None
-        };
+        let mut copies: Vec<(PathBuf, String)> = Vec::new();
+        if !first.is_empty() {
+            let own = p.config_path.file_name().map_or_else(
+                || "pathwarden.toml".into(),
+                |n| n.to_string_lossy().into_owned(),
+            );
+            let mut sources: Vec<(PathBuf, String)> = vec![(p.config_path.to_path_buf(), own)];
+            if packs_replaced {
+                sources.extend(overwritten.iter().cloned());
+            }
+            for (file, name) in sources {
+                match save_before_connect(&file) {
+                    Ok(Some(copy)) => {
+                        let copy_name = copy
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default();
+                        let shown = match name.rsplit_once('/') {
+                            Some((folder, _)) => format!("{folder}/{copy_name}"),
+                            None => copy_name,
+                        };
+                        copies.push((copy, shown));
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        for (c, _) in &copies {
+                            let _ = std::fs::remove_file(c);
+                        }
+                        return Err(format!(
+                            "{e}. Nothing was changed: this computer's settings are saved \
+                             before the history's replace them."
+                        ));
+                    }
+                }
+            }
+        }
         write_all(&files)?;
-        Ok(backup)
+        Ok((first, copies))
     })
     .map_err(anyhow::Error::msg)?;
+    let (first, copies) = done;
     let names: Vec<&'static str> = keys.iter().map(|k| section_name(k)).collect();
+    // A first sync's notice the app hasn't shown yet stays: this record
+    // adds to it.
+    let earlier = unseen_applied(p.store, false).filter(|a| a.first.is_some());
+    let mut first_names: Vec<String> = earlier
+        .as_ref()
+        .and_then(|a| a.first.clone())
+        .unwrap_or_default();
+    for k in unsynced {
+        let n = section_name(k).to_string();
+        if !first_names.contains(&n) {
+            first_names.push(n);
+        }
+    }
+    let mut backups: Vec<String> = earlier
+        .as_ref()
+        .map(|a| a.backups.clone())
+        .unwrap_or_default();
+    backups.extend(copies.iter().map(|(_, n)| n.clone()));
+    let mut sections: Vec<String> = earlier
+        .as_ref()
+        .map(|a| a.sections.clone())
+        .unwrap_or_default();
+    for n in &names {
+        if !sections.iter().any(|s| s == n) {
+            sections.push(n.to_string());
+        }
+    }
     let me = Applied {
-        first: (!first.is_empty())
-            .then(|| first.iter().map(|k| section_name(k).to_string()).collect()),
-        backup: backup
-            .as_ref()
-            .and_then(|b| b.file_name())
-            .map(|n| n.to_string_lossy().into_owned()),
+        first: (!first_names.is_empty()).then_some(first_names),
+        backups,
         at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs() as i64),
-        sections: names.iter().map(|n| n.to_string()).collect(),
+        sections,
         summary: last.as_ref().map(|c| c.summary.clone()),
         by: last.as_ref().and_then(|c| c.by.clone()),
         on: last.as_ref().and_then(|c| c.on.clone()),
@@ -1748,17 +2030,52 @@ fn apply_repo(
     };
     p.store
         .write_local_file(APPLIED_FILE, &serde_json::to_vec_pretty(&me)?)?;
-    Ok((names, skipped, backup))
+    Ok(ApplyDone {
+        names,
+        first,
+        backups: copies.iter().map(|(c, _)| c.clone()).collect(),
+        backup_names: copies.into_iter().map(|(_, n)| n).collect(),
+        skipped,
+    })
 }
 
-/// Saves this computer's `pathwarden.toml` (at `config_path`, under the
-/// save lock) beside it as `pathwarden.toml.before-connect-<YYYY-MM-DD>`
-/// (this computer's date; `-2`, `-3`, ... when that one is taken), before
-/// a first sync replaces sections in it. Never overwrites a file, and the
-/// copy is made private to this account, as the folder keeps the original.
-/// `None` when there is no `pathwarden.toml` yet.
+/// What [`apply_repo`] did.
+struct ApplyDone {
+    /// The sections applied, in plain words.
+    names: Vec<&'static str>,
+    /// Those a first sync took over this computer's own (keys).
+    first: Vec<&'static str>,
+    /// The copies saved first, and their names from the folder of
+    /// `pathwarden.toml`.
+    backups: Vec<PathBuf>,
+    backup_names: Vec<String>,
+    /// Packs left out, and why.
+    skipped: Vec<String>,
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tests: the next copies fail, as a full disk would.
+    static FAIL_COPY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Saves a file this computer has (its `pathwarden.toml`, or a mapping
+/// pack; read under the save lock) beside it as
+/// `<name>.before-connect-<YYYY-MM-DD>` (this computer's date; `-2`, `-3`,
+/// ... when that one is taken), before a first sync replaces it. Never
+/// overwrites a file. The copy is private to this account (mode 600 from
+/// its creation on Unix; this account, Administrators and SYSTEM on
+/// Windows), and when that can't be set it is removed and the copy fails.
+/// `None` when the file isn't there.
 fn save_before_connect(config_path: &Path) -> Result<Option<PathBuf>, String> {
     use std::io::Write as _;
+    #[cfg(test)]
+    if FAIL_COPY.with(std::cell::Cell::get) {
+        return Err(format!(
+            "Could not save a copy of {}: failing for the test",
+            config_path.display()
+        ));
+    }
     let bytes = match std::fs::read(config_path) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -1778,20 +2095,27 @@ fn save_before_connect(config_path: &Path) -> Result<Option<PathBuf>, String> {
             format!("-{i}")
         };
         let target = config_path.with_file_name(format!("{name}.before-connect-{day}{suffix}"));
-        let mut f = match std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&target)
+        let mut open = std::fs::OpenOptions::new();
+        open.write(true).create_new(true);
+        #[cfg(unix)]
         {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            open.mode(0o600);
+        }
+        let mut f = match open.open(&target) {
             Ok(f) => f,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(format!("Could not save {}: {e}", target.display())),
         };
-        // Private before it holds anything: this account (Administrators and
-        // SYSTEM on Windows), as the original's folder keeps it. Where a file
-        // system can't say (a share), the folder's own rights apply, as they
-        // do to the original.
-        let _ = crate::perms::make_output_file_private(&target);
+        // Private before it holds anything, or no copy.
+        if let Err(e) = crate::perms::make_output_file_private(&target) {
+            drop(f);
+            let _ = std::fs::remove_file(&target);
+            return Err(format!(
+                "Could not make {} private to this account: {e}",
+                target.display()
+            ));
+        }
         if let Err(e) = f.write_all(&bytes).and_then(|()| f.sync_all()) {
             drop(f);
             let _ = std::fs::remove_file(&target);
@@ -2008,10 +2332,11 @@ pub struct Applied {
     /// The sections taken on this computer's first sync, when it was one.
     #[serde(default)]
     pub first: Option<Vec<String>>,
-    /// The file name of the copy of `pathwarden.toml` saved before the
-    /// first sync.
+    /// The copies saved before the first sync, by their names from the
+    /// folder of `pathwarden.toml` (`pathwarden.toml.before-connect-…`,
+    /// `packs/acme.toml.before-connect-…`).
     #[serde(default)]
-    pub backup: Option<String>,
+    pub backups: Vec<String>,
     /// The app showed it.
     #[serde(default)]
     pub seen: bool,
@@ -2459,7 +2784,7 @@ pub struct AfterPull {
     /// The sections the repository's were applied here, by key
     /// (`tier_zero`, `rules`, ...).
     pub applied: Vec<&'static str>,
-    /// Some section changed here and in the repository waits for a choice.
+    /// Some section differs from the shared settings (changed on both sides).
     pub conflict: bool,
 }
 

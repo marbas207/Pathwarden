@@ -1254,6 +1254,20 @@
     })();
   }
 
+  // Dismiss on the note about settings that differ: no dot on Settings
+  // until something else differs; the note stays, on one line.
+  all("[data-sync-dismiss]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      b.disabled = true;
+      // Either way the page is drawn again: dismissed, or what differs now.
+      var again = function () {
+        if (window.Pathwarden) window.Pathwarden.leaving = true;
+        location.reload();
+      };
+      api("POST", "/api/settings/dismiss", { key: b.getAttribute("data-sync-dismiss") }).then(again, again);
+    });
+  });
+
   // "Use the shared settings" / "Keep this computer's" for one section.
   all("[data-sync-action]").forEach(function (b) {
     b.addEventListener("click", function () {

@@ -1209,7 +1209,7 @@ fn before_connect_copies(dir: &Path) -> Vec<PathBuf> {
 /// with default rules gets the history's customized rules and zones, its
 /// own pathwarden.toml saved beside it first, and one line says so; a
 /// section only it has is pushed. After that a change here is pushed, and
-/// only edits on two computers wait for a choice. A computer that only
+/// only edits on two computers differ from the shared ones. A computer that only
 /// reads gets the history's settings on its first sync as well.
 #[test]
 fn a_new_computer_takes_the_historys_settings() {
@@ -1254,7 +1254,9 @@ fn a_new_computer_takes_the_historys_settings() {
     assert_eq!(section(&s, "tier_zero"), Changed::Here);
     let o = n.sync(Resolve::Auto).unwrap();
     assert!(!o.conflict(), "{:?}", o.done);
-    assert_eq!(o.done.first, ["Rule settings", "Zones"], "{:?}", o.done);
+    // Its own rules are replaced; it had no zones, so those are only taken.
+    assert_eq!(o.done.first, ["Rule settings"], "{:?}", o.done);
+    assert_eq!(o.done.taken, ["Rule settings", "Zones"], "{:?}", o.done);
     assert_eq!(o.done.applied, ["Rule settings", "Zones"], "{:?}", o.done);
     assert_eq!(o.done.pushed, ["Tier Zero additions"], "{:?}", o.done);
     let c = n.config();
@@ -1265,7 +1267,7 @@ fn a_new_computer_takes_the_historys_settings() {
     // The copy: beside it, as it was.
     let copies = before_connect_copies(&n.dir);
     assert_eq!(copies.len(), 1, "{copies:?}");
-    assert_eq!(o.done.backup.as_deref(), Some(copies[0].as_path()));
+    assert_eq!(o.done.backups, [copies[0].clone()]);
     assert_eq!(std::fs::read(&copies[0]).unwrap(), before);
     let name = copies[0]
         .file_name()
@@ -1285,13 +1287,13 @@ fn a_new_computer_takes_the_historys_settings() {
         a.first.as_deref(),
         Some(&["Rule settings".to_string(), "Zones".to_string()][..])
     );
-    assert_eq!(a.backup.as_deref(), Some(name.as_str()));
+    assert_eq!(a.backups, [name.as_str()]);
     assert_eq!(n.status().state, Changed::InStep);
 
     // The writer gets the section only the new computer had.
     let o = w.sync(Resolve::Auto).unwrap();
     assert_eq!(o.done.applied, ["Tier Zero additions"], "{:?}", o.done);
-    assert!(o.done.first.is_empty() && o.done.backup.is_none());
+    assert!(o.done.taken.is_empty() && o.done.backups.is_empty());
     assert!(before_connect_copies(&w.dir).is_empty());
 
     // A second sync after an edit here pushes it: no copy, no first line.
@@ -1301,12 +1303,12 @@ fn a_new_computer_takes_the_historys_settings() {
     });
     let o = n.sync(Resolve::Auto).unwrap();
     assert_eq!(o.done.pushed, ["Rule settings"], "{:?}", o.done);
-    assert!(o.done.first.is_empty() && o.done.backup.is_none());
+    assert!(o.done.taken.is_empty() && o.done.backups.is_empty());
     assert_eq!(before_connect_copies(&n.dir).len(), 1);
     w.sync(Resolve::Auto).unwrap();
     assert_eq!(w.config().rules.stale_days, 45);
 
-    // Edits on two computers after the first sync still wait for a choice.
+    // Edits on two computers after the first sync still differ from the shared ones.
     w.edit(|d| d.set_rules(&rules(50, &[]), &stamp("ned", "W")).unwrap());
     w.sync(Resolve::Auto).unwrap();
     n.edit(|d| d.set_rules(&rules(60, &[]), &stamp("arya", "N")).unwrap());
@@ -1333,8 +1335,9 @@ fn a_new_computer_takes_the_historys_settings() {
     let head = git(&remote, &["rev-parse", "main"]);
     let o = r.sync(Resolve::Auto).unwrap();
     assert!(!o.conflict(), "{:?}", o.done);
+    assert_eq!(o.done.first, ["Rule settings"], "{:?}", o.done);
     assert_eq!(
-        o.done.first,
+        o.done.taken,
         ["Tier Zero additions", "Rule settings", "Zones"],
         "{:?}",
         o.done
@@ -1352,5 +1355,167 @@ fn a_new_computer_takes_the_historys_settings() {
         "a reader pushes nothing"
     );
     assert_eq!(r.status().state, Changed::InStep);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn rules_with(days: i64) -> config_edit::RulesEdit {
+    config_edit::RulesEdit {
+        disabled: Vec::new(),
+        stale_days: days,
+        password_age_days: 365,
+        krbtgt_age_days: 180,
+        sso_key_age_days: None,
+        severity: "exposure".into(),
+        severities: Default::default(),
+    }
+}
+
+fn zone(name: &str) -> config_edit::ZoneEdit {
+    config_edit::ZoneEdit {
+        name: name.into(),
+        groups: vec!["SERVER ADMINS@NORTH.LOCAL".into()],
+        ..Default::default()
+    }
+}
+
+/// A reader's section kept only on this computer is a section synced as
+/// absent: a shared version that arrives later differs from the shared ones, never
+/// replacing it as a first sync would.
+#[test]
+fn a_readers_own_section_is_not_replaced_later() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("reader-own");
+    let remote = bare(&root);
+    let w = Machine::new(&root, "w", &remote, true, "");
+    w.edit(|d| d.set_tier_zero(&["A".into()]).unwrap());
+    w.sync(Resolve::Auto).unwrap();
+    let r = Machine::new(&root, "r", &remote, false, "");
+    r.edit(|d| d.upsert_zone(None, None, &zone("Mine")).unwrap());
+    let o = r.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.here_only, ["Zones"], "{:?}", o.done);
+    // The writer shares a zone of its own.
+    w.edit(|d| d.upsert_zone(None, None, &zone("Theirs")).unwrap());
+    w.sync(Resolve::Auto).unwrap();
+    let o = r.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.conflict, ["Zones"], "{:?}", o.done);
+    assert!(o.done.taken.is_empty(), "{:?}", o.done);
+    assert_eq!(r.config().zones.len(), 1);
+    assert_eq!(r.config().zones[0].name, "Mine");
+    assert_eq!(section(&r.status(), "zone"), Changed::Both);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A base file that is there but can't be read is not a first sync: a
+/// section that differs is shown as differing; the history's are never taken
+/// silently.
+#[test]
+fn a_damaged_base_is_not_a_first_sync() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("damaged-base");
+    let remote = bare(&root);
+    let w = Machine::new(&root, "w", &remote, true, "");
+    w.edit(|d| d.set_rules(&rules_with(30), &stamp("ned", "W")).unwrap());
+    w.sync(Resolve::Auto).unwrap();
+    let n = Machine::new(&root, "n", &remote, true, DEFAULT_RULES);
+    n.sync(Resolve::Auto).unwrap();
+    assert!(!n.status().first_sync);
+    let base = n
+        .dir
+        .join("state")
+        .join(".git")
+        .join("pathwarden-settings-base.json");
+    assert!(base.is_file());
+    std::fs::write(&base, "{ not json").unwrap();
+    w.edit(|d| d.set_rules(&rules_with(40), &stamp("ned", "W")).unwrap());
+    w.sync(Resolve::Auto).unwrap();
+    let s = n.status();
+    assert!(!s.first_sync, "a damaged base is not a first sync");
+    assert_eq!(section(&s, "rules"), Changed::Both);
+    let o = n.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.conflict, ["Rule settings"], "{:?}", o.done);
+    assert!(o.done.taken.is_empty() && o.done.backups.is_empty());
+    assert_eq!(n.config().rules.stale_days, 30, "left as it is");
+    // Still a choice on the next pull, from the base written meanwhile.
+    assert!(n.sync(Resolve::Auto).unwrap().conflict());
+    let o = n.sync(Resolve::UseRepo(vec![])).unwrap();
+    assert_eq!(o.done.applied, ["Rule settings"], "{:?}", o.done);
+    assert_eq!(n.config().rules.stale_days, 40);
+    assert_eq!(n.status().state, Changed::InStep);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// `config sync --keep-local` with no section on a first sync keeps this
+/// computer's versions and shares them; on a computer that only reads it
+/// is refused.
+#[test]
+fn keep_local_on_a_first_sync_keeps_this_computers() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("keep-first");
+    let remote = bare(&root);
+    let w = Machine::new(&root, "w", &remote, true, "");
+    w.edit(|d| {
+        d.set_rules(&rules_with(30), &stamp("ned", "W")).unwrap();
+        d.upsert_zone(None, None, &zone("Theirs")).unwrap();
+    });
+    w.sync(Resolve::Auto).unwrap();
+    let n = Machine::new(&root, "n", &remote, true, DEFAULT_RULES);
+    let before = n.text();
+    let o = n.sync(Resolve::KeepLocal(vec![])).unwrap();
+    assert_eq!(o.done.pushed, ["Rule settings"], "{:?}", o.done);
+    // What it had nothing of still comes from the history.
+    assert_eq!(o.done.applied, ["Zones"], "{:?}", o.done);
+    assert!(o.done.first.is_empty() && o.done.backups.is_empty());
+    assert_eq!(n.config().rules.stale_days, 90);
+    assert!(n.text().contains("stale_days = 90"), "{before}");
+    assert_eq!(n.status().state, Changed::InStep);
+    w.sync(Resolve::Auto).unwrap();
+    assert_eq!(w.config().rules.stale_days, 90);
+    let r = Machine::new(&root, "r", &remote, false, DEFAULT_RULES);
+    let e = r.sync(Resolve::KeepLocal(vec![])).unwrap_err().to_string();
+    assert!(e.contains("doesn't push"), "{e}");
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// The first sync's notice survives a later pull that applies more, until
+/// the app shows it.
+#[test]
+fn the_first_sync_notice_waits_until_shown() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("notice");
+    let remote = bare(&root);
+    let w = Machine::new(&root, "w", &remote, true, "");
+    w.edit(|d| d.set_rules(&rules_with(30), &stamp("ned", "W")).unwrap());
+    w.sync(Resolve::Auto).unwrap();
+    let n = Machine::new(&root, "n", &remote, true, DEFAULT_RULES);
+    let o = n.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.first, ["Rule settings"], "{:?}", o.done);
+    w.edit(|d| accept(d, "PW-011", "r", &stamp("ned", "W")));
+    w.sync(Resolve::Auto).unwrap();
+    let o = n.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.applied, ["Accepted risks"], "{:?}", o.done);
+    assert!(o.done.taken.is_empty(), "an update: {:?}", o.done);
+    let a = settings_sync::unseen_applied(&n.store(), true).unwrap();
+    assert_eq!(a.first.as_deref(), Some(&["Rule settings".to_string()][..]));
+    assert_eq!(a.backups.len(), 1, "{a:?}");
+    assert!(
+        a.backups[0].starts_with("pathwarden.toml.before-connect-"),
+        "{a:?}"
+    );
+    assert_eq!(a.sections, ["Rule settings", "Accepted risks"]);
+    // Shown: the next update's record says only what it applied.
+    w.edit(|d| d.set_tier_zero(&["T".into()]).unwrap());
+    w.sync(Resolve::Auto).unwrap();
+    n.sync(Resolve::Auto).unwrap();
+    let a = settings_sync::unseen_applied(&n.store(), false).unwrap();
+    assert!(a.first.is_none() && a.backups.is_empty(), "{a:?}");
+    assert_eq!(a.sections, ["Tier Zero additions"]);
     let _ = std::fs::remove_dir_all(&root);
 }

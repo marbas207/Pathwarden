@@ -813,7 +813,8 @@ pub fn first_sync_line(store: &pathwarden_core::store::Store) -> Option<String> 
     let a = pathwarden_core::settings_sync::unseen_applied(store, false)?;
     let first = a.first.as_ref().filter(|f| !f.is_empty())?;
     let names: Vec<&str> = first.iter().map(String::as_str).collect();
-    let line = pathwarden_core::settings_sync::first_sync_words(&names, a.backup.as_deref());
+    let backups: Vec<&str> = a.backups.iter().map(String::as_str).collect();
+    let line = pathwarden_core::settings_sync::first_sync_words(&names, &backups);
     let _ = pathwarden_core::settings_sync::unseen_applied(store, true);
     Some(line)
 }

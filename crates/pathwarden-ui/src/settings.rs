@@ -56,6 +56,7 @@ pub fn routes() -> Router<Shared> {
         .route("/api/settings/state", post(save_state))
         .route("/api/settings/full-runs", post(save_full_runs))
         .route("/api/settings/sync", post(crate::sync_ui::sync_section))
+        .route("/api/settings/dismiss", post(crate::sync_ui::dismiss))
         .route("/api/settings/sharing", get(crate::sync_ui::sharing))
         .route("/api/findings", get(search_findings))
 }

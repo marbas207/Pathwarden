@@ -1296,6 +1296,32 @@
       foot.querySelectorAll(".pull-foot, .pull-btn").forEach(function (a) { a.remove(); });
       if (html) foot.insertBefore(fromHtml(html), foot.firstChild);
     };
+    // The amber dot on Settings in the rail while settings differ from the
+    // shared ones, as the last sync left them (the page draws it first).
+    var setDot = function (on) {
+      var link = document.querySelector('.tablist a[href="/settings"]');
+      if (!link) return;
+      var dot = link.querySelector(".nav-dot");
+      if (!!dot === !!on) return;
+      if (!on) {
+        dot.remove();
+        var said = link.querySelector(".sr-only");
+        if (said) said.remove();
+        link.removeAttribute("title");
+        return;
+      }
+      var words = "Settings differ from the shared ones";
+      var sr = document.createElement("span");
+      sr.className = "sr-only";
+      sr.textContent = ": " + words.toLowerCase();
+      var d = document.createElement("span");
+      d.className = "nav-dot";
+      d.setAttribute("aria-hidden", "true");
+      d.title = words;
+      link.title = words;
+      link.appendChild(sr);
+      link.appendChild(d);
+    };
     var setNote = function (html) {
       if (!html || html === closed) return;
       if (html === shown) return;
@@ -1326,6 +1352,7 @@
         .then(function (j) {
           if (!j) return;
           setFoot(j.foot);
+          if (typeof j.differ === "boolean") setDot(j.differ);
           setNote(j.note);
         }, function () {});
     };

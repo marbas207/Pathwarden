@@ -434,6 +434,36 @@ pub fn foot_html(ws: &Workspace, flag: Option<&std::path::Path>) -> String {
         .unwrap_or_default()
 }
 
+/// The footer ([`foot_html`]) and whether to show the rail's dot on
+/// Settings: some section differs from the shared settings (changed here
+/// and in the repository), in the working copy as the last pull left it,
+/// and this computer didn't dismiss these same differences. No git is run.
+pub fn foot_and_dot(ws: &Workspace, flag: Option<&std::path::Path>) -> (String, bool) {
+    (foot_html(ws, flag), settings_dot(ws, flag))
+}
+
+/// [`foot_and_dot`]'s dot.
+pub fn settings_dot(ws: &Workspace, flag: Option<&std::path::Path>) -> bool {
+    use pathwarden_core::settings_sync;
+    let Ok(config) = ws.config() else {
+        return false;
+    };
+    if settings_sync::inactive(&config.state).is_some() {
+        return false;
+    }
+    let Ok(loc) = history_ui::locate_with(ws, flag, &config) else {
+        return false;
+    };
+    let place = settings_sync::Place {
+        store: &loc.store,
+        config_path: &ws.config_path(),
+        pushes: loc.push,
+        env_name: None,
+    };
+    settings_sync::differs_key(&place)
+        .is_some_and(|k| settings_sync::dismissed_key(&loc.store).as_deref() != Some(k.as_str()))
+}
+
 /// The last pull of `ws`'s history in words, when it is a git repository.
 pub fn pull_status(ws: &Workspace, flag: Option<&std::path::Path>) -> Option<last_pull::Status> {
     let config = ws.config().ok()?;
@@ -492,13 +522,14 @@ pub async fn pulled_api(State(st): State<Shared>, Query(q): Query<PulledQuery>) 
     };
     let ws = st.ws();
     let flag = st.state_dir_for(&ws);
-    let (foot, note) = tokio::task::spawn_blocking(move || {
-        let foot = foot_html(&ws, flag.as_deref());
-        (foot, note_html(&ws, flag.as_deref(), &q, &change))
+    let (foot, differ, note) = tokio::task::spawn_blocking(move || {
+        let (foot, differ) = foot_and_dot(&ws, flag.as_deref());
+        (foot, differ, note_html(&ws, flag.as_deref(), &q, &change))
     })
     .await
     .unwrap_or_default();
-    Json(serde_json::json!({ "n": n, "foot": foot, "note": note })).into_response()
+    Json(serde_json::json!({ "n": n, "foot": foot, "differ": differ, "note": note }))
+        .into_response()
 }
 
 /// The note fixed at the bottom of page `q.page` for `change`, if it shows
@@ -547,14 +578,14 @@ fn note_html(
             let what = format!("<strong>{}</strong>", esc(&last_pull::names_words(&names)));
             if q.editing {
                 return Some(note(
-                    &format!("{what} changed in the repository while you were editing."),
+                    &format!("{what} changed in the shared settings while you were editing."),
                     Some("Reload to see the new version. Your unsaved changes here will be lost."),
                     reload,
                 ));
             }
             Some(note(
                 &format!(
-                    "{what} changed in the repository. {}",
+                    "{what} changed in the shared settings. {}",
                     changed_tip(ws, flag)
                 ),
                 None,

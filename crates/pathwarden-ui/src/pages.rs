@@ -59,6 +59,9 @@ pub struct Ctx<'a> {
     /// The sidebar footer's pull status (empty unless the history is a git
     /// repository).
     pub pull_foot: String,
+    /// Some shared section differs from the shared settings: an amber dot
+    /// on Settings in the rail, on every page.
+    pub settings_differ: bool,
 }
 
 /// One environment in the switcher.
@@ -118,12 +121,13 @@ impl<'a> Ctx<'a> {
             .collect();
         let ws = st.ws();
         let flag = st.state_dir_for(&ws);
-        let pull_foot = crate::auto_pull::foot_html(&ws, flag.as_deref());
+        let (pull_foot, settings_differ) = crate::auto_pull::foot_and_dot(&ws, flag.as_deref());
         // The runs the Runs list shows: these, and the history's others.
         let points = crate::history_ui::point_ids(&ws, flag.as_deref());
         Self {
             pulled: st.auto_pull.counter(&env_id),
             pull_foot,
+            settings_differ,
             workspace: st.workspace.root(),
             runs: crate::run_list::row_count(runs, points.iter().map(String::as_str)),
             keep_uploads: st.keep_uploads,
@@ -644,7 +648,35 @@ pub(crate) fn shell(
             "History storage",
             None
         ),
-        settings = item(Nav::Settings, "/settings", "i-gear", "Settings", None),
+        settings = settings_item(
+            item(Nav::Settings, "/settings", "i-gear", "Settings", None),
+            ctx.settings_differ
+        ),
+    )
+}
+
+/// What the rail's dot on Settings says.
+pub const SETTINGS_DIFFER: &str = "Settings differ from the shared ones";
+
+/// The rail's Settings link `link`, with an amber dot when some shared
+/// section differs from the shared settings: no text on the page, the words
+/// in the link's name for screen readers and as its tooltip.
+fn settings_item(link: String, differ: bool) -> String {
+    if !differ {
+        return link;
+    }
+    link.replacen(
+        r#"<a href="/settings""#,
+        &format!(r#"<a href="/settings" title="{SETTINGS_DIFFER}""#),
+        1,
+    )
+    .replacen(
+        "</a>",
+        &format!(
+            r#"<span class="sr-only">: {}</span><span class="nav-dot" aria-hidden="true" title="{SETTINGS_DIFFER}"></span></a>"#,
+            SETTINGS_DIFFER.to_lowercase()
+        ),
+        1,
     )
 }
 

@@ -40,6 +40,9 @@ pub struct View {
     pub remote: String,
     /// Whether this computer pushes.
     pub pushes: bool,
+    /// The differences on show were dismissed on this computer: the note
+    /// is one line, and the rail shows no dot.
+    pub dismissed: bool,
 }
 
 /// The shared settings of `ws`, when its history shares them. `mark_seen`:
@@ -59,12 +62,21 @@ pub fn view(ws: &Workspace, flag: Option<&Path>, mark_seen: bool) -> Option<View
     let status = settings_sync::status(&place).ok()?;
     let diffs = settings_sync::section_diffs(&place).unwrap_or_default();
     let applied = settings_sync::unseen_applied(&loc.store, mark_seen);
+    let dismissed = status
+        .differs_key
+        .as_ref()
+        .is_some_and(|k| settings_sync::dismissed_key(&loc.store).as_ref() == Some(k));
+    // Nothing differs any more: the next difference shows again.
+    if status.differs_key.is_none() && status.unreadable.is_none() {
+        settings_sync::clear_dismissed(&loc.store);
+    }
     Some(View {
         status,
         diffs,
         applied,
         remote: loc.git.map(|(r, _)| short_remote(&r)).unwrap_or_default(),
         pushes: loc.push,
+        dismissed,
     })
 }
 
@@ -180,6 +192,14 @@ pub fn sync_line(v: &View, page: &str) -> String {
         .sections
         .iter()
         .all(|x| x.state == Changed::InStep || x.state == Changed::Both);
+    if !both.is_empty() && v.dismissed {
+        return format!(
+            r#"<div class="note warn sync-conflict dismissed" role="status">{}<div><p>{}: {}.</p></div></div>"#,
+            icon("i-alert"),
+            crate::pages::SETTINGS_DIFFER,
+            esc(&sections_words(&both))
+        );
+    }
     if !both.is_empty() {
         let rows = vec![
             (
@@ -200,10 +220,11 @@ pub fn sync_line(v: &View, page: &str) -> String {
             ),
         ];
         return format!(
-            r#"<div class="note warn sync-conflict" role="status">{}<div><p><strong>{}</strong> Both changed since this computer last synced. {choose} Until then, runs here use this computer's. {}</p></div></div>"#,
+            r#"<div class="note warn sync-conflict dismissable" role="status">{}<div><p><strong>{}</strong> Both changed since this computer last synced. {choose} Until then, runs here use this computer's. {}</p></div><button type="button" class="linkish sync-dismiss" data-sync-dismiss="{}" title="Hides the dot on Settings until something else differs">Dismiss</button></div>"#,
             icon("i-alert"),
             esc(&settings_sync::differ_words(&both)),
-            tip(&format!("conf-{page}"), "While this is open", &rows, false)
+            tip(&format!("conf-{page}"), "While this is open", &rows, false),
+            esc(s.differs_key.as_deref().unwrap_or_default()),
         );
     }
     let changed = |c: Changed| s.sections.iter().filter(|x| x.state == c).count();
@@ -458,10 +479,8 @@ pub fn pulled_note(v: &View) -> String {
     let text = match &a.first {
         Some(first) if !first.is_empty() => {
             let first: Vec<&str> = first.iter().map(String::as_str).collect();
-            esc(&settings_sync::first_sync_words(
-                &first,
-                a.backup.as_deref(),
-            ))
+            let backups: Vec<&str> = a.backups.iter().map(String::as_str).collect();
+            esc(&settings_sync::first_sync_words(&first, &backups))
         }
         _ => format!(
             "{} updated from the run history",
@@ -661,6 +680,41 @@ pub(crate) async fn sharing(
 }
 
 #[derive(Deserialize)]
+pub(crate) struct DismissBody {
+    /// The differences shown ([`Status::differs_key`]).
+    key: String,
+}
+
+/// `POST /api/settings/dismiss`: the note's Dismiss. Hides the rail's dot
+/// on this computer while these same differences stand; refused when they
+/// changed since the page was drawn (the page reloads to show them).
+pub(crate) async fn dismiss(State(st): State<Shared>, Json(body): Json<DismissBody>) -> Response {
+    let ws = st.ws();
+    let flag = st.state_dir_for(&ws);
+    let done = tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let loc = crate::history_ui::locate(&ws, flag.as_deref())?;
+        let place = Place {
+            store: &loc.store,
+            config_path: &ws.config_path(),
+            pushes: loc.push,
+            env_name: None,
+        };
+        match settings_sync::differs_key(&place) {
+            Some(k) if k == body.key => {
+                settings_sync::dismiss(&loc.store, &k).map_err(|e| format!("{e:#}"))
+            }
+            _ => Err("The settings changed since this page was loaded. Reload the page.".into()),
+        }
+    })
+    .await;
+    match done {
+        Ok(Ok(())) => Json(serde_json::json!({ "saved": true })).into_response(),
+        Ok(Err(e)) => crate::settings::json_error(StatusCode::CONFLICT, e),
+        Err(_) => crate::settings::json_error(StatusCode::INTERNAL_SERVER_ERROR, "That failed."),
+    }
+}
+
+#[derive(Deserialize)]
 pub(crate) struct SyncBody {
     /// `use_repo` or `keep_local`.
     action: String,
@@ -697,7 +751,7 @@ pub(crate) async fn sync_section(State(st): State<Shared>, Json(body): Json<Sync
                     env_name: Some(&name),
                 };
                 let o = settings_sync::sync(&place, resolve).map_err(|e| format!("{e:#}"))?;
-                // The footer's "Settings wait for a choice" goes with it.
+                // Kept in the last sync's record.
                 crate::last_pull::set_conflict(&loc.store, o.conflict());
                 // Shown on this page now: the note about it isn't kept for later.
                 let _ = settings_sync::unseen_applied(&loc.store, true);

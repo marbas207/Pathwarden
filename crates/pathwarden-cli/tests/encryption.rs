@@ -883,7 +883,7 @@ fn full_runs_and_settings_with_encrypt_shares_nothing_plain() {
     ));
     let encrypted = out.find("Encrypted").unwrap_or_else(|| panic!("{out}"));
     let shared = out
-        .find("Shared settings pushed")
+        .find("Shared with this history")
         .unwrap_or_else(|| panic!("{out}"));
     assert!(encrypted < shared, "encrypted first: {out}");
     let text = std::fs::read_to_string(&config).unwrap();

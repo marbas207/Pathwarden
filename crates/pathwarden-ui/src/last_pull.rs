@@ -192,7 +192,9 @@ pub fn failed(store: &Store, by: &str, at: i64, error: &str) {
 }
 
 /// After a choice on Settings settled the shared settings (or didn't):
-/// whether some section still waits for one.
+/// whether some section still differs from them. Kept in the record; the
+/// sidebar and History storage say only how the sync went, and Settings
+/// itself shows a difference.
 pub fn set_conflict(store: &Store, conflict: bool) {
     let _one = one_at_a_time();
     if let Some(mut r) = read(store) {
@@ -213,8 +215,6 @@ pub enum Kind {
     /// Synced, and runs recorded here still wait to be pushed
     /// ([`Status::with_waiting`]).
     Waiting,
-    /// Up to date, but some shared section waits for a choice.
-    Conflict,
     /// The repository couldn't be reached.
     Failed,
     /// The repository wanted a sign-in git couldn't make.
@@ -259,7 +259,6 @@ pub fn status(last: Option<LastPull>, minutes: u32, now: i64) -> Status {
         Some(r) if !r.ok && r.sign_in => Kind::NotSignedIn,
         Some(r) if !r.ok => Kind::Failed,
         Some(r) if r.locked => Kind::Locked,
-        Some(r) if r.conflict => Kind::Conflict,
         Some(_) => Kind::UpToDate,
     };
     Status {
@@ -377,7 +376,7 @@ impl Status {
     pub fn warn(&self) -> bool {
         matches!(
             self.kind,
-            Kind::Failed | Kind::NotSignedIn | Kind::NoHelper | Kind::Locked | Kind::Conflict
+            Kind::Failed | Kind::NotSignedIn | Kind::NoHelper | Kind::Locked
         )
     }
 
@@ -410,7 +409,6 @@ impl Status {
             Kind::NotSignedIn if self.refused() => "Sign-in refused by the repository".into(),
             Kind::NotSignedIn | Kind::NoHelper => "Not signed in to the repository".into(),
             Kind::Locked => "Passphrase needed".into(),
-            Kind::Conflict => "Settings wait for a choice".into(),
             Kind::Waiting => format!(
                 "{} waiting to be pushed",
                 pathwarden_core::text::count(self.waiting.len(), "run", "runs")
@@ -437,7 +435,7 @@ impl Status {
     fn foot_icon(&self) -> &'static str {
         match self.kind {
             Kind::Locked => "i-lock",
-            Kind::Failed | Kind::NotSignedIn | Kind::NoHelper | Kind::Conflict => "i-alert",
+            Kind::Failed | Kind::NotSignedIn | Kind::NoHelper => "i-alert",
             Kind::Waiting => "i-upload",
             _ => "i-sync",
         }
@@ -481,14 +479,6 @@ impl Status {
                     "Up to date".to_string(),
                     format!(" · synced {} · {every}", self.pulled_ago()),
                     Some(self.ok_tip()),
-                ),
-                // The Settings row is the one note about it.
-                Kind::Conflict => (
-                    "",
-                    "i-check",
-                    "Up to date".to_string(),
-                    format!(" · synced {} · {every}", self.pulled_ago()),
-                    None,
                 ),
                 Kind::Waiting => (
                     "",
@@ -758,9 +748,6 @@ impl Status {
                 }
                 t
             }
-            Kind::Conflict => format!(
-                "Up to date · synced {pulled} · shared settings wait for a choice (`pathwarden config sync --status`)"
-            ),
             Kind::Locked => format!(
                 "Synced {pulled} · nothing loaded until the passphrase is entered (`pathwarden history storage passphrase set`)"
             ),
@@ -876,15 +863,22 @@ mod tests {
             5,
             1010,
         );
-        assert_eq!(s.kind, Kind::Conflict);
-        assert_eq!(s.foot(), "Settings wait for a choice");
-        assert!(s.warn());
-        // The line stays neutral: the Settings row is the one note.
+        // Settings that differ from the shared ones are Settings' to say:
+        // the footer and the line say only how the sync went.
+        assert_eq!(s.kind, Kind::UpToDate);
+        assert_eq!(s.foot(), "Synced just now");
+        assert!(!s.warn());
+        let foot = s.foot_html();
+        assert!(
+            !foot.contains("warn") && !foot.contains("differ") && !foot.contains("i-alert"),
+            "{foot}"
+        );
         let line = s.line_html();
         assert!(
             !line.contains("warn") && line.contains("Up to date"),
             "{line}"
         );
+        assert!(!s.text().contains("differ"), "{}", s.text());
 
         let locked = LastPull {
             locked: true,

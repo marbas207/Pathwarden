@@ -1657,7 +1657,15 @@ pub(crate) fn connect(
             .map_err(anyhow::Error::msg)?;
     }
     for n in &done.notes {
-        eprintln!("Warning: {}", ui::safe_text(n));
+        // What the first sync took is a note; anything else said is a
+        // warning.
+        let (first, rest) = pathwarden_core::settings_sync::split_first_sync(n);
+        if let Some(line) = first {
+            eprintln!("Note: {}", ui::safe_text(&line));
+        }
+        if !rest.is_empty() {
+            eprintln!("Warning: {}", ui::safe_text(&rest));
+        }
     }
     println!(
         "Connected environment {} (ID {}){}.",

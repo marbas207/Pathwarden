@@ -214,7 +214,7 @@ fn settings_go_through_the_repository_from_the_terminal() {
     // A writer's saves are pushed at once.
     let (_, e) = ok(&sched.run(&["tier-zero", "add", "SVC_SYNC@NORTH.LOCAL", "--force"]));
     assert!(
-        e.contains("Shared settings pushed to the repository, in plain text (not encrypted)"),
+        e.contains("Shared with this history, in plain text (not encrypted)."),
         "{e}"
     );
     let (_, e) = ok(&sched.run(&[
@@ -226,7 +226,9 @@ fn settings_go_through_the_repository_from_the_terminal() {
         "Break-glass, reviewed quarterly",
     ]));
     assert!(
-        e.contains("pathwarden settings: 1 accepted risk added"),
+        e.contains(
+            "Shared with this history, in plain text (not encrypted): 1 accepted risk added."
+        ),
         "{e}"
     );
 
@@ -245,15 +247,14 @@ fn settings_go_through_the_repository_from_the_terminal() {
     );
     assert!(text.contains("in plain text (not encrypted)"), "{text}");
     assert_eq!(v["encrypted"], false);
-    // Its first sync: the history's settings are taken, and its own
-    // pathwarden.toml is saved beside it first.
+    // Its first sync: the history's settings are taken. It had none of
+    // its own, so nothing is saved beside pathwarden.toml.
     let (text, _) = ok(&ws.run(&["sync"]));
     assert!(
-        text.contains(
-            "Tier Zero additions and accepted risks were taken from the run history. This computer's earlier settings are saved in pathwarden.toml.before-connect-"
-        ),
+        text.contains("Tier Zero additions and accepted risks were taken from the run history."),
         "{text}"
     );
+    assert!(!text.contains("saved in"), "{text}");
     let copies: Vec<_> = std::fs::read_dir(&ws.dir)
         .unwrap()
         .filter_map(|e| e.ok())
@@ -263,7 +264,7 @@ fn settings_go_through_the_repository_from_the_terminal() {
                 .starts_with("pathwarden.toml.before-connect-")
         })
         .collect();
-    assert_eq!(copies.len(), 1, "{copies:?}");
+    assert!(copies.is_empty(), "{copies:?}");
     let (text, _) = ok(&ws.run(&["risk", "list"]));
     assert!(
         text.contains(r"accepted by NORTH\eddard.stark on PW-SCHED01"),
@@ -294,7 +295,7 @@ fn settings_go_through_the_repository_from_the_terminal() {
     );
     // Keep the scheduler's: the workstation follows.
     let (text, _) = ok(&sched.run(&["sync", "--keep-local"]));
-    assert!(text.contains("pushed to the repository"), "{text}");
+    assert!(text.contains("Shared with this history"), "{text}");
     let (text, _) = ok(&ws.run(&["sync"]));
     assert!(text.contains("applied here"), "{text}");
     let (text, _) = ok(&ws.run(&["tier-zero", "list"]));

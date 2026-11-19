@@ -200,7 +200,10 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
         d.set_tier_zero(&["VAULT01$".into(), "SRV-ADSYNC$".into()])
     })
     .unwrap();
-    assert!(note.unwrap().contains("pushed"), "the other machine shares");
+    assert!(
+        note.unwrap().contains("Shared with this history"),
+        "the other machine shares"
+    );
 
     let ws = Workspace::open(dir.join("ws")).unwrap();
     std::fs::write(ws.config_path(), state(&ws.env_dir())).unwrap();
@@ -248,7 +251,7 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
         d.set_tier_zero(&["VAULT01$".into(), "CASTELBLACK$".into()])
     })
     .unwrap();
-    assert!(note.unwrap().contains("pushed"));
+    assert!(note.unwrap().contains("Shared with this history"));
     let p = pull(&ws).await.unwrap();
     assert_eq!(a.state.auto_pull.record(&env, &p), 2);
 
@@ -256,7 +259,7 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
     assert_eq!(v["n"], 2);
     let note = v["note"].as_str().unwrap();
     assert!(
-        note.contains("<strong>Tier Zero</strong> changed in the repository"),
+        note.contains("<strong>Tier Zero</strong> changed in the shared settings"),
         "{note}"
     );
     assert!(note.contains("From the next analysis"), "{note}");
@@ -266,7 +269,7 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
         .await;
     let note = v["note"].as_str().unwrap();
     assert!(
-        note.contains("changed in the repository while you were editing.")
+        note.contains("changed in the shared settings while you were editing.")
             && note.contains("Your unsaved changes here will be lost."),
         "{note}"
     );
@@ -361,7 +364,7 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
         )
     })
     .unwrap();
-    assert!(note.unwrap().contains("pushed"));
+    assert!(note.unwrap().contains("Shared with this history"));
     let p = pull(&ws).await.unwrap();
     for k in ["rules", "zone", "suppress"] {
         assert!(p.sections.contains(&k), "{k}: {p:?}");
@@ -489,7 +492,7 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
         d.set_tier_zero(&["VAULT01$".into(), "N1$".into()])
     })
     .unwrap();
-    assert!(note.unwrap().contains("pushed"));
+    assert!(note.unwrap().contains("Shared with this history"));
     // No save of this app is still sharing: one would pull the change
     // first and leave this pull nothing to apply. Taking and dropping the
     // lock doesn't prove it (a share may not have taken it yet).
