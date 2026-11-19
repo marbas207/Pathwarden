@@ -152,7 +152,8 @@ pub fn run(args: UiArgs) -> anyhow::Result<()> {
     if own_console {
         session::release_console();
     }
-    let result = open(state, &dir, &notes, &version);
+    let result = open(state.clone(), &dir, &notes, &version);
+    pathwarden_ui::logs_ui::end_session(&state);
     if let (Err(e), true) = (&result, own_console) {
         rfd::MessageDialog::new()
             .set_title("Pathwarden")

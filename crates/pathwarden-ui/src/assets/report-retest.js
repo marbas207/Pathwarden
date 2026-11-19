@@ -632,6 +632,17 @@
               line.appendChild(b);
               line.appendChild(more);
             }
+            // Its log, on the computer that ran it: the app opens it.
+            if (e.ok === false && typeof e.log === "string" && e.log && typeof e.at === "string") {
+              var lg = text("button", "ac-link", "Open log");
+              lg.type = "button";
+              lg.addEventListener("click", function (ev) {
+                ev.preventDefault();
+                ev.stopPropagation();
+                send({ type: "pathwarden:open-log", fingerprint: fp, at: e.at });
+              });
+              line.insertBefore(lg, line.querySelector(".ac-full"));
+            }
             li.appendChild(line);
             ol.appendChild(li);
           });

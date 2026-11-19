@@ -88,6 +88,15 @@ the next analysis. A page says something at its top only when there is
 something to do: the file can't be loaded, the shared settings can't be
 read, or a setting has two values.
 
+**Settings › Logs** keeps this computer's logs and crash reports: **Open
+logs folder** opens it. After Pathwarden stopped unexpectedly, the card
+says when and during what, with **Open crash report** and **Dismiss**, and
+the amber dot shows by **Settings** in the sidebar and on the card's link
+(the same dot as for settings that differ). **Dismiss** clears both, on
+this computer. A failed collection, and a failed action's Activity entry,
+have **Open log**, which opens the job's log in your text editor. See
+[Logs and crash reports](running.md#logs-and-crash-reports).
+
 In a git history that keeps **Full runs and settings**, these settings are
 shared; **History storage** says where the history is and whether it is
 encrypted. When this computer and another both changed shared settings
@@ -272,3 +281,4 @@ collection or retest reads, and a git history's repository.
 | "Couldn't sync with the repository". | Check the network, then click **Sync now**. |
 | "This page is out of date: reload it." | Reload and make the change again. |
 | A run went to the wrong environment. | Fix the domain lists on **Environments**. |
+| A collection or action failed. | Click **Open log** beside it, or **Open logs folder** on **Settings › Logs**. |

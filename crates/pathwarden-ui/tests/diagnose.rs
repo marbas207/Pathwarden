@@ -521,11 +521,83 @@ async fn a_recorded_run_has_its_own_performance_page() {
     assert!(panel.contains("not timed"), "{panel}");
     assert!(panel.contains("No collection timings"), "{panel}");
     assert!(panel.contains(&format!("/runs/{upload}/diagnostics.zip")));
-    let zip = pathwarden_ui::diagnose::bundle_point(&ws, &p).expect("no names");
+    let zip = pathwarden_ui::diagnose::bundle_point(&ws, &p, None).expect("no names");
     let files = unzip(&zip);
     assert!(files.iter().any(|(n, _)| n == "timings.json"));
     assert_no_names(&files);
     // An unknown run: not found.
     let (s, _, _) = app.get("/history/20200101T000000.000Z/performance").await;
     assert_eq!(s, StatusCode::NOT_FOUND);
+}
+
+/// The bundle's logs: this computer's logs and crash reports, every name
+/// in them replaced like the rest of the zip, and searched; the page lists
+/// them among what the zip holds.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_bundle_takes_the_logs_without_names() {
+    use pathwarden_core::logs::{By, Crash, JobLog, Kind, Outcome};
+    let dir = std::env::temp_dir().join(format!("pathwarden-diagnose-logs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let ws = Workspace::open(dir.join("ws")).unwrap();
+    let run = collect_run(&ws, &hostile_fixture(), timings(100_000, 6));
+    let logs = dir.join("logs");
+    let log = JobLog::open_in(&logs, Kind::Collect, By::App, "kestrelüber.local").unwrap();
+    log.line("domain controller dc01.kestrelüber.local (chosen)");
+    log.line("Contacting computers: sessions not fully read on SRV-ÆTHER01");
+    log.line("owner: ALICE \"<IMG SRC=X>\" NOVÁK@KESTRELÜBER.LOCAL");
+    log.line(r"kept in C:\Users\someone\AppData\Local\Pathwarden\uploads");
+    log.end(
+        Outcome::Failed,
+        "the LDAP connection to dc01.kestrelüber.local was reset",
+    );
+    let crash = Crash {
+        message: "index out of bounds on SRV-ÆTHER01".into(),
+        location: "src/x.rs:1:2".into(),
+        thread: "main".into(),
+        backtrace: String::new(),
+        system: "Test OS".into(),
+        job: None,
+    }
+    .write_in(&logs)
+    .unwrap();
+    let state = AppState::new(ws, Token::generate().unwrap(), PORT);
+    state.jobs.set_logs_dir(Some(logs.clone()));
+    let state = Arc::new(state);
+    let app = App {
+        router: router(state.clone()),
+        state,
+        dir: dir.clone(),
+    };
+    let (_, _, page) = app.get(&format!("/runs/{run}/performance")).await;
+    let page = String::from_utf8(page).unwrap();
+    assert!(page.contains("In the zip, every name replaced:"), "{page}");
+    assert!(
+        page.contains("<li>Latest logs</li><li>Crash reports</li>"),
+        "{page}"
+    );
+    let (s, _, zip) = app.get(&format!("/runs/{run}/diagnostics.zip")).await;
+    assert_eq!(s, StatusCode::OK, "{}", String::from_utf8_lossy(&zip));
+    let files = unzip(&zip);
+    let get = |n: &str| {
+        files
+            .iter()
+            .find(|(f, _)| f == n)
+            .map(|(_, t)| t.clone())
+            .unwrap_or_else(|| {
+                panic!(
+                    "no {n} in {:?}",
+                    files.iter().map(|f| &f.0).collect::<Vec<_>>()
+                )
+            })
+    };
+    let text = get(&format!("logs/{}", log.name()));
+    assert!(
+        text.contains("result: failed: the LDAP connection to host-"),
+        "{text}"
+    );
+    assert!(!text.contains("someone"), "{text}");
+    assert!(get(&format!("logs/{crash}")).contains("Message: index out of bounds on "));
+    assert!(get("README.txt").contains("logs/"));
+    assert_no_names(&files);
 }

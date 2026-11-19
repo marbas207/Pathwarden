@@ -551,14 +551,26 @@ pub async fn pulled_api(State(st): State<Shared>, Query(q): Query<PulledQuery>) 
     };
     let ws = st.ws();
     let flag = st.state_dir_for(&ws);
-    let (foot, differ, note) = tokio::task::spawn_blocking(move || {
+    let logs = st.jobs.logs_dir();
+    let (foot, differ, note, crash) = tokio::task::spawn_blocking(move || {
         let (foot, differ) = foot_and_dot(&ws, flag.as_deref());
-        (foot, differ, note_html(&ws, flag.as_deref(), &q, &change))
+        // A crash not dismissed keeps the same dot ([`crate::logs_ui`]).
+        let crash = logs
+            .as_deref()
+            .is_some_and(|d| pathwarden_core::logs::pending_crash(d).is_some());
+        (
+            foot,
+            differ,
+            note_html(&ws, flag.as_deref(), &q, &change),
+            crash,
+        )
     })
     .await
     .unwrap_or_default();
-    Json(serde_json::json!({ "n": n, "foot": foot, "differ": differ, "note": note }))
-        .into_response()
+    Json(
+        serde_json::json!({ "n": n, "foot": foot, "differ": differ, "crash": crash, "note": note }),
+    )
+    .into_response()
 }
 
 /// The note fixed at the bottom of page `q.page` for `change`, if it shows

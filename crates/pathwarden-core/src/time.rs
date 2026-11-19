@@ -78,6 +78,12 @@ fn civil(t: i64) -> (i64, i64, i64, i64) {
     (y, m, d, secs)
 }
 
+/// (year, month 1-12, day, seconds into the day) of Unix time `t` in
+/// this computer's time zone ([`local_offset`]).
+pub fn local_civil(t: i64) -> (i64, i64, i64, i64) {
+    civil(t + local_offset(t))
+}
+
 /// `YYYY-MM-DD HH:MM` (UTC): a sortable stamp for machines (IDs, file
 /// names). People read [`format_us`] and its kin.
 pub fn format_unix(t: i64) -> String {

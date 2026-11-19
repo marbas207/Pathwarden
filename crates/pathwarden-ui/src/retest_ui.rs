@@ -813,7 +813,8 @@ fn actions_meta(st: &AppState, r: &RunSummary) -> Option<serde_json::Value> {
         return None;
     }
     let blocks = crate::actions_ui::described(&config.actions);
-    let mut data = crate::actions_ui::page_data(&ws, &blocks, r)?;
+    let logs = st.jobs.logs_dir();
+    let mut data = crate::actions_ui::page_data(&ws, &blocks, r, logs.as_deref())?;
     if let Some(f) = data["f"].as_object_mut() {
         for v in f.values_mut() {
             if let Some(o) = v.as_object_mut() {
@@ -1161,19 +1162,52 @@ async fn retest(
     // The run's own environment: its config and history, whichever is
     // current.
     let ws = st.workspace.for_run(&summary);
+    let log = st.jobs.logs_dir().and_then(|d| {
+        pathwarden_core::logs::JobLog::open_in(
+            &d,
+            pathwarden_core::logs::Kind::Retest,
+            pathwarden_core::logs::By::App,
+            &form.fingerprint,
+        )
+        .ok()
+    });
+    if let Some(l) = &log {
+        l.line(&format!("finding {} of run {id}", form.fingerprint));
+    }
+    let in_log = log.clone();
     let done = tokio::task::spawn_blocking(move || {
+        let _in = in_log.as_ref().map(|l| l.enter());
         let r = targeted(&ws, &dir, form, &pathwarden_collect::BuiltinRefresher);
         drop(slot);
         r
     })
     .await;
+    use pathwarden_core::logs::Outcome;
     match done {
-        Ok(Ok(rec)) => Json(result_json(&rec)).into_response(),
-        Ok(Err((status, body))) => (status, Json(body)).into_response(),
-        Err(_) => json_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "The retest stopped. Try again.",
-        ),
+        Ok(Ok(rec)) => {
+            if let Some(l) = &log {
+                for line in result_lines(&rec) {
+                    l.line(&line);
+                }
+                l.end(Outcome::Ok, rec.verdict.label());
+            }
+            Json(result_json(&rec)).into_response()
+        }
+        Ok(Err((status, body))) => {
+            if let Some(l) = &log {
+                l.end(Outcome::Failed, body["error"].as_str().unwrap_or_default());
+            }
+            (status, Json(body)).into_response()
+        }
+        Err(_) => {
+            if let Some(l) = &log {
+                l.end(Outcome::Failed, "the retest stopped unexpectedly");
+            }
+            json_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "The retest stopped. Try again.",
+            )
+        }
     }
 }
 

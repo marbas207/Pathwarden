@@ -1219,15 +1219,29 @@
       refreshNav();
       nav.hidden = true;
     } else {
-      failed(j.error || "The collection failed.", !!(j.collect && j.collect.resumable));
+      failed(j.error || "The collection failed.", !!(j.collect && j.collect.resumable), j.log);
     }
   }
 
   // `resumable`: the read stopped and is kept to resume.
-  function failed(message, resumable) {
+  // `log`: the collection's log, for Open log beside the error.
+  function failed(message, resumable, log) {
     go(5);
     view("failed");
-    $("collect-error").textContent = message;
+    var err = $("collect-error");
+    err.textContent = "";
+    err.className = log ? "err-line" : "";
+    var said = document.createElement("span");
+    said.textContent = message;
+    err.appendChild(said);
+    if (log && window.Pathwarden && window.Pathwarden.openLog) {
+      var open = document.createElement("button");
+      open.type = "button";
+      open.className = "linkish";
+      open.textContent = "Open log";
+      open.addEventListener("click", function () { window.Pathwarden.openLog(log); });
+      err.appendChild(open);
+    }
     $("failed-resume").hidden = !resumable;
     $("failed-over").hidden = !resumable;
     $("collect-retry").hidden = !!resumable;

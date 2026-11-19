@@ -16,7 +16,7 @@ pub const WIDTH: usize = 80;
 /// command appears exactly once.
 pub const GROUPS: &[(&str, &[&str])] = &[
     ("Getting started", &["demo", "ui", "report"]),
-    ("Collect", &["collect", "diagnose"]),
+    ("Collect", &["collect", "diagnose", "logs"]),
     (
         "Analyze",
         &[

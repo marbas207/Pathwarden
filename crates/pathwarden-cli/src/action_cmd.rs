@@ -295,6 +295,15 @@ fn workspace(t: &Target) -> Result<&pathwarden_ui::workspace::Workspace> {
     )
 }
 
+/// What a run of an action logs itself as: the finding, or the test.
+pub(crate) fn job_of(a: &ActionArgs) -> Option<String> {
+    match &a.what {
+        ActionWhat::Run { fingerprint, .. } => Some(fingerprint.clone()),
+        ActionWhat::Test { name, .. } => Some(format!("test of {name}")),
+        _ => None,
+    }
+}
+
 pub(crate) fn run(a: ActionArgs) -> Result<ExitCode> {
     // Nobody is there to ask in a scheduled task.
     if pathwarden_core::store::unattended() {
@@ -685,6 +694,7 @@ fn start(
     let tag = ui::VIOLET;
     let name = o.name.clone();
     let mut on_line = |line: &str| {
+        pathwarden_core::logs::note(line);
         let l = format!("  {tag}[{}]{tag:#} {}", ui::safe(&name), ui::safe(line));
         if json {
             eprintln!("{l}");
@@ -717,6 +727,16 @@ fn start(
     } else {
         Some(actions_ui::save_outcome(ws, ready, &out))
     };
+    // The activity entry's log, for the app's Open log on this computer.
+    if let (Some(Ok(s)), Some(log), Some(dir)) = (
+        &saved,
+        pathwarden_core::logs::current(),
+        pathwarden_core::logs::dir(),
+    ) {
+        if let Some(at) = &s.at {
+            pathwarden_core::logs::note_action(&dir, &ready.finding.fingerprint, at, log.name());
+        }
+    }
     let mut said = Vec::new();
     match &saved {
         Some(Ok(s)) => {

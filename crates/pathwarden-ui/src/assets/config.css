@@ -434,3 +434,18 @@ fieldset.choice.has-clash .clash-row { margin: 0 0 10px; }
 @media (max-width: 760px) { .cmp, .choice.keep-choice { grid-template-columns: 1fr; } }
 /* A lock note (pages::lock_note): its (i) links to the docs. */
 .note.locked .tip-text a { color: inherit; font-weight: 600; text-decoration: underline; }
+
+/* Logs and crash reports: the Logs card's crash line, the jump link's dot,
+   Open log beside an error, and what the diagnostics zip holds. */
+.crash-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0; font-size: 0.9rem; color: var(--warn); }
+.crash-line > .ic { width: 16px; height: 16px; color: var(--warn); flex: none; }
+.crash-line > span { color: var(--ink); }
+.crash-line .linkish { font-size: 0.86rem; }
+.jump a .jump-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: 2px; }
+.err-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.err-line .linkish { font-size: 0.9rem; white-space: nowrap; }
+.diag-has-wrap { margin-top: 12px; }
+.diag-has-wrap > p { margin: 0; }
+.diag-has { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.diag-has li { font-size: 0.8rem; padding: 3px 9px; border-radius: 999px; background: var(--chip); color: var(--ink); }
+.diag-has-wrap + .perf-cards { margin-top: 16px; }

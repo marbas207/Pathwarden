@@ -1167,6 +1167,266 @@ impl NameScan {
     }
 }
 
+/// File name endings that make a dotted word a file, not a host.
+const FILE_ENDINGS: &[&str] = &[
+    "log", "txt", "json", "jsonl", "gz", "zip", "exe", "dll", "rs", "ps1", "psm1", "py", "sh",
+    "toml", "html", "htm", "csv", "md", "xml", "pdf", "png", "svg", "js", "css", "age", "sig",
+    "msi", "cmd", "bat", "yml", "yaml", "ini", "cfg", "conf", "tmp", "lock", "pem", "crt", "key",
+    "pub", "db", "so", "dylib", "pdb", "git",
+];
+
+/// Whether a dotted word looks like a host or domain name
+/// (`dc01.scale.local`), not a version (`1.0.0-rc.2`), a file
+/// (`objects.json.gz`) or an abbreviation (`e.g.`).
+fn looks_like_host(t: &str) -> bool {
+    let labels: Vec<&str> = t.split('.').collect();
+    let Some(last) = labels.last() else {
+        return false;
+    };
+    labels.len() >= 2
+        && labels.iter().all(|l| !l.is_empty())
+        && last.len() >= 2
+        && last.chars().all(|c| c.is_ascii_alphabetic())
+        && !FILE_ENDINGS.contains(&last.to_ascii_lowercase().as_str())
+        && t.chars().any(|c| c.is_alphabetic())
+}
+
+/// The words of this computer that identify it or its user: its name and
+/// the account's, upper-cased.
+fn own_names() -> HashSet<String> {
+    ["COMPUTERNAME", "HOSTNAME", "USERNAME", "USER", "USERDOMAIN"]
+        .iter()
+        .filter_map(|v| std::env::var(v).ok())
+        .map(|v| v.trim().to_uppercase())
+        .filter(|v| v.chars().count() >= 3 && !own_word(v))
+        .collect()
+}
+
+/// `text` (a log) with names replaced by placeholders `ph` gives, the
+/// same as everywhere else in the bundle: every name `scan` knows (a
+/// word, a phrase, a domain SID), and whatever looks like one without
+/// being known: host and domain names, `name@domain`, the values of
+/// distinguished names (`CN=`, `OU=`, `DC=`), domain SIDs, the folder
+/// under `Users` or `home` of a path, and this computer's and account's
+/// names.
+pub fn replace_names(text: &str, scan: &NameScan, ph: &mut Placeholders) -> String {
+    let own = own_names();
+    let mut out = String::with_capacity(text.len());
+    for (i, line) in text.split('\n').enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        out.push_str(&replace_line(line, scan, ph, &own));
+    }
+    out
+}
+
+fn replace_line(
+    line: &str,
+    scan: &NameScan,
+    ph: &mut Placeholders,
+    own: &HashSet<String>,
+) -> String {
+    // Upper case of the same length, so spans line up; else the line in
+    // upper case (rare: letters whose upper case is longer).
+    let up = line.to_uppercase();
+    let line = if up.len() == line.len() {
+        line.to_string()
+    } else {
+        up.clone()
+    };
+    let line = replace_phrases(&line, &up, scan, ph);
+    let line = replace_dn_values(&line, ph);
+    let line = replace_profile(&line, ph);
+    let mut out = String::with_capacity(line.len());
+    let mut token = String::new();
+    for c in line.chars().map(Some).chain([None]) {
+        match c {
+            Some(c) if token_char(c) => token.push(c),
+            _ => {
+                if !token.is_empty() {
+                    out.push_str(&replace_token(&token, c, scan, ph, own));
+                    token.clear();
+                }
+                if let Some(c) = c {
+                    out.push(c);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// One word of a log line (`after` is the character after it), replaced
+/// when it is or holds a name.
+fn replace_token(
+    token: &str,
+    after: Option<char>,
+    scan: &NameScan,
+    ph: &mut Placeholders,
+    own: &HashSet<String>,
+) -> String {
+    // Dots around it are punctuation.
+    let lead = token.len() - token.trim_start_matches('.').len();
+    let core = token.trim_matches('.');
+    if core.is_empty() {
+        return token.to_string();
+    }
+    let trail = &token[lead + core.len()..];
+    let up = core.to_uppercase();
+    let wrap = |s: String| format!("{}{s}{trail}", &token[..lead]);
+    if own_word(&up) || is_placeholder(core) {
+        return token.to_string();
+    }
+    let known = |p: &str| scan.words.contains(p) || own.contains(p);
+    let dotted = |t: &str| match t.matches('.').count() {
+        0 => "name",
+        1 => "domain",
+        _ => "host",
+    };
+    if known(&up) {
+        return wrap(ph.of(dotted(core), core));
+    }
+    if let Some(sid) = domain_sid(&up) {
+        let rest = &core[sid.len()..];
+        return wrap(format!("{}{rest}", ph.of("sid", &sid)));
+    }
+    if core.contains('.') {
+        if looks_like_host(core) {
+            return wrap(ph.of(dotted(core), core));
+        }
+        // A file or a version: its known parts only.
+        let parts: Vec<String> = core
+            .split('.')
+            .map(|p| {
+                let u = p.to_uppercase();
+                if !p.is_empty() && !own_word(&u) && known(&u) {
+                    ph.of("name", p)
+                } else {
+                    p.to_string()
+                }
+            })
+            .collect();
+        return wrap(parts.join("."));
+    }
+    // `name@domain`: the account.
+    if after == Some('@') && core.chars().any(|c| c.is_alphabetic()) {
+        return wrap(ph.of("account", core));
+    }
+    token.to_string()
+}
+
+/// A placeholder this module writes: `domain-1`, `host-12`.
+fn is_placeholder(t: &str) -> bool {
+    t.rsplit_once('-').is_some_and(|(k, n)| {
+        !n.is_empty()
+            && n.chars().all(|c| c.is_ascii_digit())
+            && matches!(
+                k,
+                "domain" | "host" | "name" | "account" | "sid" | "user" | "zone"
+            )
+    })
+}
+
+/// The domain SID a word starts with (`S-1-5-21-a-b-c`), upper-cased.
+fn domain_sid(up: &str) -> Option<String> {
+    let rest = up.strip_prefix("S-1-5-21-")?;
+    let parts: Vec<&str> = rest.splitn(4, '-').take(3).collect();
+    (parts.len() == 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())))
+    .then(|| format!("S-1-5-21-{}", parts.join("-")))
+}
+
+/// `line` with every phrase and SID `scan` knows replaced; `up` is the
+/// line in upper case, of the same length.
+fn replace_phrases(line: &str, up: &str, scan: &NameScan, ph: &mut Placeholders) -> String {
+    if (scan.phrases.is_empty() && scan.sids.is_empty()) || up.len() != line.len() {
+        return line.to_string();
+    }
+    // The same automaton as [`NameScan::find_except`]'s.
+    let _ = scan.find("");
+    let Some((ac, _)) = scan.matcher.get() else {
+        return line.to_string();
+    };
+    let mut out = String::with_capacity(line.len());
+    let mut at = 0;
+    for m in ac.find_iter(up) {
+        if m.start() < at || !line.is_char_boundary(m.start()) || !line.is_char_boundary(m.end()) {
+            continue;
+        }
+        out.push_str(&line[at..m.start()]);
+        let found = &line[m.start()..m.end()];
+        let kind = if found.to_uppercase().starts_with("S-1-5-21-") {
+            "sid"
+        } else {
+            "name"
+        };
+        out.push_str(&ph.of(kind, found));
+        at = m.end();
+    }
+    out.push_str(&line[at..]);
+    out
+}
+
+/// The values of a distinguished name's `CN=`, `OU=` and `DC=` parts.
+fn replace_dn_values(line: &str, ph: &mut Placeholders) -> String {
+    let up = line.to_ascii_uppercase();
+    let b = up.as_bytes();
+    let mut out = String::with_capacity(line.len());
+    let mut at = 0;
+    let mut i = 0;
+    while i + 3 <= b.len() {
+        let starts = i == 0 || !b[i - 1].is_ascii_alphanumeric();
+        let key = up.get(i..i + 3).unwrap_or_default();
+        if starts && matches!(key, "CN=" | "OU=" | "DC=") {
+            let v = i + 3;
+            let end = line[v..]
+                .find([',', '"', '\'', ')', ']', ';'])
+                .map_or(line.len(), |e| v + e);
+            let value = line[v..end].trim();
+            if !value.is_empty() && !own_word(&value.to_uppercase()) && !is_placeholder(value) {
+                out.push_str(&line[at..v]);
+                let kind = if key == "DC=" { "domain" } else { "name" };
+                out.push_str(&ph.of(kind, value));
+                at = end;
+            }
+            i = end.max(i + 1);
+            continue;
+        }
+        i += 1;
+    }
+    out.push_str(&line[at..]);
+    out
+}
+
+/// The account folder of a path (`C:\Users\<name>\`, `/home/<name>/`).
+fn replace_profile(line: &str, ph: &mut Placeholders) -> String {
+    let mut out = line.to_string();
+    for sep in ['\\', '/'] {
+        for dir in ["Users", "users", "home"] {
+            let needle = format!("{sep}{dir}{sep}");
+            let mut from = 0;
+            while let Some(i) = out[from..].find(&needle).map(|i| from + i) {
+                let v = i + needle.len();
+                let end = out[v..]
+                    .find(|c: char| c == sep || c.is_whitespace() || c == '"' || c == '\'')
+                    .map_or(out.len(), |e| v + e);
+                let name = out[v..end].to_string();
+                if name.is_empty() || is_placeholder(&name) || name.eq_ignore_ascii_case("public") {
+                    from = end.max(v);
+                    continue;
+                }
+                let p = ph.of("user", &name);
+                out.replace_range(v..end, &p);
+                from = v + p.len();
+            }
+        }
+    }
+    out
+}
+
 /// No bundle: `file` holds a name of the run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Refused {
@@ -1234,7 +1494,28 @@ pub struct Bundle {
     pub findings_by_rule: BTreeMap<String, BTreeMap<String, usize>>,
     /// How the data was collected, without credentials or names.
     pub collection: Option<Value>,
+    /// Pathwarden's logs and crash reports ([`crate::logs::for_bundle`]):
+    /// file name and text. Every name in them is replaced
+    /// ([`replace_names`]) and they are searched like the rest.
+    pub logs: Vec<(String, String)>,
 }
+
+/// What a bundle holds, as the run page lists it.
+pub const CONTENTS: &[&str] = &[
+    "This computer",
+    "Run numbers",
+    "Timings",
+    "Completeness",
+    "Posture",
+    "Plan size",
+    "Findings by rule",
+    "Latest logs",
+    "Crash reports",
+];
+
+/// What the list's (i) says.
+pub const CONTENTS_TIP: &str =
+    "Logs of the last 7 days, at most 20 MB, and crash reports. Look through the zip before you send it.";
 
 /// The plan's numbers from an event document's `plan`: per step its cost,
 /// edge kinds and reach; never its objects or action text. The kinds are
@@ -1288,11 +1569,12 @@ pub fn plan_numbers(plan: &Value) -> Value {
 impl Bundle {
     /// The bundle's files, names replaced, before the search.
     pub fn files(&self) -> Vec<(String, Vec<u8>)> {
-        self.files_and_placeholders().0
+        self.files_and_placeholders(&NameScan::default()).0
     }
 
     /// The files, and the placeholders written into them (upper-cased).
-    fn files_and_placeholders(&self) -> (Vec<(String, Vec<u8>)>, HashSet<String>) {
+    /// `scan`'s names are replaced in the logs too.
+    fn files_and_placeholders(&self, scan: &NameScan) -> (Vec<(String, Vec<u8>)>, HashSet<String>) {
         let mut ph = Placeholders::default();
         let mut files: Vec<(String, Vec<u8>)> = Vec::new();
         let mut json_file = |name: &str, mut v: Value, scrub: bool, ph: &mut Placeholders| {
@@ -1357,12 +1639,16 @@ impl Bundle {
                 );
             }
         }
+        for (name, text) in &self.logs {
+            let text = replace_names(text, scan, &mut ph);
+            files.push((format!("logs/{name}"), text.into_bytes()));
+        }
         let mut readme = format!(
             "Pathwarden diagnostics bundle\r\n\
              =============================\r\n\r\n\
              Made by `pathwarden diagnose --bundle` (or the run page's \"Download diagnostics\")\r\n\
-             with Pathwarden {}. Counts and durations only: every domain, object, host and\r\n\
-             zone name is replaced by a placeholder (domain-1, zone-1), and the bundle was\r\n\
+             with Pathwarden {}. Counts, durations and logs: every domain, object, host,\r\n\
+             account and zone name is replaced by a placeholder (domain-1, zone-1), and the bundle was\r\n\
              searched for the run's names before it was written.\r\n\r\n",
             self.system.pathwarden
         );
@@ -1371,13 +1657,22 @@ impl Bundle {
                 readme.push_str(&format!("{name:<23}{what}\r\n"));
             }
         }
+        if !self.logs.is_empty() {
+            readme.push_str(&format!(
+                "{:<23}Pathwarden's logs of the last {} days (at most {}) and its\r\n\
+                 \x20                      crash reports, every name replaced\r\n",
+                "logs/",
+                crate::logs::BUNDLE_DAYS,
+                bytes(crate::logs::BUNDLE_BYTES)
+            ));
+        }
         files.insert(0, ("README.txt".into(), readme.into_bytes()));
         (files, ph.written())
     }
 
     /// The zip, or [`Refused`] when a file holds a name `scan` knows.
     pub fn zip(&self, scan: &NameScan) -> Result<Vec<u8>, Refused> {
-        let (files, written) = self.files_and_placeholders();
+        let (files, written) = self.files_and_placeholders(scan);
         check_except(&files, scan, &written)?;
         Ok(zip_files(&files))
     }
@@ -1961,5 +2256,67 @@ mod tests {
         let took = started.elapsed();
         eprintln!("{} names, bundle in {took:?}", scan.len());
         assert!(took < std::time::Duration::from_secs(20), "{took:?}");
+    }
+
+    /// The logs in a bundle: every name of the run replaced as in the
+    /// rest of it (the same placeholder for the same name), names that
+    /// look like names replaced too, and the search covers them.
+    #[test]
+    fn logs_in_a_bundle_hold_no_names() {
+        let mut scan = NameScan::default();
+        scan.add_name("ALICE@CONTOSO.LOCAL");
+        scan.add_name("WS01.CONTOSO.LOCAL");
+        scan.add_text("Alice Smith");
+        scan.add_sid("S-1-5-21-1-2-3-1104");
+        let log = "# Collection CONTOSO.LOCAL | app | collect | Pathwarden 1.0\n\
+            09:42:11.204 [collect, app] Collection CONTOSO.LOCAL started in the app\n\
+            09:42:11.390 [collect, app] domain controller dc01.fabrikam.test (chosen)\n\
+            09:42:12.018 [collect, app] LAPS: readable on ws01 and WS01.contoso.local, by Alice Smith\n\
+            09:42:13.000 [collect, app] bob@fabrikam.test owns CN=Bob Jones,OU=Finance,DC=fabrikam,DC=test\n\
+            09:42:14.000 [collect, app] S-1-5-21-1-2-3-1104 and S-1-5-21-9-8-7-500\n\
+            09:42:15.000 [collect, app] kept in C:\\Users\\jdoe\\AppData\\Local\\Pathwarden\\uploads\\x.json\n\
+            09:42:16.000 [collect, app] Pathwarden 1.0.0-rc.2 wrote objects.json.gz, e.g. 12.5 MB\n";
+        let b = Bundle {
+            run: json!({"domains": ["CONTOSO.LOCAL"]}),
+            logs: vec![("job-20261119-094211-collect.log".into(), log.into())],
+            ..Bundle::default()
+        };
+        let zip = b.zip(&scan).expect("no name left");
+        assert!(zip.starts_with(b"PK"));
+        let (files, _) = b.files_and_placeholders(&scan);
+        let text = |n: &str| {
+            String::from_utf8_lossy(&files.iter().find(|(f, _)| f == n).unwrap().1).into_owned()
+        };
+        let out = text("logs/job-20261119-094211-collect.log");
+        for name in [
+            "CONTOSO",
+            "contoso",
+            "ws01",
+            "WS01",
+            "Alice",
+            "fabrikam",
+            "bob",
+            "Bob Jones",
+            "Finance",
+            "S-1-5-21-1-2-3",
+            "S-1-5-21-9-8-7",
+            "jdoe",
+        ] {
+            assert!(!out.contains(name), "{name} in:\n{out}");
+        }
+        let run = text("run.json");
+        assert!(
+            run.contains("domain-1") && out.contains("Collection domain-1 started"),
+            "{out}"
+        );
+        assert!(
+            out.contains("1.0.0-rc.2 wrote objects.json.gz, e.g. 12.5 MB"),
+            "{out}"
+        );
+        assert!(out.contains("sid-1-1104"), "{out}");
+        assert!(text("README.txt").contains("logs/"));
+        // The search covers the logs: a name left in one refuses the bundle.
+        let leaky = vec![("logs/x.log".to_string(), b"seen on ALICE today".to_vec())];
+        assert_eq!(check(&leaky, &scan).unwrap_err().file, "logs/x.log");
     }
 }

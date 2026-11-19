@@ -751,6 +751,10 @@ pub(crate) fn apply_env_in(
     for (key, value) in std::env::vars_os() {
         let upper = key.to_string_lossy().to_ascii_uppercase();
         if BASE_ENV.contains(&upper.as_str()) || named.contains(&upper) {
+            if named.contains(&upper) {
+                // Never in a log line ([`crate::redact::log_line`]).
+                crate::redact::register_secret(&value.to_string_lossy());
+            }
             cmd.env(key, value);
         }
     }

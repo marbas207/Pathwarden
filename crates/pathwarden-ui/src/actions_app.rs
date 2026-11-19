@@ -109,7 +109,8 @@ pub fn run_parts(st: &AppState, r: &RunSummary) -> (String, String) {
         return (String::new(), String::new());
     }
     let blocks = actions_ui::described(&config.actions);
-    let Some(data) = actions_ui::page_data(&ws, &blocks, r) else {
+    let logs = st.jobs.logs_dir();
+    let Some(data) = actions_ui::page_data(&ws, &blocks, r, logs.as_deref()) else {
         return (String::new(), String::new());
     };
     (dialog(r, &data), notes(&ws, log.err()))
@@ -350,7 +351,23 @@ fn start(st: &Shared, ws: Workspace, ready: Ready, blocks: Vec<ActionConfig>) ->
     });
     let jobs = st.jobs.clone();
     let job = id.clone();
+    let log = st.jobs.open_log(
+        &id,
+        pathwarden_core::logs::Kind::Action,
+        &format!("{label} on {}", ready.finding.fingerprint),
+    );
+    if let Some(l) = &log {
+        l.line(&format!(
+            "{} ({}), run {}{}",
+            ready.prepared.offered.address,
+            ready.finding.title,
+            ready.run.id,
+            if dry_run { ", a test" } else { "" }
+        ));
+    }
+    let logs_dir = st.jobs.logs_dir();
     std::thread::spawn(move || {
+        let _in = log.as_ref().map(|l| l.enter());
         // Whatever happens in here (a panic too), the job ends: else it
         // would stay running and refuse every later action.
         let mut guard = Ended {
@@ -363,11 +380,26 @@ fn start(st: &Shared, ws: Workspace, ready: Ready, blocks: Vec<ActionConfig>) ->
         let mut on_line = move |l: &str| lines.action_line(&line_job, l);
         let result = match actions_ui::run_and_save(&ws, &ready, &mut on_line, &stop) {
             Ok((out, saved)) => {
+                // The activity entry's log, for its Open log.
+                if let (Some(l), Some(dir), Some(Ok(s))) = (&log, &logs_dir, saved.as_ref()) {
+                    if let Some(at) = &s.at {
+                        pathwarden_core::logs::note_action(
+                            dir,
+                            &ready.finding.fingerprint,
+                            at,
+                            l.name(),
+                        );
+                    }
+                }
                 let mut v = actions_ui::outcome_json(&ready, &out, saved.as_ref());
                 v["said"] = Value::from(said(&out, saved.as_ref()));
-                if let Some(view) =
-                    actions_ui::view_now(&ws, &blocks, &ready.run.id, &ready.finding.fingerprint)
-                {
+                if let Some(view) = actions_ui::view_now(
+                    &ws,
+                    &blocks,
+                    &ready.run.id,
+                    &ready.finding.fingerprint,
+                    logs_dir.as_deref(),
+                ) {
                     v["view"] = serde_json::to_value(view).unwrap_or_default();
                 }
                 v

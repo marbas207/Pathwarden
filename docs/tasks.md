@@ -353,3 +353,22 @@ pathwarden export sarif --run 20261027-191300-a1b2c3 --env Lab -o findings.sarif
 ```
 
 More: [Integrations](integrations.md).
+
+## Find out why something failed
+
+### In the app
+
+1. Beside a failed collection's error, or on a failed action's **Activity**
+   entry, click **Open log**. The job's log opens in your text editor.
+2. After Pathwarden stopped unexpectedly, an amber dot shows by **Settings**:
+   on **Settings › Logs**, click **Open crash report**, then **Dismiss**.
+3. **Open logs folder** on the same card opens every log.
+
+### On the command line
+
+```powershell
+pathwarden logs --last
+pathwarden logs --crash --open
+```
+
+More: [Logs and crash reports](running.md#logs-and-crash-reports).

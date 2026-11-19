@@ -255,9 +255,11 @@ fn write_bundle(ws: &Workspace, picked: &Picked, out: &Path) -> Result<()> {
     if out.exists() {
         return Err(exists());
     }
+    // With this computer's logs and crash reports, names replaced.
+    let logs = pathwarden_core::logs::dir();
     let (zip, run) = match picked {
-        Picked::Saved(run) => (diagnose::bundle(ws, run), &**run),
-        Picked::Recorded(p, env_ws) => (diagnose::bundle_point(env_ws, p), &p.run),
+        Picked::Saved(run) => (diagnose::bundle(ws, run, logs.as_deref()), &**run),
+        Picked::Recorded(p, env_ws) => (diagnose::bundle_point(env_ws, p, logs.as_deref()), &p.run),
     };
     let zip = zip.map_err(|e| anyhow::anyhow!("{e}"))?;
     let mut file = match std::fs::OpenOptions::new()
@@ -283,8 +285,9 @@ fn write_bundle(ws: &Workspace, picked: &Picked, out: &Path) -> Result<()> {
         run.run_id()
     );
     println!(
-        "  Counts and durations only; every name replaced by a placeholder, and none of the \
-         run's names found in it. Look through it before you send it."
+        "  Counts and durations, and this computer's logs of the last 7 days and crash reports; \
+         every name replaced by a placeholder, and none of the run's names found in it. Look \
+         through it before you send it."
     );
     Ok(())
 }

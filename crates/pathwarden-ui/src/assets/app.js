@@ -55,6 +55,83 @@
     if (left) { sessionStorage.removeItem("pw-note"); toast(left, true); }
   } catch (e) {}
 
+  // The rail's amber dot on Settings (pages::settings_item): settings that
+  // differ from the shared ones, a crash not dismissed, or both.
+  window.Pathwarden = window.Pathwarden || {};
+  window.Pathwarden.settingsDot = function (differ, crash) {
+    var link = document.querySelector('.tablist a[href="/settings"]');
+    if (!link) return;
+    var DIFFER = "Settings differ from the shared ones", CRASH = "Pathwarden stopped unexpectedly";
+    var words = differ && crash ? DIFFER + "; " + CRASH.toLowerCase() : differ ? DIFFER : crash ? CRASH : "";
+    link.toggleAttribute("data-differ", !!differ);
+    link.toggleAttribute("data-crash", !!crash);
+    var dot = link.querySelector(".nav-dot");
+    var said = link.querySelector(".sr-only");
+    if (!words) {
+      if (dot) dot.remove();
+      if (said) said.remove();
+      link.removeAttribute("title");
+      return;
+    }
+    if (!said) {
+      said = document.createElement("span");
+      said.className = "sr-only";
+      link.appendChild(said);
+    }
+    if (!dot) {
+      dot = document.createElement("span");
+      dot.className = "nav-dot";
+      dot.setAttribute("aria-hidden", "true");
+      link.appendChild(dot);
+    }
+    said.textContent = ": " + words.toLowerCase();
+    dot.title = words;
+    link.title = words;
+  };
+
+  // Open log, Open crash report, Open logs folder: the app opens it (only a
+  // file of the logs folder, by its name) in this computer's default app.
+  window.Pathwarden.openLog = function (file) {
+    return fetch("/api/logs/open", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(file ? { file: file } : {})
+    }).then(function (r) {
+      if (r.ok) return;
+      return r.json().then(function (j) { throw new Error((j && j.error) || "Couldn't open it."); },
+        function () { throw new Error("Couldn't open it."); });
+    }).catch(function (e) { toast(e.message || "Couldn't open it."); });
+  };
+
+  // Settings, the Logs card: Open logs folder, Open crash report, Dismiss.
+  (function () {
+    var card = $("logs");
+    if (!card || !card.classList.contains("setting")) return;
+    var folder = card.querySelector("[data-logs-open]");
+    if (folder) folder.addEventListener("click", function () { window.Pathwarden.openLog(null); });
+    var open = card.querySelector("[data-crash-open]");
+    if (open) open.addEventListener("click", function () {
+      window.Pathwarden.openLog(open.getAttribute("data-crash-open"));
+    });
+    var dismiss = card.querySelector("[data-crash-dismiss]");
+    if (dismiss) dismiss.addEventListener("click", function () {
+      dismiss.disabled = true;
+      fetch("/api/logs/dismiss", { method: "POST", credentials: "same-origin" }).then(function (r) {
+        if (!r.ok) throw new Error("Couldn't dismiss it.");
+        var line = card.querySelector("[data-crash]");
+        if (line) line.remove();
+        var jump = document.querySelector('.jump a[href="#logs"]');
+        if (jump) {
+          jump.removeAttribute("title");
+          jump.querySelectorAll(".jump-dot, .sr-only").forEach(function (e) { e.remove(); });
+        }
+        var rail = document.querySelector('.tablist a[href="/settings"]');
+        window.Pathwarden.settingsDot(!!(rail && rail.hasAttribute("data-differ")), false);
+      }).catch(function (e) { dismiss.disabled = false; toast(e.message); });
+    });
+  })();
+
   // The wizards' shared step indicator (pages::stepper): steps before `n`
   // (and `n` itself when `done`) are ticked, `n` is current, and the phone
   // line says "Step n of N · label".
@@ -1297,30 +1374,10 @@
       if (html) foot.insertBefore(fromHtml(html), foot.firstChild);
     };
     // The amber dot on Settings in the rail while settings differ from the
-    // shared ones, as the last sync left them (the page draws it first).
-    var setDot = function (on) {
-      var link = document.querySelector('.tablist a[href="/settings"]');
-      if (!link) return;
-      var dot = link.querySelector(".nav-dot");
-      if (!!dot === !!on) return;
-      if (!on) {
-        dot.remove();
-        var said = link.querySelector(".sr-only");
-        if (said) said.remove();
-        link.removeAttribute("title");
-        return;
-      }
-      var words = "Settings differ from the shared ones";
-      var sr = document.createElement("span");
-      sr.className = "sr-only";
-      sr.textContent = ": " + words.toLowerCase();
-      var d = document.createElement("span");
-      d.className = "nav-dot";
-      d.setAttribute("aria-hidden", "true");
-      d.title = words;
-      link.title = words;
-      link.appendChild(sr);
-      link.appendChild(d);
+    // shared ones, as the last sync left them (the page draws it first),
+    // or while a crash isn't dismissed: one dot for either.
+    var setDot = function (differ, crash) {
+      window.Pathwarden.settingsDot(differ, crash);
     };
     var setNote = function (html) {
       if (!html || html === closed) return;
@@ -1352,7 +1409,7 @@
         .then(function (j) {
           if (!j) return;
           setFoot(j.foot);
-          if (typeof j.differ === "boolean") setDot(j.differ);
+          if (typeof j.differ === "boolean") setDot(j.differ, j.crash === true);
           setNote(j.note);
         }, function () {});
     };

@@ -418,7 +418,7 @@ fn app_paths(_exe: &str) -> Vec<PathBuf> {
 }
 
 #[cfg(windows)]
-fn open_file(path: &Path) -> bool {
+pub(crate) fn open_file(path: &Path) -> bool {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::System::Com::{
         CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE,
@@ -452,7 +452,7 @@ fn open_file(path: &Path) -> bool {
 }
 
 #[cfg(not(windows))]
-fn open_file(path: &Path) -> bool {
+pub(crate) fn open_file(path: &Path) -> bool {
     use std::process::Stdio;
     let program = if cfg!(target_os = "macos") {
         "open"

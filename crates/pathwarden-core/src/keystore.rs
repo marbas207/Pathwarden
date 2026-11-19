@@ -84,7 +84,10 @@ pub fn take_env() {
     taken().get_or_init(|| {
         SECRET_ENV.map(|name| {
             let v = match std::env::var(name) {
-                Ok(v) if !v.is_empty() => Some(Ok(zeroize::Zeroizing::new(v))),
+                Ok(v) if !v.is_empty() => {
+                    crate::redact::register_secret(&v);
+                    Some(Ok(zeroize::Zeroizing::new(v)))
+                }
                 Ok(_) | Err(std::env::VarError::NotPresent) => None,
                 Err(std::env::VarError::NotUnicode(_)) => Some(Err(())),
             };
@@ -108,7 +111,10 @@ pub fn secret_env(name: &str) -> Result<Option<zeroize::Zeroizing<String>>> {
         }
     }
     match std::env::var(name).map(zeroize::Zeroizing::new) {
-        Ok(v) if !v.is_empty() => Ok(Some(v)),
+        Ok(v) if !v.is_empty() => {
+            crate::redact::register_secret(&v);
+            Ok(Some(v))
+        }
         Ok(_) | Err(std::env::VarError::NotPresent) => Ok(None),
         Err(std::env::VarError::NotUnicode(_)) => bail!("{name} is not valid Unicode"),
     }

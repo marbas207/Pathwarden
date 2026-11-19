@@ -109,6 +109,7 @@
 .ac-box .ac-act li.bad .what { color: var(--critical); font-weight: 600; }
 .ac-box .ac-act li.ac-earlier { display: block; padding-left: 24px; color: var(--muted); }
 .ac-box .ac-link { border: 0; background: none; padding: 0; margin-left: 6px; font: inherit; font-size: 0.82rem; color: var(--accent); cursor: pointer; }
+.ac-box .ac-link + .ac-link { margin-left: 12px; }
 .ac-box .ac-full { display: block; margin-top: 2px; white-space: pre-wrap; color: var(--muted); font-size: 0.82rem; }
 .ac-box .ac-full[hidden] { display: none; }
 .ac-box .ac-all { margin-top: 4px; border: 0; background: none; padding: 0; font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--accent); cursor: pointer; }

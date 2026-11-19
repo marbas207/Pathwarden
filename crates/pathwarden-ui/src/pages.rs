@@ -62,6 +62,9 @@ pub struct Ctx<'a> {
     /// Some shared section differs from the shared settings: an amber dot
     /// on Settings in the rail, on every page.
     pub settings_differ: bool,
+    /// Pathwarden stopped unexpectedly and it isn't dismissed
+    /// ([`crate::logs_ui`]): the same dot.
+    pub crash: bool,
 }
 
 /// One environment in the switcher.
@@ -128,6 +131,7 @@ impl<'a> Ctx<'a> {
             pulled: st.auto_pull.counter(&env_id),
             pull_foot,
             settings_differ,
+            crash: crate::logs_ui::pending(st).is_some(),
             workspace: st.workspace.root(),
             runs: crate::run_list::row_count(runs, points.iter().map(String::as_str)),
             keep_uploads: st.keep_uploads,
@@ -650,7 +654,8 @@ pub(crate) fn shell(
         ),
         settings = settings_item(
             item(Nav::Settings, "/settings", "i-gear", "Settings", None),
-            ctx.settings_differ
+            ctx.settings_differ,
+            ctx.crash
         ),
     )
 }
@@ -658,23 +663,36 @@ pub(crate) fn shell(
 /// What the rail's dot on Settings says.
 pub const SETTINGS_DIFFER: &str = "A setting has two values";
 
-/// The rail's Settings link `link`, with an amber dot when some shared
-/// section differs from the shared settings: no text on the page, the words
-/// in the link's name for screen readers and as its tooltip.
-fn settings_item(link: String, differ: bool) -> String {
-    if !differ {
-        return link;
-    }
+/// The rail's Settings link `link`, with one amber dot when some shared
+/// section differs from the shared settings, or Pathwarden stopped
+/// unexpectedly ([`crate::logs_ui::CRASH_DOT`]), or both: no text on the
+/// page, the words in the link's name for screen readers and as its
+/// tooltip. `data-differ` tells the page's script which it is.
+fn settings_item(link: String, differ: bool, crash: bool) -> String {
+    let words = match (differ, crash) {
+        (false, false) => return link,
+        (true, false) => SETTINGS_DIFFER.to_string(),
+        (false, true) => crate::logs_ui::CRASH_DOT.to_string(),
+        (true, true) => format!(
+            "{SETTINGS_DIFFER}; {}",
+            crate::logs_ui::CRASH_DOT.to_lowercase()
+        ),
+    };
+    let marks = format!(
+        "{}{}",
+        if differ { " data-differ" } else { "" },
+        if crash { " data-crash" } else { "" }
+    );
     link.replacen(
         r#"<a href="/settings""#,
-        &format!(r#"<a href="/settings" title="{SETTINGS_DIFFER}""#),
+        &format!(r#"<a href="/settings" title="{words}"{marks}"#),
         1,
     )
     .replacen(
         "</a>",
         &format!(
-            r#"<span class="sr-only">: {}</span><span class="nav-dot" aria-hidden="true" title="{SETTINGS_DIFFER}"></span></a>"#,
-            SETTINGS_DIFFER.to_lowercase()
+            r#"<span class="sr-only">: {}</span><span class="nav-dot" aria-hidden="true" title="{words}"></span></a>"#,
+            words.to_lowercase()
         ),
         1,
     )

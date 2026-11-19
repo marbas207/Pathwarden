@@ -13,6 +13,8 @@ use pathwarden_core::record::RecordProgress;
 use pathwarden_core::IngestError;
 use serde::Serialize;
 
+use pathwarden_core::logs::{By, JobLog, Kind, Outcome};
+
 use crate::environments::{self, Assigned, Choice, Placement, Settling};
 use crate::workspace::{CollectionInfo, RunSummary, Workspace};
 
@@ -99,6 +101,10 @@ pub struct Job {
     /// Finding actions: stops the program.
     #[serde(skip)]
     pub stop: Option<pathwarden_core::actions::CancelHandle>,
+    /// Its log's file name in the logs folder ([`Jobs::open_log`]): what
+    /// Open log opens.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log: Option<String>,
 }
 
 /// A finding action's run, as the progress view shows it: the program's
@@ -200,6 +206,10 @@ pub struct Jobs {
     /// Files uploaded on the Collect page to analyze with the collection,
     /// waiting for Start collecting: one set at a time.
     also: Mutex<Option<AlsoFiles>>,
+    /// The logs folder ([`pathwarden_core::logs`]); `None` writes none.
+    logs_dir: Mutex<Option<PathBuf>>,
+    /// The log of each job still running, by job.
+    logs: Mutex<HashMap<String, Arc<JobLog>>>,
 }
 
 /// Other collectors' files uploaded on the Collect page, kept until
@@ -271,6 +281,71 @@ impl JobSpec {
 }
 
 impl Jobs {
+    /// The logs folder jobs write their logs to.
+    pub fn logs_dir(&self) -> Option<PathBuf> {
+        self.logs_dir
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    pub fn set_logs_dir(&self, dir: Option<PathBuf>) {
+        *self.logs_dir.lock().unwrap_or_else(|e| e.into_inner()) = dir;
+    }
+
+    /// Opens job `id`'s log (once: its log when it has one), named in the
+    /// job for Open log. `None` without a logs folder.
+    pub fn open_log(&self, id: &str, kind: Kind, subject: &str) -> Option<Arc<JobLog>> {
+        if let Some(l) = self.log(id) {
+            return Some(l);
+        }
+        let log = JobLog::open_in(&self.logs_dir()?, kind, By::App, subject).ok()?;
+        self.logs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(id.to_string(), log.clone());
+        if let Some(j) = self.lock().get_mut(id) {
+            j.log = Some(log.name().to_string());
+        }
+        Some(log)
+    }
+
+    /// Job `id`'s log while it runs.
+    pub fn log(&self, id: &str) -> Option<Arc<JobLog>> {
+        self.logs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(id)
+            .cloned()
+    }
+
+    /// Writes `text` to job `id`'s log, if it has one.
+    pub fn log_line(&self, id: &str, text: &str) {
+        if let Some(l) = self.log(id) {
+            l.line(text);
+        }
+    }
+
+    /// Ends job `id`'s log with how it ended; a failure is said in the
+    /// session's log too.
+    fn end_log(&self, id: &str, outcome: Outcome, detail: &str) {
+        let log = self
+            .logs
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(id);
+        if let Some(l) = log {
+            l.end(outcome, detail);
+            if outcome == Outcome::Failed {
+                pathwarden_core::logs::session_line(&format!(
+                    "{} failed: see {}",
+                    l.title(),
+                    l.name()
+                ));
+            }
+        }
+    }
+
     /// Keeps files uploaded to analyze with the next collection,
     /// in place of any kept before (deleted unless uploads are kept).
     pub fn stage_also(&self, files: AlsoFiles, keep_uploads: bool) {
@@ -391,6 +466,7 @@ impl Jobs {
                 cancel: None,
                 action: Some(progress),
                 stop: Some(stop),
+                log: None,
             },
         );
         true
@@ -398,6 +474,7 @@ impl Jobs {
 
     /// Adds a line of a running finding action's output.
     pub fn action_line(&self, id: &str, line: &str) {
+        self.log_line(id, line);
         if let Some(p) = self.lock().get_mut(id).and_then(|j| j.action.as_mut()) {
             if p.lines.len() == ACTION_LINES {
                 p.lines.remove(0);
@@ -409,6 +486,17 @@ impl Jobs {
 
     /// A finding action ended: its result, and the job is done.
     pub fn action_done(&self, id: &str, result: serde_json::Value) {
+        let ok = result["ok"].as_bool() == Some(true);
+        let said = result["message"].as_str().unwrap_or_default().to_string();
+        let outcome = match result["ended"].as_str() {
+            Some("cancelled") => Outcome::Stopped,
+            _ if ok => Outcome::Ok,
+            _ => Outcome::Failed,
+        };
+        if let Some(details) = result["details"].as_str().filter(|d| !d.trim().is_empty()) {
+            self.log_line(id, &format!("the program's error output:\n{details}"));
+        }
+        self.end_log(id, outcome, &said);
         if let Some(j) = self.lock().get_mut(id) {
             if let Some(p) = j.action.as_mut() {
                 p.result = Some(result);
@@ -424,6 +512,29 @@ impl Jobs {
     }
 
     pub(crate) fn set(&self, id: &str, status: JobStatus) {
+        let before = self.lock().get(id).map(|j| j.status.clone());
+        match &status {
+            JobStatus::Running { phase } => {
+                let was = matches!(before, Some(JobStatus::Running { phase: p }) if p == *phase);
+                if !was {
+                    self.log_line(id, &format!("analysis: {}", phase.as_str()));
+                }
+            }
+            JobStatus::Collecting | JobStatus::Acting | JobStatus::Acted => {}
+            JobStatus::Done { run } => self.end_log(id, Outcome::Ok, &format!("run {run} saved")),
+            JobStatus::Failed { error } => self.end_log(id, Outcome::Failed, error),
+            JobStatus::Stopped => self.end_log(id, Outcome::Stopped, ""),
+            JobStatus::Duplicate { what, .. } => self.end_log(
+                id,
+                Outcome::Ok,
+                &format!("the same collection as {what}: nothing saved"),
+            ),
+            JobStatus::Ask { reason, .. } => self.end_log(
+                id,
+                Outcome::Stopped,
+                &format!("the environment needs a choice: {reason}"),
+            ),
+        }
         if let Some(j) = self.lock().get_mut(id) {
             j.status = status;
         }
@@ -491,6 +602,7 @@ impl Jobs {
             cancel: None,
             action: None,
             stop: None,
+            log: None,
         })
     }
 
@@ -513,6 +625,7 @@ impl Jobs {
             cancel: Some(cancel),
             action: None,
             stop: None,
+            log: None,
         })
     }
 
@@ -544,6 +657,14 @@ pub fn spawn(
 ) {
     std::thread::spawn(move || {
         let id = spec.id.clone();
+        let log = jobs.open_log(&id, Kind::Analyze, &spec.source);
+        if let Some(l) = &log {
+            l.line(&format!(
+                "analysis: reading {}",
+                pathwarden_core::text::count(spec.inputs.len(), "input", "inputs")
+            ));
+        }
+        let _in = log.as_ref().map(|l| l.enter());
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             analyze_checked(&jobs, &ws, &spec, check_duplicate && !spec.demo)
         }))
@@ -999,8 +1120,10 @@ impl<'a> JobProgress<'a> {
 }
 
 impl pathwarden_core::record::RecordProgress for JobProgress<'_> {
-    // The run keeps them ([`save_analysis`]).
-    fn warn(&mut self, _message: String) {}
+    // The run keeps them ([`save_analysis`]); the log too.
+    fn warn(&mut self, message: String) {
+        self.jobs.log_line(self.id, &format!("warning: {message}"));
+    }
 }
 
 impl analyze::Progress for JobProgress<'_> {

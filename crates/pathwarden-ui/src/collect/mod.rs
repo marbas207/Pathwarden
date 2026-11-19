@@ -1565,6 +1565,22 @@ async fn start(
         }
         return busy();
     }
+    if let Some(log) = st.jobs.open_log(
+        &id,
+        pathwarden_core::logs::Kind::Collect,
+        &req.domain.to_ascii_uppercase(),
+    ) {
+        log.line(&source);
+        if let Some(server) = &info.server {
+            log.line(&format!("domain controller {server} (chosen)"));
+        }
+        for t in &trusted {
+            log.line(&format!(
+                "trusted domain {} after it",
+                t.to_ascii_uppercase()
+            ));
+        }
+    }
     let job = CollectJob {
         jobs: st.jobs.clone(),
         ws: st.ws(),
@@ -1662,6 +1678,17 @@ struct CollectJob {
     also: Option<jobs::AlsoFiles>,
 }
 
+/// A domain of a collection started, ended or failed, as its log says it.
+fn domain_line(e: &pathwarden_collect::DomainEvent) -> String {
+    use pathwarden_collect::DomainState;
+    let d = e.domain.to_ascii_uppercase();
+    match &e.state {
+        DomainState::Started => format!("domain {d} ({} of {}) started", e.index + 1, e.total),
+        DomainState::Done { seconds, .. } => format!("domain {d} done in {seconds} s"),
+        DomainState::Failed { reason, .. } => format!("domain {d} failed: {reason}"),
+    }
+}
+
 /// A domain of a collection of several started, ended or failed:
 /// its line on the Collect page.
 fn domain_event(c: &mut CollectProgress, e: &pathwarden_collect::DomainEvent) {
@@ -1701,10 +1728,20 @@ impl CollectJob {
     fn run(mut self, req: CollectRequest) {
         let out = req.output_dir.clone();
         let names = account_names(&req);
+        let log = self.jobs.log(&self.id);
+        let _in = log.as_ref().map(|l| l.enter());
         let collected = {
             let jobs = &self.jobs;
             let id = &self.id;
             let mut on_progress = |p: Progress| {
+                if let Some(l) = &log {
+                    match &p {
+                        Progress::Phase(s) => l.line(&format!("step: {s}")),
+                        Progress::Log(line) => l.line(line),
+                        Progress::Domain(e) => l.line(&domain_line(e)),
+                        Progress::Objects { .. } | Progress::Status(_) => {}
+                    }
+                }
                 jobs.update_collect(id, |c| match p {
                     Progress::Phase(s) => c.phase = s,
                     Progress::Objects { kind, count } => {
@@ -1771,6 +1808,16 @@ impl CollectJob {
         self.info.read_started = outcome.read_started;
 
         let warnings: Vec<String> = outcome.warnings.iter().map(|w| capitalize(w)).collect();
+        if let Some(l) = &log {
+            let counts: Vec<String> = pathwarden_collect::summarize_outputs(&outcome.files)
+                .into_iter()
+                .map(|(k, n)| format!("{k} {n}"))
+                .collect();
+            l.line(&format!("collected: {}", counts.join(", ")));
+            for w in &warnings {
+                l.line(&format!("warning: {w}"));
+            }
+        }
         self.info.warnings = warnings.clone();
         // Keep: move the collection out of uploads/ (emptied at start-up)
         // before analyzing, so the run records where it really is.
@@ -1872,6 +1919,7 @@ impl CollectJob {
     /// The `[memory]` line for `phase`, in the collection's log.
     fn log_memory(&self, phase: &str) {
         if let Some(line) = pathwarden_collect::memory::line(phase) {
+            self.jobs.log_line(&self.id, &line);
             self.jobs.update_collect(&self.id, |c| {
                 c.log_total += 1;
                 c.log.push(line);

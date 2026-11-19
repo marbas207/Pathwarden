@@ -697,7 +697,7 @@ fn the_app_and_the_command_line_give_the_same_results() {
     let blocks = pathwarden_ui::actions_ui::described(&config.actions);
     let run_id = on["run"].as_str().unwrap();
     let summary = ws.summary(run_id).unwrap();
-    let page = pathwarden_ui::actions_ui::page_data(&ws, &blocks, &summary).unwrap();
+    let page = pathwarden_ui::actions_ui::page_data(&ws, &blocks, &summary, None).unwrap();
     let app: Vec<String> = page["f"][&critical]["view"]["offered"]
         .as_array()
         .unwrap()

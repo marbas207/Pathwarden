@@ -38,6 +38,7 @@ pub mod home_overview;
 pub mod jobs;
 pub mod last_pull;
 pub mod launch;
+pub mod logs_ui;
 pub mod pages;
 pub use pathwarden_core::perms;
 pub mod run_details;
@@ -182,6 +183,7 @@ pub fn run(args: UiArgs) -> anyhow::Result<()> {
         let mut state = server::AppState::new(ws, link.clone(), port);
         state.localhost_host = !matches!(v6, V6::Taken);
         apply_args(&mut state, &args)?;
+        logs_ui::start_session(&mut state, "the browser");
         // A git history is pulled from the first page load on.
         state.auto_pull.enable();
         let state = Arc::new(state);
@@ -229,6 +231,7 @@ pub fn run(args: UiArgs) -> anyhow::Result<()> {
             .await
             .context("web server")?;
         launch::discard(&state);
+        logs_ui::end_session(&state);
         drop(v6);
         println!("Stopped.");
         Ok(())
@@ -354,6 +357,7 @@ pub fn embedded(
     let (dir, notes, ws) = open_workspace(args)?;
     let mut state = server::AppState::embedded(ws, origin)?;
     apply_args(&mut state, args)?;
+    logs_ui::start_session(&mut state, "the desktop window");
     Ok((Arc::new(state), dir, notes))
 }
 

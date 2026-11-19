@@ -16,6 +16,7 @@ mod help;
 mod history_cmd;
 mod interrupt;
 mod logo;
+mod logs_cmd;
 mod mappings_cmd;
 mod outputs;
 mod owned_cmd;
@@ -449,6 +450,9 @@ does: --run ID, or the latest run of --env NAME (--workspace DIR for another wor
     /// Where a saved run's collection time went, compared with the last run;
     /// --bundle writes a zip that is safe to share.
     Diagnose(diagnose_cmd::DiagnoseArgs),
+    /// This computer's logs and crash reports: the latest jobs, the latest
+    /// job's last lines, the latest crash report.
+    Logs(logs_cmd::LogsArgs),
     /// Analyze a collection and record it in the run history: sync, analyze,
     /// record what changed, run the output plugins, push.
     Run {
@@ -899,6 +903,8 @@ fn main() -> ExitCode {
     // First, before any thread: the history passphrase variables leave the
     // environment, so nothing started from here inherits them.
     pathwarden_core::keystore::take_env();
+    // A panic writes a crash report to the logs folder.
+    pathwarden_core::logs::install_crash_hook(pathwarden_ui::diagnose::system_info().os);
     let mut command = cli_command().before_help(ui::banner());
     // clap exits with 2 on a usage error, 0 for --help and --version.
     let matches = command.clone().get_matches();
@@ -1089,6 +1095,7 @@ impl Command {
             | Command::Ui(_)
             | Command::Collect(_)
             | Command::Diagnose(_)
+            | Command::Logs(_)
             | Command::History { .. }
             | Command::Runs { .. }
             | Command::Label { .. }
@@ -1107,7 +1114,48 @@ impl Command {
     }
 }
 
-fn run(mut command: Command) -> Result<ExitCode> {
+/// Runs `command`; a job (a collection, `run`, a retest, a history sync, a
+/// finding action) with its log ([`pathwarden_core::logs`]): what it was,
+/// its lines, and how it ended.
+fn run(command: Command) -> Result<ExitCode> {
+    use pathwarden_core::logs::{By, JobLog, Outcome};
+    let log = job_of(&command)
+        .and_then(|(kind, subject)| JobLog::open(kind, By::command_line(), &subject));
+    let Some(log) = log else {
+        return run_command(command);
+    };
+    let _in = log.enter();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    log.line(&format!("pathwarden {}", args.join(" ")));
+    let result = run_command(command);
+    match &result {
+        Ok(code) if *code == ExitCode::SUCCESS => log.end(Outcome::Ok, ""),
+        Ok(_) => log.end(Outcome::Ok, "exit status not 0"),
+        Err(e) => log.end(Outcome::Failed, &error_text(e)),
+    }
+    result
+}
+
+/// The log `command` gets, if it is a job: its kind and subject.
+fn job_of(command: &Command) -> Option<(pathwarden_core::logs::Kind, String)> {
+    use pathwarden_core::logs::Kind;
+    match command {
+        Command::Collect(c) => Some((Kind::Collect, c.args.first_domain().to_ascii_uppercase())),
+        Command::Run { label, .. } => Some((Kind::Run, label.clone().unwrap_or_default())),
+        Command::Retest { findings, .. } => Some((Kind::Retest, findings.join(", "))),
+        Command::History {
+            action:
+                Some(history_cmd::HistoryAction::Storage {
+                    action: history_cmd::StorageAction::Sync { .. },
+                }),
+            ..
+        } => Some((Kind::Sync, String::new())),
+        Command::Action(a) => action_cmd::job_of(a).map(|s| (Kind::Action, s)),
+        _ => None,
+    }
+}
+
+fn run_command(mut command: Command) -> Result<ExitCode> {
     // `retest targeted` reads a saved run, not collector data.
     if let Command::Retest { action, .. } = &mut command {
         if let Some(retest_cmd::RetestAction::Targeted(args)) = action.take() {
@@ -1490,6 +1538,7 @@ fn run(mut command: Command) -> Result<ExitCode> {
         Command::Mappings(args) => mappings_cmd::run(args),
         Command::Plugins(args) => plugins_cmd::run(args),
         Command::Action(args) => return action_cmd::run(args),
+        Command::Logs(args) => return logs_cmd::run(args),
         Command::Env { action } => match action {
             EnvAction::List { workspace, json } => save_cmd::env_list(workspace.as_deref(), json),
             EnvAction::Rename {

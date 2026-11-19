@@ -1930,7 +1930,7 @@ pub fn remote_has_password(remote: &str) -> bool {
 /// server, refresh, fine-grained), GitLab (personal, pipeline trigger,
 /// deploy, runner, feed, OAuth), Bitbucket app passwords and Atlassian API
 /// tokens, Hugging Face, Slack. Compared ignoring case.
-const TOKEN_PREFIXES: &[&str] = &[
+pub(crate) const TOKEN_PREFIXES: &[&str] = &[
     "ghp_",
     "gho_",
     "ghu_",

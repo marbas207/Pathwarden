@@ -2398,8 +2398,25 @@ async fn refresh_api(State(st): State<Shared>) -> Response {
     let env = st.env_id();
     let flag = st.state_dir();
     let (st2, env2) = (st.clone(), env.clone());
+    let log = st.jobs.logs_dir().and_then(|d| {
+        pathwarden_core::logs::JobLog::open_in(
+            &d,
+            pathwarden_core::logs::Kind::Sync,
+            pathwarden_core::logs::By::App,
+            "",
+        )
+        .ok()
+    });
+    let in_log = log.clone();
     let done = tokio::task::spawn_blocking(move || {
+        let _in = in_log.as_ref().map(|l| l.enter());
         let loc = locate(&ws, flag.as_deref())?;
+        if let Some(l) = &in_log {
+            l.line(&match &loc.git {
+                Some((remote, branch)) => format!("history: {remote}, branch {branch}"),
+                None => format!("history: {}", loc.dir.display()),
+            });
+        }
         refresh_detail(
             Some(&ws),
             &loc,
@@ -2414,15 +2431,32 @@ async fn refresh_api(State(st): State<Shared>) -> Response {
     })
     .await;
     st.auto_pull.timer.reset();
+    use pathwarden_core::logs::Outcome;
     match done {
         Ok(Ok(p)) => {
             st.auto_pull.record_runs(&env, &p);
             let all: Vec<String> = p.loaded.into_iter().chain(p.notes).collect();
+            if let Some(l) = &log {
+                for n in &all {
+                    l.line(n);
+                }
+                l.end(Outcome::Ok, "");
+            }
             let note = (!all.is_empty()).then(|| all.join(" "));
             Json(serde_json::json!({ "saved": true, "note": note })).into_response()
         }
-        Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Refreshing failed."),
+        Ok(Err(e)) => {
+            if let Some(l) = &log {
+                l.end(Outcome::Failed, &e);
+            }
+            json_error(StatusCode::BAD_REQUEST, e)
+        }
+        Err(_) => {
+            if let Some(l) = &log {
+                l.end(Outcome::Failed, "the sync stopped unexpectedly");
+            }
+            json_error(StatusCode::INTERNAL_SERVER_ERROR, "Refreshing failed.")
+        }
     }
 }
 

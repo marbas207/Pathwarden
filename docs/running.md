@@ -217,6 +217,57 @@ disk space, `pathwarden collect --no-cache` keeps the read in memory. Objects
 over 128 MiB are skipped and listed on **Run details**; raise the limit with
 `[ingest] max_object_mib` for a trusted collection.
 
+## Logs and crash reports
+
+Pathwarden keeps a log of each app session and each job: a collection (with
+the collector's output and exit code), an analysis, `run`, a retest, a
+history sync, each finding action. Every line has the time, the job and
+what started it (`app`, `command line` or `schedule`), and is written as it
+happens, so the last lines survive a crash:
+
+```
+09:42:11.204 [collect, app] Collection SCALE.LOCAL started in the app
+09:42:12.018 [collect, app] Running C:\Tools\SharpHound.exe
+09:46:58.902 [collect, app] SharpHound exited with exit code: 3
+09:46:58.903 [collect, app] result: failed: The collection failed: ...
+```
+
+They are in `%LOCALAPPDATA%\Pathwarden\logs` on Windows,
+`$XDG_STATE_HOME/pathwarden/logs` (or `~/.local/state/pathwarden/logs`) on
+Linux, private to your account like the workspace: `job-<time>-<kind>.log`,
+`session-<time>.log` and `crash-<time>.txt`. They are kept 30 days, at most
+200 MB in all; the oldest go first. Passwords, tokens, cookies and the
+values of secret environment variables are never written (the same
+redaction as the collector's output). Logs do name domains, hosts and
+accounts: share them as you would a report.
+
+When Pathwarden stops on an internal error, it writes a crash report: the
+message, where it happened, the backtrace, the version, the job that was
+running and that job's last 200 lines. The next time the app starts, an
+amber dot shows by **Settings**, and **Settings › Logs** says when it
+stopped and during what, with **Open crash report** and **Dismiss**.
+
+```powershell
+pathwarden logs              # the latest jobs (--all for every one)
+pathwarden logs --last       # the latest job's last lines
+pathwarden logs --crash      # the latest crash report
+pathwarden logs --last --open
+```
+
+`--open` opens the logs folder, or with `--last` or `--crash` that file, in
+the default app. In the app, **Open logs folder** is on **Settings › Logs**,
+and a failed collection or action has **Open log**.
+
+**Download diagnostics** on a run's performance page, and `pathwarden
+diagnose --bundle`, add the logs of the last 7 days (at most 20 MB) and the
+crash reports, with every name replaced like the rest of the zip.
+
+A hard crash (the process killed, out of memory, a crash in a system
+library) may leave no crash report. On Windows, look in **Event Viewer ›
+Windows Logs › Application** for an error from `pathwarden.exe` at that
+time; on Linux, `journalctl --since "1 hour ago"` (or the unit's journal for
+a systemd timer). The job's log still has its lines up to the crash.
+
 ## When something goes wrong
 
 | What you see | What to do |
@@ -228,6 +279,8 @@ over 128 MiB are skipped and listed on **Run details**; raise the limit with
 | "This history is encrypted ..." | Run `pathwarden history storage passphrase set`, or set `PATHWARDEN_HISTORY_PASSPHRASE`. |
 | "branch main of ... is not Pathwarden state" | Use a repository or branch for the history only. |
 | `run.ps1` refuses to start | Run `setup-folder.ps1` again. |
-| Task Scheduler shows a failed run | Read the newest log in `C:\Pathwarden\reports\logs`. |
+| Task Scheduler shows a failed run | Read the newest log in `C:\Pathwarden\reports\logs`, or `pathwarden logs --last` as the task's account. |
+| A collection or action failed in the app | Click **Open log** beside the error, or run `pathwarden logs --last`. |
+| Pathwarden stopped unexpectedly | `pathwarden logs --crash`; with no report, see [Logs and crash reports](#logs-and-crash-reports). |
 
 Add `-v` to see each step.

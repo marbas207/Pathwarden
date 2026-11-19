@@ -41,6 +41,9 @@ fn app(name: &str, allow: bool) -> App {
     let ws = Workspace::open(dir.join("ws")).unwrap();
     let mut state = AppState::new(ws, Token::generate().unwrap(), 4251);
     state.allow_destinations = allow;
+    // Logs in the test's folder; Open log opens nothing.
+    state.jobs.set_logs_dir(Some(dir.join("logs")));
+    state.opener = Arc::new(|_| true);
     let state = Arc::new(state);
     App {
         router: router(state.clone()),
@@ -346,6 +349,27 @@ async fn an_action_runs_from_the_run_page_and_is_saved_on_the_finding() {
     assert!(r["details"].as_str().unwrap().contains("HTTP 403"), "{r}");
     assert_eq!(r["said"], "Kept in the finding's activity.");
     assert_eq!(r["view"]["activity"][0]["ok"], false);
+    // Its log, for Open log on its Activity entry: the action's result is
+    // in it.
+    let log = r["view"]["activity"][0]["log"]
+        .as_str()
+        .expect("a failed entry has its log")
+        .to_string();
+    assert!(log.contains("-action") && log.ends_with(".log"), "{log}");
+    let text = std::fs::read_to_string(a.dir.join("logs").join(&log)).unwrap();
+    assert!(
+        text.contains("[action, app] result: failed: The fake desk said no."),
+        "{text}"
+    );
+    let (s, _) = a
+        .json(Method::POST, "/api/logs/open", json!({ "file": log }))
+        .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    // The run page has it too, on that entry only.
+    let (_, page) = a.get(&format!("/runs/{run}")).await;
+    let again = attr_json(&page, "data-findings");
+    assert_eq!(again[&other]["view"]["activity"][0]["log"], log.as_str());
+    assert!(again[&fp]["view"]["activity"][0]["log"].is_null());
 
     // Test only: nothing saved.
     let (_, v) = a

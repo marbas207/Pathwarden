@@ -232,6 +232,8 @@ pub(crate) fn run(
     while let Ok(line) = rx.try_recv() {
         rep.log(line);
     }
+    // Its exit code, for the job's log.
+    rep.log(format!("{name} exited with {status}"));
     if !status.success() {
         output::remove_new_outputs(&req.output_dir, &before);
         anyhow::bail!(
@@ -698,6 +700,10 @@ mod tests {
             vec![out.join("20261009120000_contoso.local_rusthound-ce.zip")]
         );
         assert!(logs.contains(&Progress::Log("collecting contoso.local".into())));
+        // Its exit code, for the job's log.
+        assert!(logs
+            .iter()
+            .any(|p| matches!(p, Progress::Log(l) if l.contains("exited with"))));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

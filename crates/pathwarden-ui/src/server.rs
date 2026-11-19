@@ -86,6 +86,11 @@ pub struct AppState {
     pub transport: security::Transport,
     /// Pulling a git history while pages are open ([`crate::auto_pull`]).
     pub auto_pull: crate::auto_pull::AutoPull,
+    /// Opens a log or the logs folder ([`crate::logs_ui`]).
+    pub opener: crate::logs_ui::Opener,
+    /// This session's log ([`pathwarden_core::logs`]), from
+    /// [`crate::run`] and the desktop window.
+    pub session: Option<Arc<pathwarden_core::logs::JobLog>>,
 }
 
 impl AppState {
@@ -98,13 +103,15 @@ impl AppState {
             let _ = crate::environments::Registry::update(ws.root(), |r| Ok(r.ensure_demo()));
         }
         let env = ws.registry().current.unwrap_or_else(|| DEFAULT_ENV.into());
+        let jobs: Arc<Jobs> = Arc::default();
+        jobs.set_logs_dir(pathwarden_core::logs::dir());
         Self {
             workspace: ws,
             env: std::sync::RwLock::new(env),
             sessions: Sessions::new(link, SessionPolicy::default()),
             port,
             cookie_name: security::cookie_name(port),
-            jobs: Arc::default(),
+            jobs,
             limits: Limits::default(),
             keep_uploads: false,
             allow_destinations: false,
@@ -113,6 +120,8 @@ impl AppState {
             launch_file: crate::launch::Slot::default(),
             transport: security::Transport::Loopback,
             auto_pull: crate::auto_pull::AutoPull::default(),
+            opener: crate::logs_ui::default_opener(),
+            session: None,
         }
     }
 
@@ -268,6 +277,8 @@ pub fn router(state: Shared) -> Router {
         // Finding actions: the run page's dialog and its jobs.
         .merge(crate::actions_app::routes())
         .merge(crate::history_ui::routes())
+        // Logs and crash reports: Open log, the Logs card's buttons.
+        .merge(crate::logs_ui::routes())
         .route(
             "/static/config.js",
             get(|| async { asset("text/javascript", CONFIG_JS) }),

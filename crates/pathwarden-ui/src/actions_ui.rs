@@ -224,6 +224,8 @@ pub struct SavedOutcome {
     /// In the run history for everyone; false when kept on this computer
     /// for the next sync.
     pub pushed: bool,
+    /// The activity entry's time (`at`), when one was saved.
+    pub at: Option<String>,
 }
 
 /// Saves what a run of `ready`'s action did on its finding, at once: an
@@ -237,6 +239,7 @@ pub fn save_outcome(
     let current = log(ws)?;
     let fp = &ready.finding.fingerprint;
     let o = &ready.prepared.offered;
+    let at = action_log::now_at();
     let Some(change) = action_log::run_change(
         current.findings.get(fp),
         fp,
@@ -246,7 +249,7 @@ pub fn save_outcome(
         outcome,
         crate::history_ui::recorded_id(&ready.run).or(Some(ready.run.id.as_str())),
         &Actor::current(),
-        &action_log::now_at(),
+        &at,
     ) else {
         return Ok(SavedOutcome::default());
     };
@@ -255,6 +258,7 @@ pub fn save_outcome(
         saved: true,
         notes: s.notes,
         pushed: s.pushed,
+        at: Some(at),
     })
 }
 
@@ -278,6 +282,7 @@ pub fn save_outcome_quick(
     let current = log(ws).unwrap_or_default();
     let fp = &ready.finding.fingerprint;
     let o = &ready.prepared.offered;
+    let at = action_log::now_at();
     let Some(change) = action_log::run_change(
         current.findings.get(fp),
         fp,
@@ -287,7 +292,7 @@ pub fn save_outcome_quick(
         outcome,
         crate::history_ui::recorded_id(&ready.run).or(Some(ready.run.id.as_str())),
         &Actor::current(),
-        &action_log::now_at(),
+        &at,
     ) else {
         return Ok(SavedOutcome::default());
     };
@@ -298,6 +303,7 @@ pub fn save_outcome_quick(
         saved: true,
         notes,
         pushed: !loc.store.is_git(),
+        at: Some(at),
     })
 }
 
@@ -543,6 +549,32 @@ pub struct ActivityView {
     pub summary: String,
     /// When, as Unix time, for the page's date format.
     pub at_unix: Option<i64>,
+    /// Its log on this computer ([`with_logs`]), for Open log.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log: Option<String>,
+}
+
+/// `v` (finding `fingerprint`'s) with each failed activity entry's log on
+/// this computer, from the logs folder `logs`
+/// ([`pathwarden_core::logs::note_action`]).
+pub fn with_logs(
+    v: &mut FindingView,
+    fingerprint: &str,
+    logs: &std::collections::HashMap<(String, String), String>,
+) {
+    for a in v.activity.iter_mut().filter(|a| !a.entry.ok) {
+        a.log = logs
+            .get(&(fingerprint.to_string(), a.entry.at.clone()))
+            .cloned();
+    }
+}
+
+/// The logs of the activity entries in the logs folder `logs`.
+fn action_logs(
+    logs: Option<&std::path::Path>,
+) -> std::collections::HashMap<(String, String), String> {
+    logs.map(pathwarden_core::logs::action_logs)
+        .unwrap_or_default()
 }
 
 /// Whether action `def` is meant for a fixed finding: its `when` lists
@@ -588,6 +620,7 @@ pub fn view(file: &ActionsFile, programs: &[Program], f: &FindingContext) -> Fin
                 line: e.line(),
                 summary: e.summary(),
                 at_unix: pathwarden_core::time::parse_rfc3339(&e.at),
+                log: None,
                 entry: e,
             })
             .collect(),
@@ -736,9 +769,16 @@ fn act_json(o: &Offered) -> Value {
 /// where it stands and its view. `None` when the run has no findings this
 /// version reads. Built from the history's file read once and the blocks
 /// described once.
-pub fn page_data(ws: &Workspace, blocks: &Blocks, r: &RunSummary) -> Option<Value> {
+/// `logs`: the logs folder, for each failed entry's Open log.
+pub fn page_data(
+    ws: &Workspace,
+    blocks: &Blocks,
+    r: &RunSummary,
+    logs: Option<&std::path::Path>,
+) -> Option<Value> {
     let findings = findings_of(ws, r)?;
     let file = log(ws).unwrap_or_default();
+    let logs = action_logs(logs);
     let programs = blocks.programs();
     let mut acts = serde_json::Map::new();
     let mut f = serde_json::Map::new();
@@ -754,7 +794,8 @@ pub fn page_data(ws: &Workspace, blocks: &Blocks, r: &RunSummary) -> Option<Valu
         }
     }
     for c in &findings {
-        let v = view(&file, &programs, c);
+        let mut v = view(&file, &programs, c);
+        with_logs(&mut v, &c.fingerprint, &logs);
         if v.offered.is_empty() && v.records.is_empty() && v.activity.is_empty() {
             continue;
         }
@@ -777,11 +818,14 @@ pub fn view_now(
     actions: &[ActionConfig],
     run: &str,
     fingerprint: &str,
+    logs: Option<&std::path::Path>,
 ) -> Option<FindingView> {
     let (_, finding) = find_finding(ws, Some(run), fingerprint).ok()?;
     let blocks = described(actions);
     let file = log(ws).unwrap_or_default();
-    Some(view(&file, &blocks.programs(), &finding))
+    let mut v = view(&file, &blocks.programs(), &finding);
+    with_logs(&mut v, &finding.fingerprint, &action_logs(logs));
+    Some(v)
 }
 
 #[cfg(test)]

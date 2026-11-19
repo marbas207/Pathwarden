@@ -38,6 +38,7 @@ pub mod introduced;
 #[allow(unsafe_code)]
 pub mod keystore;
 pub mod kinds;
+pub mod logs;
 pub mod mgmt;
 pub mod model;
 pub mod object_index;
@@ -57,6 +58,7 @@ pub mod prepared;
 #[allow(unsafe_code)]
 mod proc_tree;
 pub mod record;
+pub mod redact;
 pub mod remediation;
 pub mod report;
 pub mod retest;

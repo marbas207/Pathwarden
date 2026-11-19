@@ -341,9 +341,10 @@ fn panel_in(p: &Performance, open: bool, id: &str, level: u8, name_run: bool) ->
     let Some(t) = &p.timings else {
         // Closed to one line as well: most runs have no timings.
         return format!(
-            r#"<details class="perf card" id="{id}"{open}>{}<div class="perf-head perf-none"><p class="muted small">{of_run}{}</p>{download}</div></details>"#,
+            r#"<details class="perf card" id="{id}"{open}>{}<div class="perf-head perf-none"><p class="muted small">{of_run}{}</p>{download}</div>{has}</details>"#,
             summary("not timed"),
-            esc(p.missing())
+            esc(p.missing()),
+            has = contents(id),
         );
     };
     let measures = p.measures();
@@ -365,8 +366,9 @@ fn panel_in(p: &Performance, open: bool, id: &str, level: u8, name_run: bool) ->
         esc(&p.compared_words())
     );
     let mut b = format!(
-        r#"<details class="perf card" id="{id}"{open}>{}<div class="perf-head"><p class="muted small">{compared}</p>{download}</div><div class="perf-cards">"#,
+        r#"<details class="perf card" id="{id}"{open}>{}<div class="perf-head"><p class="muted small">{compared}</p>{download}</div>{has}<div class="perf-cards">"#,
         summary(&headline.join(" · ")),
+        has = contents(id),
     );
     for (i, m) in measures.iter().enumerate() {
         let delta = match (&m.change, m.trend) {
@@ -452,6 +454,23 @@ fn panel_in(p: &Performance, open: bool, id: &str, level: u8, name_run: bool) ->
     b
 }
 
+/// What the diagnostics zip holds, under its download: every name in it
+/// replaced.
+fn contents(id: &str) -> String {
+    let items: String = diagnostics::CONTENTS
+        .iter()
+        .map(|c| format!("<li>{}</li>", esc(c)))
+        .collect();
+    format!(
+        r#"<div class="diag-has-wrap"><p class="muted small">In the zip, every name replaced: {}</p><ul class="diag-has">{items}</ul></div>"#,
+        tip(
+            &format!("{id}-zip"),
+            "what's in the zip",
+            diagnostics::CONTENTS_TIP
+        )
+    )
+}
+
 /// A small (i) with its definition, as the report's.
 fn tip(id: &str, term: &str, text: &str) -> String {
     format!(
@@ -494,8 +513,14 @@ impl std::fmt::Display for BundleError {
 
 impl std::error::Error for BundleError {}
 
-/// The diagnostics bundle of `run` (blocking: it reads the run's objects).
-pub fn bundle(ws: &Workspace, run: &RunSummary) -> Result<Vec<u8>, BundleError> {
+/// The diagnostics bundle of `run` (blocking: it reads the run's objects),
+/// with the logs and crash reports of the logs folder `logs`
+/// ([`pathwarden_core::logs::for_bundle`]).
+pub fn bundle(
+    ws: &Workspace,
+    run: &RunSummary,
+    logs: Option<&Path>,
+) -> Result<Vec<u8>, BundleError> {
     let dir = ws
         .run_dir(&run.id)
         .ok_or_else(|| BundleError::Unreadable("that run can't be found".into()))?;
@@ -539,6 +564,7 @@ pub fn bundle(ws: &Workspace, run: &RunSummary) -> Result<Vec<u8>, BundleError> 
                 "warnings": c.warnings.len(),
             })
         }),
+        logs: logs_of(logs),
     };
     let scan = names_of(ws, &perf, &dir)?;
     b.zip(&scan).map_err(BundleError::Refused)
@@ -550,17 +576,28 @@ pub fn bundle(ws: &Workspace, run: &RunSummary) -> Result<Vec<u8>, BundleError> 
 /// they be in it: every string of these files is Pathwarden's own or
 /// replaced by a placeholder. The run's domains and the environments are
 /// still searched for.
-pub fn bundle_point(ws: &Workspace, perf: &Performance) -> Result<Vec<u8>, BundleError> {
+pub fn bundle_point(
+    ws: &Workspace,
+    perf: &Performance,
+    logs: Option<&Path>,
+) -> Result<Vec<u8>, BundleError> {
     let b = Bundle {
         system: system_info(),
         run: run_numbers(&perf.run),
         timings: perf.timings.clone(),
         previous: perf.previous.as_ref().map(|(_, t)| t.clone()),
+        logs: logs_of(logs),
         ..Bundle::default()
     };
     let mut scan = NameScan::default();
     known_names(ws, perf, &mut scan);
     b.zip(&scan).map_err(BundleError::Refused)
+}
+
+/// The logs a bundle takes from the logs folder `logs`.
+fn logs_of(logs: Option<&Path>) -> Vec<(String, String)> {
+    logs.map(|d| pathwarden_core::logs::for_bundle(d, pathwarden_core::analyze::now()))
+        .unwrap_or_default()
 }
 
 /// The history run `run_id` of the environment `ws` (its history in use,
@@ -911,17 +948,18 @@ fn perf_page(st: &Shared, p: &Performance, back: Option<&str>) -> Response {
 
 async fn download(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> Response {
     let ws = st.workspace.clone();
+    let logs = st.jobs.logs_dir();
     let made = tokio::task::spawn_blocking(move || {
         find(&st, &id).map(|f| match f {
             Found::Saved(run) => (
                 bundle_name(&run),
                 format!("/runs/{}/performance", run.id),
-                bundle(&ws, &run),
+                bundle(&ws, &run, logs.as_deref()),
             ),
             Found::Recorded(p) => (
                 bundle_name(&p.run),
                 format!("/history/{}/performance", p.run.run_id()),
-                bundle_point(&st.ws(), &p),
+                bundle_point(&st.ws(), &p, logs.as_deref()),
             ),
         })
     })

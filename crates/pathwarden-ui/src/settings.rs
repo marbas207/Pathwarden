@@ -565,8 +565,9 @@ fn render(
         r##"<div class="page-head"><div><p class="eyebrow">Configure</p><h1 class="panel-title">Settings</h1>
 <p class="lead">Set up how {env} is judged: extra Tier Zero objects, rules, accepted risks and evidence signing.</p></div></div>
 {file}{line}
-<nav class="jump" aria-label="Sections">{jump}</nav>
+<nav class="jump" aria-label="Sections">{jump}{logs}</nav>
 "##,
+        logs = crate::logs_ui::jump_link(ctx.crash),
         file = file_line(st, loaded),
         env = if ctx.env_name.trim().is_empty() {
             "this environment".to_string()
@@ -936,6 +937,8 @@ fn render(
     );
     // This computer's evidence signing key, and checking a pack.
     b.push_str(&crate::evidence_ui::settings_sections(&st.workspace));
+    // This computer's logs and crash reports.
+    b.push_str(&crate::logs_ui::card(st));
     // Shared sections without a section of their own here: the choice for
     // one changed on both sides, or a reader's way back.
     for (key, title) in [

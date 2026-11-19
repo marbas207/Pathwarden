@@ -828,6 +828,17 @@ pub(crate) fn resume_notes(
         .collect()
 }
 
+/// A domain of a collection started, done or failed, in the job's log.
+fn log_domain(e: &pathwarden_collect::DomainEvent) {
+    use pathwarden_collect::DomainState;
+    let d = e.domain.to_ascii_uppercase();
+    pathwarden_core::logs::note(&match &e.state {
+        DomainState::Started => format!("domain {d} ({} of {}) started", e.index + 1, e.total),
+        DomainState::Done { seconds, .. } => format!("domain {d} done in {seconds} s"),
+        DomainState::Failed { reason, .. } => format!("domain {d} failed: {reason}"),
+    });
+}
+
 /// What [`collect`] collected.
 pub struct Collected {
     /// The files written, ready to analyze.
@@ -936,6 +947,7 @@ pub fn collect(
         &mut |p| match p {
             Progress::Status(s) => live.status(*s),
             Progress::Log(line) => {
+                pathwarden_core::logs::note(&line);
                 // `[timing]` lines exist only with PATHWARDEN_TIMINGS=1:
                 // asked for, so shown without -v.
                 let important = line.starts_with("error:")
@@ -947,24 +959,28 @@ pub fn collect(
                 }
             }
             // Several domains: which one, and the ones that fail.
-            Progress::Domain(e) => match e.state {
-                DomainState::Started => live.title(format!(
-                    "Collecting {} ({} of {})",
-                    e.domain,
-                    e.index + 1,
-                    e.total
-                )),
-                DomainState::Done { .. } => {}
-                DomainState::Failed { reason, .. } => {
-                    if verbosity != Verbosity::Verbose {
-                        live.log(&format!(
-                            "{warn}{}:{warn:#} {reason} Skipped.",
-                            e.domain.to_ascii_uppercase()
-                        ))
+            Progress::Domain(e) => {
+                log_domain(&e);
+                match e.state {
+                    DomainState::Started => live.title(format!(
+                        "Collecting {} ({} of {})",
+                        e.domain,
+                        e.index + 1,
+                        e.total
+                    )),
+                    DomainState::Done { .. } => {}
+                    DomainState::Failed { reason, .. } => {
+                        if verbosity != Verbosity::Verbose {
+                            live.log(&format!(
+                                "{warn}{}:{warn:#} {reason} Skipped.",
+                                e.domain.to_ascii_uppercase()
+                            ))
+                        }
                     }
                 }
-            },
-            Progress::Objects { .. } | Progress::Phase(_) => {}
+            }
+            Progress::Phase(s) => pathwarden_core::logs::note(&format!("step: {s}")),
+            Progress::Objects { .. } => {}
         },
         &cancel,
     );

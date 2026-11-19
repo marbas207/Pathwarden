@@ -485,6 +485,22 @@
     dialog.addEventListener("cancel", function (e) { if (busy) e.preventDefault(); });
     dialog.addEventListener("close", function () { if (!busy) { reset(); current = current && current.mode === "test" ? null : current; } });
 
+    // Open log on a failed action's Activity entry in the report: only an
+    // entry of a finding this page knows, with the log the app named.
+    window.addEventListener("message", function (e) {
+      var frame = $("report-frame");
+      if (!frame || e.source !== frame.contentWindow) return;
+      var m = e.data;
+      if (!m || typeof m !== "object" || m.type !== "pathwarden:open-log") return;
+      var fp = m.fingerprint;
+      if (typeof fp !== "string" || fp.length > 64 || !FINGERPRINT.test(fp) || !own.call(findings, fp)) return;
+      if (typeof m.at !== "string" || m.at.length > 64) return;
+      var v = findings[fp].view || {};
+      var entry = null;
+      (Array.isArray(v.activity) ? v.activity : []).forEach(function (a) { if (a && a.at === m.at && typeof a.log === "string") entry = a; });
+      if (entry && window.Pathwarden && window.Pathwarden.openLog) window.Pathwarden.openLog(entry.log);
+    });
+
     // A finding's action in the report (see the top of this file).
     window.addEventListener("message", function (e) {
       var frame = $("report-frame");
