@@ -53,10 +53,19 @@ pub const INTERPRETERS: &[&str] = &[
 /// this computer does. `SSL_CERT_FILE` and `SSL_CERT_DIR` are not: they
 /// would replace the system's trusted certificates for the plugins shipped
 /// with Pathwarden. A plugin that needs one names it in a `*_env` setting.
+/// The program folders are passed so a plugin finds installed programs the
+/// way Windows does (browser automation looks for Edge through them); they
+/// are folder paths, never secrets.
 const BASE_ENV: &[&str] = &[
     "PATH",
     "SYSTEMROOT",
     "SYSTEMDRIVE",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "PROGRAMW6432",
+    "PROGRAMDATA",
+    "COMMONPROGRAMFILES",
+    "COMMONPROGRAMFILES(X86)",
     "TEMP",
     "TMP",
     "HOME",
@@ -1386,6 +1395,24 @@ mod tests {
         } else {
             assert!(trusted_dir(Path::new("/usr/bin")) || trusted_dir(Path::new("/bin")));
         }
+    }
+
+    /// Program folders reach plugins, so browser automation finds an
+    /// installed Edge; other variables still don't.
+    #[cfg(windows)]
+    #[test]
+    fn plugins_get_the_program_folders() {
+        let mut cmd = crate::spawn::quiet("cmd");
+        apply_env_in(&mut cmd, &serde_json::Map::new());
+        let names: Vec<String> = cmd
+            .get_envs()
+            .filter(|(_, v)| v.is_some())
+            .map(|(k, _)| k.to_string_lossy().to_ascii_uppercase())
+            .collect();
+        for want in ["PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA"] {
+            assert!(names.iter().any(|n| n == want), "{want} in {names:?}");
+        }
+        assert!(!names.iter().any(|n| n == "USERNAME"), "{names:?}");
     }
 
     #[test]

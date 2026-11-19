@@ -397,7 +397,10 @@ For each request, Pathwarden:
 
 1. starts the program with a cleared environment: `PATH`, `SYSTEMROOT`,
    `SYSTEMDRIVE`, `TEMP`, `TMP`, `HOME`, `USERPROFILE`, `APPDATA`,
-   `LOCALAPPDATA`, `COMSPEC`, `PATHEXT`, `WINDIR`, the proxy variables
+   `LOCALAPPDATA`, `COMSPEC`, `PATHEXT`, `WINDIR`, the program folders
+   (`PROGRAMFILES`, `PROGRAMFILES(X86)`, `PROGRAMW6432`, `PROGRAMDATA`,
+   `COMMONPROGRAMFILES`, `COMMONPROGRAMFILES(X86)`, so browser automation
+   such as Playwright finds an installed Edge or Chrome), the proxy variables
    (`HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `ALL_PROXY`), and the variables
    the block's `*_env` settings name;
 2. sets `PATHWARDEN_ACTION_REQUEST` to the kind, `describe` or `run`, and

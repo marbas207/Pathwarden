@@ -1381,7 +1381,9 @@ fn cancel_kills_the_whole_tree() {
     let c = cancel.clone();
     let watched = alive.clone();
     std::thread::spawn(move || {
-        let until = std::time::Instant::now() + Duration::from_secs(60);
+        // Busy Windows runners can take over a minute to start PowerShell;
+        // the program itself sleeps 120 s.
+        let until = std::time::Instant::now() + Duration::from_secs(100);
         while !watched.exists() && std::time::Instant::now() < until {
             std::thread::sleep(Duration::from_millis(50));
         }
