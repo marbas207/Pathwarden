@@ -427,3 +427,66 @@ fn another_jobs_crash_comes_without_its_lines() {
     assert!(!head.contains("secret-ish"), "{head}");
     assert!(text(&ours).contains("Backtrace:"));
 }
+
+/// Sets `path`'s modified time to `secs` seconds after a fixed base.
+fn set_time(path: &Path, secs: u64) {
+    let t = std::time::SystemTime::now() - std::time::Duration::from_secs(1000)
+        + std::time::Duration::from_secs(secs);
+    OpenOptions::new()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(t)
+        .unwrap();
+}
+
+/// The latest six jobs, with every session log and crash report newer than
+/// the oldest of them, whatever second the files share; the same order
+/// every time.
+#[test]
+fn the_latest_jobs_count_jobs_only() {
+    let t = tmp("latest");
+    fs::create_dir_all(&t.0).unwrap();
+    // One second for every file, as a fast machine names them.
+    let stamp = "20261119-181156";
+    let names = [
+        format!("job-{stamp}-run.log"),
+        format!("session-{stamp}.log"),
+        format!("job-{stamp}-collect.log"),
+        format!("crash-{stamp}.txt"),
+        format!("job-{stamp}-retest.log"),
+        format!("job-{stamp}-retest-2.log"),
+        format!("job-{stamp}-retest-3.log"),
+        format!("job-{stamp}-retest-4.log"),
+    ];
+    for (i, n) in names.iter().enumerate() {
+        fs::write(t.0.join(n), format!("# {n} | app | x | Pathwarden\n")).unwrap();
+        set_time(&t.0.join(n), i as u64);
+    }
+    let all = list(&t.0);
+    let order: Vec<&str> = all.iter().map(|e| e.name.as_str()).collect();
+    let mut want: Vec<&str> = names.iter().map(String::as_str).collect();
+    want.reverse();
+    assert_eq!(order, want, "newest first, by when written");
+    // Six jobs: all eight shown (the old list stopped at six entries).
+    assert_eq!(latest_jobs(&all, 6).len(), 8);
+    // A seventh, newest: the oldest job and the session log before it go.
+    let seventh = format!("job-{stamp}-retest-5.log");
+    fs::write(t.0.join(&seventh), "# x | app | retest | Pathwarden\n").unwrap();
+    set_time(&t.0.join(&seventh), 20);
+    let all = list(&t.0);
+    let shown: Vec<&str> = latest_jobs(&all, 6)
+        .iter()
+        .map(|e| e.name.as_str())
+        .collect();
+    assert_eq!(shown.len(), 7, "{shown:?}");
+    assert_eq!(
+        shown.last(),
+        Some(&names[2].as_str()),
+        "down to the collection"
+    );
+    assert!(
+        shown.contains(&names[3].as_str()),
+        "the crash report is newer: shown"
+    );
+}

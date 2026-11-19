@@ -36,6 +36,18 @@ fn pw(logs: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     c.output().unwrap()
 }
 
+/// Sets `path`'s modified time to `secs` seconds after a fixed base.
+fn set_time(path: &Path, secs: u64) {
+    let t = std::time::SystemTime::now() - std::time::Duration::from_secs(1000)
+        + std::time::Duration::from_secs(secs);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(t)
+        .unwrap();
+}
+
 fn ok(out: &Output) -> String {
     assert!(
         out.status.success(),
@@ -137,16 +149,27 @@ fn logs_lists_shows_and_opens() {
     );
 
     // Six jobs (with a session log and a crash report among them): all
-    // shown, as the list counts jobs only.
+    // shown, as the list counts jobs only. The files' times are set, oldest
+    // first, rather than left to the clock: they share a second.
+    let mut order = vec![
+        run.path().to_path_buf(),
+        session.path().to_path_buf(),
+        collect.path().to_path_buf(),
+        logs.join(&crash),
+    ];
     for _ in 0..4 {
-        JobLog::open_in(
+        let r = JobLog::open_in(
             &logs,
             Kind::Retest,
             By::CommandLine,
             "PW-001-0123456789abcdef",
         )
-        .unwrap()
-        .end(Outcome::Ok, "");
+        .unwrap();
+        r.end(Outcome::Ok, "");
+        order.push(r.path().to_path_buf());
+    }
+    for (i, p) in order.iter().enumerate() {
+        set_time(p, i as u64);
     }
     let out = ok(&pw(&logs, &["logs"], &[]));
     assert!(!out.contains("more."), "{out}");
@@ -155,15 +178,15 @@ fn logs_lists_shows_and_opens() {
         "{out}"
     );
     // A seventh: the latest six jobs, then how many more.
-    std::thread::sleep(std::time::Duration::from_millis(20));
-    JobLog::open_in(
+    let seventh = JobLog::open_in(
         &logs,
         Kind::Retest,
         By::CommandLine,
         "PW-001-0123456789abcdef",
     )
-    .unwrap()
-    .end(Outcome::Ok, "");
+    .unwrap();
+    seventh.end(Outcome::Ok, "");
+    set_time(seventh.path(), 20);
     let out = ok(&pw(&logs, &["logs"], &[]));
     assert!(
         out.contains("  ... 2 more. All of them: pathwarden logs --all"),

@@ -131,16 +131,7 @@ pub(crate) fn run(a: LogsArgs) -> Result<ExitCode> {
     let rows: Vec<&Entry> = if a.all {
         all.iter().collect()
     } else {
-        let mut jobs = 0;
-        all.iter()
-            .take_while(|e| {
-                let more = jobs < LISTED;
-                if !e.crash && e.kind != Some(logs::Kind::Session) {
-                    jobs += 1;
-                }
-                more
-            })
-            .collect()
+        logs::latest_jobs(&all, LISTED).iter().collect()
     };
     let job_w = rows
         .iter()

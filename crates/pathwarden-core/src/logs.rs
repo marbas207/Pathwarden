@@ -773,7 +773,12 @@ pub fn list(dir: &Path) -> Vec<Entry> {
             }
             let head = first_line(&f.path).unwrap_or_default();
             let parts: Vec<&str> = head.trim_start_matches("# ").split(" | ").collect();
-            let kind = parts.get(2).and_then(|k| Kind::from_slug(k));
+            // A session's log by its name too, whatever its first line.
+            let kind = if f.name.starts_with("session-") {
+                Some(Kind::Session)
+            } else {
+                parts.get(2).and_then(|k| Kind::from_slug(k))
+            };
             let mut result = last_result(&f.path).unwrap_or_else(|| "-".into());
             if result == "-"
                 && crashes
@@ -815,14 +820,34 @@ fn order(name: &str) -> (String, u32) {
     (stamp, n)
 }
 
-/// Newest first: the time in the name, then the last written.
+/// Newest first, the same order every time: the time in the name, then
+/// the last written (to the nanosecond), then the `-2` of a second file of
+/// that second, then the name.
 fn newest_first(files: &mut [FileInfo]) {
     files.sort_by(|a, b| {
         let (ka, kb) = (order(&a.name), order(&b.name));
         kb.0.cmp(&ka.0)
             .then(b.modified_ns.cmp(&a.modified_ns))
             .then(kb.1.cmp(&ka.1))
+            .then(b.name.cmp(&a.name))
     });
+}
+
+/// What a list of the latest `jobs` jobs shows of `all` ([`list`], newest
+/// first): every entry up to and including the `jobs`-th job, so session
+/// logs and crash reports never count towards them and always show when
+/// newer than the oldest job shown. With fewer jobs, all of them.
+pub fn latest_jobs(all: &[Entry], jobs: usize) -> &[Entry] {
+    let mut seen = 0;
+    for (i, e) in all.iter().enumerate() {
+        if !e.crash && e.kind != Some(Kind::Session) {
+            seen += 1;
+            if seen == jobs {
+                return &all[..=i];
+            }
+        }
+    }
+    all
 }
 
 fn first_line(path: &Path) -> Option<String> {
