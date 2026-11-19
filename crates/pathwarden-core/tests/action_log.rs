@@ -497,42 +497,213 @@ fn a_passphrase_changed_by_an_older_release() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// An older release turned encryption on: actions.json stays plain. It
-/// isn't removed as a planted file: it is read, as untrusted as the rest,
-/// and the next save encrypts it.
+/// A plain actions.json in an encrypted history (an older release left it
+/// when it turned encryption on, or anyone who can push put it there) is
+/// never read, merged, encrypted or removed by itself; the readers say
+/// so, and importing it takes it in on purpose, as untrusted.
 #[test]
-fn encryption_turned_on_by_an_older_release() {
+fn a_plain_file_in_an_encrypted_history_is_only_imported_on_purpose() {
     let (dir, s) = folder_with_a_record("rc2-encrypt");
     let plain = dir.join("actions.json");
-    // A link that isn't https, as anyone could push.
-    let text = std::fs::read_to_string(&plain).unwrap().replace(
-        "\"open\": true",
-        "\"open\": true,\n          \"url\": \"javascript:alert(1)\"",
-    );
+    // A record with a link that isn't https, as anyone could push.
+    let text = std::fs::read_to_string(&plain)
+        .unwrap()
+        .replace(
+            "\"open\": true",
+            "\"open\": true,\n          \"url\": \"javascript:alert(1)\"",
+        )
+        .replace("PW-001-aaaa", "PW-003-cccc")
+        .replace("t-1", "t-p");
     assert!(text.contains("javascript:"));
     encrypt(&s);
-    std::fs::write(&plain, &text).unwrap();
-    std::fs::remove_file(dir.join("actions.json.age")).unwrap();
-    assert!(store::planted_files(&dir).is_empty());
-    let log = action_log::load(&s).unwrap();
-    let r = &log.records("PW-001-aaaa")[0];
-    assert_eq!(r.record.id, "t-1");
-    assert_eq!(r.record.url, None);
+    let sealed = dir.join("actions.json.age");
+    // The real log holds another record; the planted file sits beside it.
     action_log::save(
         &s,
-        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned"),
+        &opened("PW-002-bbbb", "t-9", "2026-11-18T14:30:00.000Z", "ned"),
         true,
     )
     .unwrap();
+    std::fs::write(&plain, &text).unwrap();
+    assert!(store::planted_files(&dir).is_empty());
+    assert!(action_log::plain_left(&s));
+    // Not read, not merged.
+    let log = action_log::load(&s).unwrap();
+    assert!(log.records("PW-003-cccc").is_empty());
+    assert_eq!(log.records("PW-002-bbbb").len(), 1);
+    // A save leaves it as it is.
+    action_log::save(
+        &s,
+        &opened("PW-002-bbbb", "t-10", "2026-11-18T15:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert_eq!(std::fs::read_to_string(&plain).unwrap(), text);
+    assert!(action_log::load(&s)
+        .unwrap()
+        .records("PW-003-cccc")
+        .is_empty());
+    // What it holds, for whoever decides.
+    let summary = action_log::read_plain(&s).unwrap().unwrap().summary(5);
+    assert_eq!(
+        (summary.findings, summary.records, summary.activity),
+        (1, 1, 1)
+    );
+    assert_eq!(summary.newest[0].0, "PW-003-cccc");
+    assert!(
+        summary.newest[0].1.starts_with("Opened t-p — ned"),
+        "{:?}",
+        summary.newest
+    );
+    // Imported on purpose: merged as untrusted, encrypted, plain removed.
+    action_log::import_plain(&s, true).unwrap();
     assert!(!plain.exists());
-    assert!(dir.join("actions.json.age").exists());
-    let ids: Vec<String> = action_log::load(&s)
+    assert!(sealed.exists());
+    assert!(!action_log::plain_left(&s));
+    let log = action_log::load(&s).unwrap();
+    let r = &log.records("PW-003-cccc")[0];
+    assert_eq!(r.record.id, "t-p");
+    assert_eq!(r.record.url, None, "the javascript: link is dropped");
+    assert_eq!(log.records("PW-002-bbbb").len(), 2);
+    assert!(action_log::import_plain(&s, true).is_err(), "nothing left");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// In git, a planted plain file isn't removed by a pull either, and the
+/// import's commit removes it from the repository.
+#[test]
+fn a_planted_file_stays_in_git_until_imported() {
+    if !have_git() {
+        return;
+    }
+    let ks = std::env::temp_dir().join(format!("pathwarden-actionlog-ks-{}", std::process::id()));
+    pathwarden_core::keystore::use_test_store(&ks);
+    let dir = scratch("planted-git");
+    let remote = bare(&dir);
+    let (a, _) = git_store(&remote, &dir.join("a"));
+    a.pull().unwrap();
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    a.encrypt(&pass(PASS), true).unwrap();
+    pathwarden_core::crypt::give_passphrase(&a.dir, pass(PASS));
+    // Someone without the passphrase pushes a plain file.
+    let other = dir.join("other");
+    git(
+        &dir,
+        &[
+            "clone",
+            "-q",
+            "-b",
+            "main",
+            &remote.to_string_lossy(),
+            &other.to_string_lossy(),
+        ],
+    );
+    let forged = "{\"version\":1,\"findings\":{\"PW-001-aaaa\":{\"records\":[{\"action\":\"desk/open\",\"id\":\"x\",\"open\":true,\"at\":\"2026-11-18T13:00:00.000Z\"}]}}}\n";
+    std::fs::write(other.join("actions.json"), forged).unwrap();
+    git(&other, &["add", "actions.json"]);
+    git(&other, &["commit", "-q", "-m", "forged"]);
+    git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    a.pull().unwrap();
+    assert!(action_log::plain_left(&a));
+    let ids: Vec<String> = action_log::load(&a)
         .unwrap()
         .records("PW-001-aaaa")
         .into_iter()
         .map(|r| r.record.id)
         .collect();
-    assert_eq!(ids, ["t-1", "t-2"]);
+    assert_eq!(ids, ["t-1"], "the forged record isn't read");
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert_eq!(git(&remote, &["show", "main:actions.json"]), forged);
+    action_log::import_plain(&a, true).unwrap();
+    assert!(git_command()
+        .arg("-C")
+        .arg(&remote)
+        .args(["cat-file", "-e", "main:actions.json"])
+        .status()
+        .is_ok_and(|s| !s.success()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A save to a log that can't take it is refused and kept nowhere: not
+/// written, and not in the saves waiting for a push.
+#[test]
+fn a_refused_save_is_not_kept_for_later() {
+    if !have_git() {
+        return;
+    }
+    let dir = scratch("refused");
+    let remote = bare(&dir);
+    let (a, _) = git_store(&remote, &dir.join("a"));
+    a.pull().unwrap();
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("a").join("actions.json"),
+        "{\"version\":2,\"findings\":{}}\n",
+    )
+    .unwrap();
+    let change = opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned");
+    assert!(action_log::save(&a, &change, true).is_err());
+    assert_eq!(action_log::pending_count(&a), 0);
+    for locked in [true, false] {
+        assert!(action_log::save_here(&a, &change, locked).is_err());
+        assert_eq!(action_log::pending_count(&a), 0, "locked: {locked}");
+    }
+    // Nothing to prune with a log that can't be read, and nothing grows.
+    action_log::prune_pending(&a);
+    assert_eq!(action_log::pending_count(&a), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// In an encrypted history, the saves waiting for a push are encrypted
+/// with its key, as its files are.
+#[test]
+fn saves_waiting_for_a_push_are_encrypted() {
+    if !have_git() {
+        return;
+    }
+    let ks = std::env::temp_dir().join(format!("pathwarden-actionlog-ks-{}", std::process::id()));
+    pathwarden_core::keystore::use_test_store(&ks);
+    let dir = scratch("pending-sealed");
+    let remote = bare(&dir);
+    let (a, _) = git_store(&remote, &dir.join("a"));
+    a.pull().unwrap();
+    a.write_state_file("last-run.json", b"{}").unwrap();
+    a.encrypt(&pass(PASS), true).unwrap();
+    pathwarden_core::crypt::give_passphrase(&a.dir, pass(PASS));
+    hook(
+        &remote.join("hooks").join("pre-receive"),
+        "#!/bin/sh\nexit 1\n",
+    );
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert_eq!(action_log::pending_count(&a), 1);
+    let raw = std::fs::read(
+        dir.join("a")
+            .join(".git")
+            .join("pathwarden-actions-pending.json"),
+    )
+    .unwrap();
+    assert!(raw.starts_with(b"age-encryption.org/"));
+    assert!(!String::from_utf8_lossy(&raw).contains("PW-001-aaaa"));
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -406,7 +406,7 @@ fn a_later_v1s_fields_and_kinds_are_kept() {
                     "at":"2026-11-18T14:02:11.000Z","updated_at":"2026-11-18T14:02:11.000Z"}]}}}"#;
     let f = parse(later).unwrap();
     let log = &f.findings["PW-001-x"];
-    assert_eq!(log.activity[0].kind, Kind::Other("escalate".into()));
+    assert_eq!(log.activity[0].kind, Kind::Other(Value::from("escalate")));
     assert_eq!(log.activity[0].summary(), "Escalate: Escalated");
     assert_eq!(log.records[0].record.other["sla"], "4h");
     assert_eq!(log.records[0].by.as_deref(), Some("ned"));
@@ -574,4 +574,104 @@ fn a_cancelled_run_is_saved_as_cancelled() {
         .is_none());
     o.dry_run = true;
     assert!(run_change(None, FP, "a/b", "B", None, &o, None, &who("a", "b"), "x").is_none());
+}
+
+/// A kind that isn't text reads back as it was written.
+#[test]
+fn a_kind_of_any_json_reads_back_the_same() {
+    let text = br#"{"version":1,"findings":{"PW-001-x":{"activity":[{"at":"a","action":"a/b","kind":{"name":"escalate","level":2}}]}}}"#;
+    let f = parse(text).unwrap();
+    assert!(matches!(
+        f.findings["PW-001-x"].activity[0].kind,
+        Kind::Other(Value::Object(_))
+    ));
+    let again: Value = serde_json::from_slice(&f.to_bytes()).unwrap();
+    assert_eq!(
+        again["findings"]["PW-001-x"]["activity"][0]["kind"],
+        serde_json::json!({"name":"escalate","level":2})
+    );
+}
+
+/// Fields a later release keeps on a record are capped in all.
+#[test]
+fn a_records_unknown_fields_are_capped() {
+    let big = "x".repeat(3000);
+    let text = format!(
+        r#"{{"version":1,"findings":{{"PW-001-x":{{"records":[{{"action":"a/b","id":"t","a":"{big}","b":"{big}","c":"{big}","d":"{big}"}}]}}}}}}"#
+    );
+    let f = parse(text.as_bytes()).unwrap();
+    let other = &f.findings["PW-001-x"].records[0].record.other;
+    assert_eq!(other.len(), 2, "{:?}", other.keys());
+    assert!(other.contains_key("a") && other.contains_key("b"));
+}
+
+/// The removal remembers when the record was made, so a remover's clock
+/// behind the maker's still removes it; with the remover's clock ahead, a
+/// record made anew is kept once it is later than the removal.
+#[test]
+fn removals_hold_whatever_the_clocks_say() {
+    let ned = who("ned", "WS");
+    let mut f = ActionsFile::default();
+    opened(&f, "2026-11-18T15:00:00.000Z", &ned).apply(&mut f);
+    let r = f.findings[FP].records[0].clone();
+    // Behind: removed "at 14:00", an hour before the record was made.
+    let behind = remove_change(FP, &r, &ned, "2026-11-18T14:00:00.000Z");
+    assert_eq!(behind.removed[0].record_at, "2026-11-18T15:00:00.000Z");
+    let mut late = f.clone();
+    behind.apply(&mut late);
+    assert!(late.findings[FP].records.is_empty());
+    // A stale update of the record started before: stays removed.
+    let stale = ActionRecord {
+        updated_at: "2026-11-18T16:00:00.000Z".into(),
+        ..r.clone()
+    };
+    put_record(late.findings.get_mut(FP).unwrap(), &stale);
+    assert!(late.findings[FP].records.is_empty());
+    // Merged either way, it stays removed.
+    let mut m = f.clone();
+    merge(&mut m, &late);
+    assert!(m.findings[FP].records.is_empty());
+    // Ahead: removed "at 18:00"; a record made anew at 17:00 by a slower
+    // clock is taken for the old one, one made after 18:00 is kept.
+    let ahead = remove_change(FP, &r, &ned, "2026-11-18T18:00:00.000Z");
+    let mut g = f.clone();
+    ahead.apply(&mut g);
+    let at = |t: &str| ActionRecord {
+        at: t.into(),
+        updated_at: t.into(),
+        ..r.clone()
+    };
+    put_record(
+        g.findings.get_mut(FP).unwrap(),
+        &at("2026-11-18T17:00:00.000Z"),
+    );
+    assert!(g.findings[FP].records.is_empty());
+    put_record(
+        g.findings.get_mut(FP).unwrap(),
+        &at("2026-11-18T18:30:00.000Z"),
+    );
+    assert_eq!(g.findings[FP].records.len(), 1);
+}
+
+/// A waiting removal counts as made only once its removal is in the log,
+/// however full the activity is.
+#[test]
+fn a_waiting_removal_is_made_only_when_its_removal_is_there() {
+    let ned = who("ned", "WS");
+    let mut f = ActionsFile::default();
+    opened(&f, "2026-11-18T14:00:00.000Z", &ned).apply(&mut f);
+    let r = f.findings[FP].records[0].clone();
+    let removal = remove_change(FP, &r, &ned, "2026-11-18T14:30:00.000Z");
+    for i in 0..MAX_ACTIVITY {
+        let at = at_of_ms(1_795_017_600_000 + i as i64 * 1000);
+        Change {
+            records: Vec::new(),
+            ..opened(&f, &at, &ned)
+        }
+        .apply(&mut f);
+    }
+    assert!(!removal.is_in(&f));
+    removal.apply(&mut f);
+    assert!(removal.is_in(&f));
+    assert!(f.findings[FP].records.is_empty());
 }

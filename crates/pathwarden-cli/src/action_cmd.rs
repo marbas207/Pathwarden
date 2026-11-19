@@ -181,6 +181,11 @@ enum ActionWhat {
         #[arg(long)]
         json: bool,
     },
+    /// Repairs of what finding actions did, kept in the run history.
+    Log {
+        #[command(subcommand)]
+        what: LogWhat,
+    },
     /// Every run of a finding action, newest first, kept on each finding in
     /// the run history: one finding's, or every finding's.
     Activity {
@@ -190,6 +195,19 @@ enum ActionWhat {
         /// Print JSON instead of text.
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum LogWhat {
+    /// Take a plain actions.json in an encrypted history into the history,
+    /// encrypted. Pathwarden never reads one by itself: anyone who can push
+    /// could have put it there. An older Pathwarden leaves one when it
+    /// turns encryption on. It shows what the file holds and asks first.
+    Import {
+        /// Don't ask before importing it.
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
 }
 
@@ -397,6 +415,9 @@ pub(crate) fn run(a: ActionArgs) -> Result<ExitCode> {
                 ActionWhat::Activity { fingerprint, json } => {
                     activity(&t, fingerprint.as_deref(), json)
                 }
+                ActionWhat::Log {
+                    what: LogWhat::Import { yes },
+                } => import_log(&t, yes),
                 ActionWhat::Check { .. } => unreachable!("handled above"),
             }
         }
@@ -786,6 +807,7 @@ fn run_one(
     json: bool,
 ) -> Result<ExitCode> {
     let ws = workspace(t)?;
+    note_plain(ws);
     let ready = actions_ui::prepare(ws, blocks, ask.run.as_deref(), fingerprint, &ask.ask())
         .map_err(anyhow::Error::msg)?;
     start(ws, &ready, yes, json)
@@ -1087,8 +1109,52 @@ fn finding_key(log: &pathwarden_core::action_log::ActionsFile, fp: &str) -> Stri
         .unwrap_or_else(|| fp.trim().to_string())
 }
 
+/// On stderr: a plain actions.json in the encrypted history wasn't read.
+fn note_plain(ws: &pathwarden_ui::workspace::Workspace) {
+    if actions_ui::plain_left(ws) {
+        eprintln!("Note: {}", pathwarden_core::action_log::PLAIN_LEFT_WORDS);
+    }
+}
+
+fn import_log(t: &Target, yes: bool) -> Result<ExitCode> {
+    let ws = workspace(t)?;
+    let Some(s) = actions_ui::plain_summary(ws, 5).map_err(anyhow::Error::msg)? else {
+        bail!(
+            "There is no plain actions.json in the encrypted history of {}.",
+            t.label
+        );
+    };
+    println!(
+        "The plain actions.json holds {} on {}, with {}.",
+        pathwarden_core::text::count(s.records, "record", "records"),
+        pathwarden_core::text::count(s.findings, "finding", "findings"),
+        pathwarden_core::text::count(s.activity, "entry of activity", "entries of activity"),
+    );
+    if !s.newest.is_empty() {
+        println!("The latest:");
+        for (fp, line) in &s.newest {
+            println!("  {}  {}", ui::safe(fp), ui::safe(line));
+        }
+    }
+    println!(
+        "Import it only if you know where it comes from: anyone who can push to the history could have put it there."
+    );
+    if !yes {
+        confirm("Import it?")?;
+    }
+    let notes = actions_ui::import_plain(ws).map_err(anyhow::Error::msg)?;
+    println!(
+        "Imported: what it holds is in the history, encrypted, and the plain copy is removed."
+    );
+    for n in notes {
+        println!("{}", ui::safe(&n));
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
 fn records(t: &Target, fingerprint: Option<&str>, json: bool) -> Result<ExitCode> {
     let ws = workspace(t)?;
+    note_plain(ws);
     let log = actions_ui::log(ws).map_err(anyhow::Error::msg)?;
     let mut rows: Vec<(String, Vec<actions::ActionRecord>)> = match fingerprint {
         Some(fp) => {
@@ -1136,6 +1202,7 @@ fn records(t: &Target, fingerprint: Option<&str>, json: bool) -> Result<ExitCode
 
 fn activity(t: &Target, fingerprint: Option<&str>, json: bool) -> Result<ExitCode> {
     let ws = workspace(t)?;
+    note_plain(ws);
     let log = actions_ui::log(ws).map_err(anyhow::Error::msg)?;
     // Newest first, each with its finding.
     let mut all: Vec<(String, pathwarden_core::action_log::Activity)> = match fingerprint {

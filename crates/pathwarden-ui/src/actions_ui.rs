@@ -358,6 +358,42 @@ pub fn prepare(
     })
 }
 
+/// Whether the environment's encrypted history holds a plain actions.json,
+/// which is never read ([`action_log::plain_left`]): the command line says
+/// [`action_log::PLAIN_LEFT_WORDS`], a page
+/// [`action_log::PLAIN_LEFT_PAGE_WORDS`].
+pub fn plain_left(ws: &Workspace) -> bool {
+    crate::history_ui::locate(ws, None).is_ok_and(|l| action_log::plain_left(&l.store))
+}
+
+/// What a plain actions.json in the environment's encrypted history holds
+/// (its `newest` latest entries), for someone deciding whether to import
+/// it; `None` when there is none.
+pub fn plain_summary(ws: &Workspace, newest: usize) -> Result<Option<action_log::Summary>, String> {
+    let loc = crate::history_ui::locate(ws, None)?;
+    Ok(action_log::read_plain(&loc.store)
+        .map_err(|e| format!("{e:#}"))?
+        .map(|f| f.summary(newest)))
+}
+
+/// Imports a plain actions.json into the environment's encrypted history
+/// ([`action_log::import_plain`]): under its lock, after a pull, in one
+/// commit pushed when it is in git. Notes for the user.
+pub fn import_plain(ws: &Workspace) -> Result<Vec<String>, String> {
+    let config = ws.config().map_err(|e| format!("{e:#}"))?;
+    let loc = crate::history_ui::locate_with(ws, None, &config)?;
+    let _lock = loc
+        .store
+        .lock_waiting(pathwarden_core::settings_sync::lock_wait())
+        .map_err(|e| format!("{e:#}"))?;
+    let pulled = loc
+        .store
+        .pull()
+        .map_err(|e| format!("Couldn't get the latest history: {e:#}"))?;
+    let notes = action_log::import_plain(&loc.store, loc.push).map_err(|e| format!("{e:#}"))?;
+    Ok(pulled.into_iter().chain(notes).collect())
+}
+
 /// What a page shows of finding actions on one finding (the report's
 /// `report_meta`, the Activity list): the actions offered on it, its
 /// records with their chips and follow-ups, and its activity, newest

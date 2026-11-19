@@ -1145,9 +1145,11 @@ fn max_state_bytes(rel: &str) -> Option<u64> {
 }
 
 /// A plain `rel` in an encrypted history in `dir`, which an older release
-/// left when it turned encryption on ([`crate::action_log::load`] reads
-/// it, as untrusted as the rest): at most `max` bytes, never through a
-/// link. `None` when there is none, or the history is plain.
+/// may have left when it turned encryption on, or anyone who can push may
+/// have put there: never read into the history, only shown to someone
+/// deciding whether to import it ([`crate::action_log::read_plain`]). At
+/// most `max` bytes, never through a link. `None` when there is none, or
+/// the history is plain.
 pub(crate) fn read_leftover(dir: &Path, rel: &str, max: u64) -> Result<Option<Vec<u8>>> {
     if !crypt::is_encrypted(dir) {
         return Ok(None);
@@ -1169,6 +1171,16 @@ pub(crate) fn read_leftover(dir: &Path, rel: &str, max: u64) -> Result<Option<Ve
         .into()),
         Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
     }
+}
+
+/// Removes a plain `rel` from an encrypted history in `dir`, once its
+/// contents were taken in on purpose
+/// ([`crate::action_log::import_plain`]).
+pub(crate) fn remove_plain_leftover(dir: &Path, rel: &str) -> Result<bool> {
+    if !crypt::is_encrypted(dir) {
+        bail!("the history isn't encrypted");
+    }
+    remove_if_there(&dir.join(rel))
 }
 
 /// `path`'s bytes, or a `FileTooLarge` error when it holds more than
@@ -1773,7 +1785,9 @@ pub fn write_state_file(dir: &Path, rel: &str, bytes: &[u8]) -> Result<Vec<Strin
             if !fs::read(&path).is_ok_and(|b| crypt::is_stub(&b)) {
                 write_atomic(&path, &crypt::stub())?;
             }
-        } else {
+        } else if rel != crate::action_log::FILE {
+            // A plain actions.json is never read, and never removed but on
+            // purpose ([`remove_plain_leftover`]).
             remove_if_there(&dir.join(rel))?;
         }
     } else {
@@ -1853,9 +1867,8 @@ pub fn planted_files(dir: &Path) -> Vec<String> {
     if !crypt::is_encrypted(dir) {
         return Vec::new();
     }
-    // A plain actions.json an older release left when it turned encryption
-    // on is read as untrusted and encrypted by the next save, never removed
-    // ([`crate::action_log::load`]).
+    // A plain actions.json is never read, and never removed but when
+    // someone imports it ([`crate::action_log::import_plain`]).
     let mut out: Vec<String> = single_files()
         .filter(|f| *f != crate::action_log::FILE)
         .filter(|f| {

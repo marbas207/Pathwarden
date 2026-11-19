@@ -427,6 +427,9 @@ fn actions_are_added_run_checked_and_removed() {
         out.contains(&format!("Checking fake-action on {high}.")),
         "{out}"
     );
+    // Nothing to import in a plain history.
+    let (_, e) = err(&call(&["log", "import", "-y"], &[]));
+    assert!(e.contains("There is no plain actions.json"), "{e}");
     // Check and test are dry runs: nothing more was saved.
     let act = json(&call(&["activity", "--json"], &[]));
     assert_eq!(act.as_array().unwrap().len(), 4, "{act}");
