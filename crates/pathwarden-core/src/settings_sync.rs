@@ -1651,7 +1651,7 @@ impl Outcome {
             out.push(if page {
                 format!(
                     "Only on this computer: {}. This computer only reads the history, so they \
-                     stay here; Use the shared settings on Settings replaces them.",
+                     stay here; Use shared settings on Settings replaces them.",
                     d.here_only.join(", ")
                 )
             } else {

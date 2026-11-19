@@ -342,11 +342,11 @@ async fn the_switcher_scopes_every_page() {
         !runs.contains(&default_run),
         "Default's run is not listed in Lab"
     );
+    // Settings names the environment it sets up (its file is on
+    // Environments).
     let (_, settings) = a.get("/settings").await;
+    assert!(settings.contains("Set up how Lab is judged"), "{settings}");
     let lab_dir = a.state.workspace.root().join("environments").join("lab");
-    assert!(settings.contains(&pathwarden_ui::workspace::shown_path(
-        &lab_dir.join("pathwarden.toml")
-    )));
     let (_, history) = a.get("/automate/history").await;
     assert!(history.contains(&pathwarden_ui::workspace::shown_path(
         &lab_dir.join("pathwarden-state")

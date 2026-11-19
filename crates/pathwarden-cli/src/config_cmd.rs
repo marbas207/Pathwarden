@@ -121,14 +121,14 @@ enum ConfigWhat {
     /// takes the history's settings and saves its own pathwarden.toml
     /// beside it first.
     Sync {
-        /// Use the shared settings: for sections that differ from them, and
+        /// Use shared settings: for sections that differ from them, and
         /// on a computer that only reads those only on this computer too
         /// (replaces this computer's); or the ones --section names.
         #[arg(long, conflicts_with_all = ["keep_local", "status"])]
         use_repo: bool,
-        /// Keep this computer's sections and share them (a computer that
-        /// pushes): those that differ from the shared settings, or the ones
-        /// --section names.
+        /// Use local settings: keep this computer's sections and share them
+        /// (a computer that pushes): those that differ from the shared
+        /// settings, or the ones --section names.
         #[arg(long, conflicts_with = "status")]
         keep_local: bool,
         /// With --use-repo or --keep-local: only this section: tier_zero,

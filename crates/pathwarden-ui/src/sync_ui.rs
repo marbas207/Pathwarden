@@ -158,10 +158,10 @@ fn sections_words(names: &[&str]) -> String {
     }
 }
 
-/// The line under a configuration page's title: where the settings are
-/// shared and whether they are up to date, with the details behind ⓘ; or,
-/// when a section changed here and in the repository, the note that asks
-/// for a choice.
+/// What a configuration page says at its top about the shared settings,
+/// only when there is something to act on: the repository's settings can't
+/// be read here, or a section changed here and in the repository (the note
+/// that asks for a choice, on one line once dismissed). Otherwise nothing.
 pub fn sync_line(v: &View, page: &str) -> String {
     let s = &v.status;
     // Not "up to date": nothing here says what the repository holds.
@@ -227,112 +227,9 @@ pub fn sync_line(v: &View, page: &str) -> String {
             esc(s.differs_key.as_deref().unwrap_or_default()),
         );
     }
-    let changed = |c: Changed| s.sections.iter().filter(|x| x.state == c).count();
-    let n = |k: usize| crate::pages::num(k);
-    let changes = |k: usize| if k == 1 { "change" } else { "changes" };
-    let (class, words) = if !s.in_repository {
-        (
-            "chg",
-            if v.pushes {
-                "not shared yet".to_string()
-            } else {
-                "nothing shared yet".to_string()
-            },
-        )
-    } else if changed(Changed::Here) > 0 {
-        let k = changed(Changed::Here);
-        (
-            "chg",
-            if v.pushes {
-                format!("{} {} not shared yet", n(k), changes(k))
-            } else {
-                format!("{} {} only on this computer", n(k), changes(k))
-            },
-        )
-    } else if changed(Changed::Repository) > 0 {
-        let k = changed(Changed::Repository);
-        (
-            "chg",
-            format!(
-                "{} shared {}, applied at the next sync",
-                n(k),
-                if k == 1 { "update" } else { "updates" }
-            ),
-        )
-    } else {
-        ("ok", "up to date".to_string())
-    };
-    let mut rows: Vec<(String, String)> = Vec::new();
-    if !v.pushes {
-        rows.push((
-            "This computer".into(),
-            if changed(Changed::Here) > 0 {
-                "Only reads the shared settings: your change stays here".into()
-            } else {
-                "Only reads the shared settings".into()
-            },
-        ));
-    }
-    let changed_rows: Vec<_> = s
-        .sections
-        .iter()
-        .filter(|x| x.state != Changed::InStep)
-        .collect();
-    if changed_rows.is_empty() {
-        rows.push((
-            "Shared".into(),
-            "Tier Zero additions, rules, accepted risks, zones, management planes and mapping \
-             packs"
-                .into(),
-        ));
-        if let Some(c) = &s.last_change {
-            if !c.sections.is_empty() {
-                rows.push(("Last change".into(), esc(&sections_words(&c.sections))));
-            }
-            if let Some(w) = who(&c.by, &c.on) {
-                rows.push(("By".into(), esc(&w)));
-            }
-            rows.push(("When".into(), when(&c.at)));
-        }
-    } else {
-        for x in &changed_rows {
-            rows.push((x.name.to_string(), state_words(v, x.state).into()));
-        }
-        rows.push(("Other settings".into(), "Up to date".into()));
-    }
-    if let Some(w) = &s.written_by_version {
-        rows.push((
-            "Written by".into(),
-            if s.newer_writer {
-                format!("Pathwarden {} (newer than this one)", esc(w))
-            } else {
-                format!("Pathwarden {}", esc(w))
-            },
-        ));
-    }
-    // Plain text by choice: said on the line, never the "up to date" colour.
-    let (line_class, class, plain) = if s.encrypted {
-        ("sync-line", class, "")
-    } else {
-        rows.push((
-            "Encryption".into(),
-            "Off: anyone who can read the repository sees these settings and who accepted each \
-             risk"
-                .into(),
-        ));
-        (
-            "sync-line plain",
-            if class == "ok" { "" } else { class },
-            r#"<span class="sep">·</span><span class="chg">in plain text (not encrypted)</span>"#,
-        )
-    };
-    format!(
-        r#"<p class="{line_class}">{}<span>Shared through <code>{}</code></span><span class="sep">·</span><span class="{class}">{}</span>{plain}{}</p>"#,
-        icon("i-history"),
-        esc(&v.remote),
-        esc(&words),
-        tip(&format!("sync-{page}"), "Shared settings", &rows, false),
-    )
+    // Nothing to act on: nothing at the top of the page. Where the history
+    // lives, and whether it is encrypted, is History storage's to say.
+    String::new()
 }
 
 /// A section's state in the pages' words: "Not shared yet" ("Only on this
@@ -421,7 +318,7 @@ pub fn conflict(v: &View, key: &str) -> Option<String> {
         })
         .unwrap_or_default();
     let mut b = format!(
-        r#"<div class="cmp"><div><h3>This computer <span class="muted">{here_when}</span></h3>{}</div><div><h3>Shared <span class="muted">{repo_who}</span></h3>{}</div></div><div class="cmp-actions"><span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{key}">Use the shared settings</button><span class="act-help">Replaces this computer's</span></span>"#,
+        r#"<div class="cmp"><div><h3>This computer <span class="muted">{here_when}</span></h3>{}</div><div><h3>Shared <span class="muted">{repo_who}</span></h3>{}</div></div><div class="cmp-actions"><span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{key}">Use shared settings</button><span class="act-help">Replaces local settings with the shared ones</span></span>"#,
         list(&d.here),
         list(&d.repository),
         key = esc(key),
@@ -429,7 +326,7 @@ pub fn conflict(v: &View, key: &str) -> Option<String> {
     if v.pushes {
         let _ = write!(
             b,
-            r#"<span class="act"><button type="button" class="btn primary" data-sync-action="keep_local" data-sync-section="{key}">Keep this computer's</button><span class="act-help">Shares them with everyone on this history</span></span>"#,
+            r#"<span class="act"><button type="button" class="btn primary" data-sync-action="keep_local" data-sync-section="{key}">Use local settings</button><span class="act-help">Overwrites the settings in the shared repository</span></span>"#,
             key = esc(key),
         );
     }
@@ -444,7 +341,7 @@ pub fn reader_action(v: &View, key: &str) -> String {
         return String::new();
     }
     format!(
-        r#"<span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{}">Use the shared settings</button><span class="act-help">Replaces this computer's</span></span>"#,
+        r#"<span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{}">Use shared settings</button><span class="act-help">Replaces local settings with the shared ones</span></span>"#,
         esc(key)
     )
 }
@@ -727,7 +624,7 @@ pub(crate) struct SyncBody {
 }
 
 /// `POST /api/settings/sync`: the conflict's buttons (and a reader's
-/// "Use the shared settings") for one section, as `pathwarden config sync
+/// "Use shared settings") for one section, as `pathwarden config sync
 /// --use-repo|--keep-local --section KEY`.
 pub(crate) async fn sync_section(State(st): State<Shared>, Json(body): Json<SyncBody>) -> Response {
     let ws = st.ws();

@@ -172,9 +172,17 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     };
     let (s, page) = a.get("/settings").await;
     assert_eq!(s, StatusCode::OK);
+    // Nothing to act on: nothing about sharing, nor the file, at the top.
     assert!(
-        page.contains("Shared through") && page.contains("up to date"),
+        !page.contains("Shared through")
+            && !page.contains("sync-conflict")
+            && !page.contains("cfg-file")
+            && !page.contains("Changes are written to this file"),
         "{page}"
+    );
+    assert!(
+        page.contains("Set up how ") && page.contains(" is judged: extra Tier Zero objects"),
+        "the description: {page}"
     );
     assert!(!page.contains("nav-dot"), "nothing differs: no dot");
     assert!(
@@ -243,7 +251,10 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         "no commands on pages: {notes:?}"
     );
     let (_, page) = a.get("/settings").await;
-    assert!(page.contains("up to date"), "both saves arrived: {page}");
+    assert!(
+        !page.contains("sync-conflict") && !page.contains("Differs from"),
+        "both saves arrived: {page}"
+    );
 
     // Both change Tier Zero: the page asks for a choice. (The other machine
     // takes this one's change first.)
@@ -286,9 +297,11 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         "what happens meanwhile: {page}"
     );
     assert!(
-        page.contains("Keep this computer")
-            && page.contains("Use the shared settings")
-            && page.contains("Differs from the shared settings"),
+        page.contains("Use local settings")
+            && page.contains("Use shared settings")
+            && page.contains("Differs from the shared settings")
+            && page.contains("Replaces local settings with the shared ones")
+            && page.contains("Overwrites the settings in the shared repository"),
         "{page}"
     );
     assert!(
@@ -348,7 +361,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     );
     assert!(!page.contains("data-sync-dismiss"), "{page}");
     assert!(
-        page.contains("CASTELBLACK$") && page.contains("Keep this computer"),
+        page.contains("CASTELBLACK$") && page.contains("Use local settings"),
         "the comparison stays: {page}"
     );
     // The same difference after a restart: still dismissed.
@@ -369,7 +382,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     .unwrap();
     let (_, page) = a.get("/runs").await;
     assert!(dot(&page), "a changed difference: {page}");
-    // Keep this computer's: shared, up to date again.
+    // Use local settings: shared, up to date again.
     let (s, r) = a
         .post(
             "/api/settings/sync",
@@ -378,8 +391,8 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         .await;
     assert_eq!(s, StatusCode::OK, "{r}");
     let (_, page) = a.get("/settings").await;
-    assert!(page.contains("up to date"), "{page}");
-    assert!(!page.contains("Keep this computer"));
+    assert!(!page.contains("sync-conflict"), "{page}");
+    assert!(!page.contains("Use local settings"));
     assert!(!dot(&page), "resolved: {page}");
     // Resolved: the dismissal is gone, so the next difference shows.
     {
@@ -555,13 +568,10 @@ async fn full_runs_and_settings_shares_nothing_plain() {
         all_objects(&remote).contains("Break-glass, reviewed quarterly"),
         "shared in plain text, as chosen"
     );
-    // ... and said so, never in the "up to date" colour.
+    // ... and said so on History storage, the one place that says where
+    // the history lives and whether it is encrypted; not atop Settings.
     let (_, page) = a.get("/settings").await;
-    assert!(
-        page.contains(r#"<p class="sync-line plain">"#)
-            && page.contains("in plain text (not encrypted)"),
-        "{page}"
-    );
+    assert!(!page.contains("Shared through"), "{page}");
     let (_, page) = a.get("/automate/history").await;
     assert!(page.contains("in plain text (not encrypted)"), "{page}");
 

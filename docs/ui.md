@@ -83,13 +83,16 @@ objects for a zone.
 
 **Settings** (Tier Zero additions, **Rules**, **Accepted risks**), **Zones**
 and **Mappings** ([opengraph.md](opengraph.md)) edit the environment's
-`pathwarden.toml`. Changes apply from the next analysis.
+`pathwarden.toml` (its folder is on **Environments**). Changes apply from
+the next analysis. A page says something at its top only when there is
+something to do: the file can't be loaded, the shared settings can't be
+read, or they differ from this computer's.
 
 In a git history that keeps **Full runs and settings**, these settings are
-shared, and the line under each page's title says whether they are **up to
-date**. When this computer's and the shared ones both changed since this
-computer last synced, the page shows both sides: **Use the shared settings**
-or **Keep this computer's**. Until you choose, runs here use this
+shared; **History storage** says where the history is and whether it is
+encrypted. When this computer's and the shared ones both changed since this
+computer last synced, the page shows both sides: **Use shared settings**
+or **Use local settings**. Until you choose, runs here use this
 computer's. An amber dot beside **Settings** in the sidebar marks it on
 every page; **Dismiss** on the note hides the dot on this computer until
 something else differs. The CLI equivalents are `pathwarden config sync --use-repo` and

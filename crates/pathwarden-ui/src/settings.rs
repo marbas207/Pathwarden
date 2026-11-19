@@ -435,37 +435,23 @@ pub(crate) fn applies_parts(c: &Config) -> Option<String> {
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
-/// The file's location and state, under each configuration page's title.
-/// [`file_line`] for the pages other than Settings: the file only once it
-/// exists (Settings says it isn't created yet), and its error always.
+/// Under a configuration page's title, only when `pathwarden.toml` can't
+/// be loaded: what is wrong and how to fix it. (Where the file is, the
+/// Environments page says.)
 pub(crate) fn file_line_if_there(st: &AppState, loaded: &Loaded) -> String {
-    if loaded.exists || loaded.error.is_some() {
-        file_line(st, loaded)
-    } else {
-        String::new()
-    }
+    file_line(st, loaded)
 }
 
-pub(crate) fn file_line(st: &AppState, loaded: &Loaded) -> String {
-    let status = if loaded.exists {
-        "Changes are written to this file; comments and anything you added by hand are kept."
-    } else {
-        "Not created yet: the first save creates it from the annotated example."
+/// [`file_line_if_there`].
+pub(crate) fn file_line(_st: &AppState, loaded: &Loaded) -> String {
+    let Some(e) = &loaded.error else {
+        return String::new();
     };
-    let mut s = format!(
-        r#"<p class="cfg-file">{} <code>{}</code> <span class="muted">{status}</span></p>"#,
-        icon("i-file"),
-        esc(&crate::workspace::shown_path(&st.ws().config_path())),
-    );
-    if let Some(e) = &loaded.error {
-        let _ = write!(
-            s,
-            r#"<div class="cfg-error card" role="alert">{}<div><strong>{CONFIG_FILE} can't be loaded, so analyzing fails until it is fixed.</strong><pre>{}</pre><p class="muted small">Fix it in a text editor, or save a change here that fixes it. Pages show the defaults until then.</p></div></div>"#,
-            icon("i-alert"),
-            esc(e)
-        );
-    }
-    s
+    format!(
+        r#"<div class="cfg-error card" role="alert">{}<div><strong>{CONFIG_FILE} can't be loaded, so analyzing fails until it is fixed.</strong><pre>{}</pre><p class="muted small">Fix it in a text editor, or save a change here that fixes it. Pages show the defaults until then.</p></div></div>"#,
+        icon("i-alert"),
+        esc(e)
+    )
 }
 
 // ------------------------------------------------------------------ page
@@ -534,11 +520,16 @@ fn render(
     let _ = write!(
         b,
         r##"<div class="page-head"><div><p class="eyebrow">Configure</p><h1 class="panel-title">Settings</h1>
-<p class="lead">How Pathwarden judges your directory. Every analysis, here and on the command line, reads these settings.</p></div></div>
+<p class="lead">Set up how {env} is judged: extra Tier Zero objects, rules, accepted risks and evidence signing.</p></div></div>
 {file}{line}
 <nav class="jump" aria-label="Sections"><a href="#tier-zero">Tier Zero</a><a href="#settings-folders">Tier Zero settings folders</a><a href="#rules">Rules</a><a href="#risks">Accepted risks</a><a href="#evidence">Evidence packs</a></nav>
 "##,
         file = file_line(st, loaded),
+        env = if ctx.env_name.trim().is_empty() {
+            "this environment".to_string()
+        } else {
+            esc(&ctx.env_name)
+        },
         line = sync
             .map(|v| crate::sync_ui::sync_line(v, "settings"))
             .unwrap_or_default(),

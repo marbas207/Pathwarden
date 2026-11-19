@@ -1268,7 +1268,7 @@
     });
   });
 
-  // "Use the shared settings" / "Keep this computer's" for one section.
+  // "Use shared settings" / "Use local settings" for one section.
   all("[data-sync-action]").forEach(function (b) {
     b.addEventListener("click", function () {
       var holder = b.closest(".cmp-actions, .card-actions, .card") || document.body;
