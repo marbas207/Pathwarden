@@ -80,6 +80,48 @@ replace settings this computer had, its `pathwarden.toml` and any mapping
 pack replaced are saved first, as `<file>.before-connect-<date>` next to
 them.
 
+### Shared settings
+
+With full runs and settings in a git history, Tier Zero additions, Tier
+Zero settings folders, rule settings, accepted risks, zones, management
+planes and mapping packs are shared. Every save, run and pull syncs them;
+`pathwarden config sync` does it on demand, and `--status` shows each
+section.
+
+When two computers change them between syncs, the changes are merged entry
+by entry: different entries changed on each side are all kept, and an entry
+removed on one side and untouched on the other is removed. Comments and
+hand edits in `pathwarden.toml` stay. Only the same entry changed to
+different values on both sides, or changed on one and removed on the other,
+has two values:
+
+```text
+$ pathwarden config sync
+Merged from the shared settings: CASTELBLACK$ added to Tier Zero.
+Shared from this computer: WINTERFELL$ added to Tier Zero.
+
+1 setting has two values:
+
+  Stale Tier Zero account (rules.stale_days)
+    This computer   30 days
+    Shared          60 days   NORTH\ned on SECOPS-WS02, Nov 18, 2026, 5:55 PM
+
+Until you choose, runs here use 30 days. Everything else is up to date.
+```
+
+Until you choose, runs on this computer use its own value for that entry
+only. Then:
+
+- `pathwarden config sync --use-repo` takes the shared value for every
+  setting with two values, and prints each one;
+- `pathwarden config sync --keep-local` keeps this computer's and shares it
+  (not on a read-only computer, which only takes the shared ones; there,
+  `--use-repo` also drops the changes made only here);
+- `--section rules.stale_days` (the name `config sync` prints) settles one
+  setting; `--section rules` settles a whole section. Repeat it for more.
+
+`config sync` exits with code 2 while a setting has two values.
+
 ## Exit codes
 
 | Code | Meaning |

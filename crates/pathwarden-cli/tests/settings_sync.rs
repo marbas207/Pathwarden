@@ -272,34 +272,59 @@ fn settings_go_through_the_repository_from_the_terminal() {
     );
     assert_eq!(status(&ws)["state"], "in_step");
 
-    // Both change Tier Zero: the workstation's change is pushed; the
-    // scheduler's meets it and stops, for that section only.
+    // Both add Tier Zero: both are kept, without asking.
     ok(&ws.run(&["tier-zero", "add", "SVC_BACKUP@NORTH.LOCAL", "--force"]));
     let (_, e) = ok(&sched.run(&["tier-zero", "add", "SVC_OTHER@NORTH.LOCAL", "--force"]));
     assert!(
-        e.contains("This computer's Tier Zero additions differ from the shared ones."),
+        e.contains("Merged from the shared settings: SVC_BACKUP@NORTH.LOCAL added to Tier Zero.")
+            && e.contains("Shared from this computer"),
         "{e}"
     );
+    // Both set the stale days: that one setting has two values.
+    ok(&ws.run(&["rules", "set", "--stale-days", "60"]));
     let (_, e) = ok(&sched.run(&["rules", "set", "--stale-days", "30"]));
-    assert!(e.contains("rule settings changed"), "{e}");
+    assert!(e.contains("Stale Tier Zero account has two values."), "{e}");
     let v = status(&sched);
     assert_eq!(v["state"], "both");
-    assert_eq!(section(&v, "tier_zero"), "both");
-    assert_eq!(section(&v, "rules"), "in_step");
+    assert_eq!(section(&v, "rules"), "both");
+    assert_eq!(section(&v, "tier_zero"), "in_step");
+    assert_eq!(v["clashes"][0]["id"], "rules.stale_days", "{v}");
+    let (text, _) = ok(&sched.run(&["sync", "--status"]));
+    assert!(
+        text.contains("1 setting has two values: stale_days (here 30, shared 60)"),
+        "{text}"
+    );
     let out = sched.run(&["sync"]);
     assert_eq!(out.status.code(), Some(2));
     let text = String::from_utf8_lossy(&out.stdout);
+    for line in [
+        "1 setting has two values:",
+        "Stale Tier Zero account (rules.stale_days)",
+        "This computer   30 days",
+        "Shared          60 days",
+        r"NORTH\arya.stark on SECOPS-WS02",
+        "Until you choose, runs here use 30 days. Everything else is up to date.",
+        "pathwarden config sync --use-repo --section rules.stale_days   use 60 days here",
+        "pathwarden config sync --keep-local --section rules.stale_days   keep 30 days and share it",
+    ] {
+        assert!(text.contains(line), "{line}: {text}");
+    }
+    // Keep the scheduler's for every setting with two values: the
+    // workstation follows.
+    let (text, _) = ok(&sched.run(&["sync", "--keep-local"]));
     assert!(
-        text.contains("Tier Zero additions") && text.contains("--keep-local"),
+        text.contains(
+            "Stale Tier Zero account: kept 30 days and pushed it to the shared settings."
+        ) && text.contains("Everything is up to date."),
         "{text}"
     );
-    // Keep the scheduler's: the workstation follows.
-    let (text, _) = ok(&sched.run(&["sync", "--keep-local"]));
-    assert!(text.contains("Shared with this history"), "{text}");
     let (text, _) = ok(&ws.run(&["sync"]));
     assert!(text.contains("applied here"), "{text}");
     let (text, _) = ok(&ws.run(&["tier-zero", "list"]));
-    assert!(!text.contains("SVC_BACKUP"), "{text}");
+    assert!(
+        text.contains("SVC_BACKUP") && text.contains("SVC_OTHER"),
+        "{text}"
+    );
     let (text, _) = ok(&ws.run(&["rules", "show"]));
     assert!(text.contains("30"), "{text}");
     // Up to date: nothing to do.

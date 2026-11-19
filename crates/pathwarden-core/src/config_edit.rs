@@ -483,6 +483,17 @@ fn sync_array(arr: &mut Array, items: &[String]) {
     }
 }
 
+/// [`set_strings`], for the shared settings' merge: the list keeps its
+/// entries' places and comments.
+pub(crate) fn set_string_list(
+    t: &mut dyn TableLike,
+    key: &str,
+    items: &[String],
+    keep_empty: bool,
+) {
+    set_strings(t, key, items, keep_empty);
+}
+
 /// Sets a list of strings. An empty list removes the key unless `keep_empty`.
 fn set_strings(t: &mut dyn TableLike, key: &str, items: &[String], keep_empty: bool) {
     if items.is_empty() && !keep_empty {
@@ -875,6 +886,21 @@ impl ConfigDoc {
 
     pub fn text(&self) -> String {
         self.doc.to_string()
+    }
+
+    /// The document, for the shared settings' merge.
+    pub(crate) fn doc(&self) -> &DocumentMut {
+        &self.doc
+    }
+
+    pub(crate) fn doc_mut(&mut self) -> &mut DocumentMut {
+        &mut self.doc
+    }
+
+    /// Numbers the tables in the order the document holds them (after
+    /// entries came from another document).
+    pub(crate) fn renumber(&mut self) {
+        renumber(&mut self.doc);
     }
 
     /// The document as every command would load it, or why it can't be.
@@ -2027,7 +2053,7 @@ pub const NEVER_SHARED: &[&str] = &[
 
 /// `text` without the comment lines (and blank ones) it starts with: the
 /// header Pathwarden writes on the repository's settings file.
-fn strip_header(text: &str) -> &str {
+pub(crate) fn strip_header(text: &str) -> &str {
     let mut rest = text;
     loop {
         let line_end = rest.find('\n').map_or(rest.len(), |i| i + 1);

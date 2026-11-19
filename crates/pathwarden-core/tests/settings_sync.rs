@@ -350,7 +350,8 @@ fn each_section_is_settled_on_its_own() {
     assert_eq!(set["PW-011"].at.as_deref(), Some("2026-10-22T14:03:11Z"));
     assert_eq!(a.status().state, Changed::InStep);
 
-    // Both change the rules, and B also adds Tier Zero: only the rules stop.
+    // Both change one rule setting, and B also adds Tier Zero: only that
+    // setting waits.
     a.edit(|d| d.set_rules(&rules(40), &stamp("ned", "A")).unwrap());
     b.edit(|d| {
         d.set_rules(&rules(50), &stamp("ned", "A")).unwrap();
@@ -365,9 +366,12 @@ fn each_section_is_settled_on_its_own() {
     assert_eq!(a.config().tier_zero, ["T"]);
     let s = o.sentence().unwrap();
     assert!(
-        s.contains("This computer's rule settings differ from the shared ones."),
+        s.contains("Stale Tier Zero account has two values. Stale Tier Zero account: 40 days here, 50 days shared."),
         "{s}"
     );
+    assert!(s.contains("--section` rules.stale_days"), "{s}");
+    assert_eq!(o.status.clashes.len(), 1, "{:?}", o.status.clashes);
+    assert_eq!(o.status.clashes[0].id, "rules.stale_days");
     assert_eq!(section(&a.status(), "rules"), Changed::Both);
     assert_eq!(a.status().state, Changed::Both);
     // Still stopped on the next pull.
@@ -378,7 +382,13 @@ fn each_section_is_settled_on_its_own() {
     b.edit(|d| d.set_tier_zero(&[]).unwrap());
     b.sync(Resolve::Auto).unwrap();
     let o = a.sync(Resolve::KeepLocal(vec![])).unwrap();
-    assert_eq!(o.done.pushed, ["Rule settings"], "{:?}", o.done);
+    assert_eq!(
+        o.done.settled,
+        ["Stale Tier Zero account: kept 40 days and pushed it to the shared settings."],
+        "{:?}",
+        o.done
+    );
+    assert!(!pushed(&o).is_empty());
     assert_eq!(o.done.applied, ["Tier Zero additions"], "{:?}", o.done);
     assert_eq!(o.status.state, Changed::InStep);
     assert!(a.config().tier_zero.is_empty());
@@ -387,18 +397,42 @@ fn each_section_is_settled_on_its_own() {
     assert_eq!(b.config().rules.stale_days, 40);
     assert!(b.config().tier_zero.is_empty());
 
-    // Both again; this time A takes the repository's, for that section.
+    // Both add Tier Zero: both are kept, with nothing to choose.
     a.edit(|d| d.set_tier_zero(&["X".into()]).unwrap());
     b.edit(|d| d.set_tier_zero(&["Y".into()]).unwrap());
+    b.sync(Resolve::Auto).unwrap();
+    let o = a.sync(Resolve::Auto).unwrap();
+    assert!(!o.conflict(), "{:?}", o.done);
+    assert_eq!(o.done.merged, ["Y added to Tier Zero"], "{:?}", o.done);
+    assert_eq!(o.done.shared, ["X added to Tier Zero"], "{:?}", o.done);
+    assert_eq!(a.config().tier_zero, ["X", "Y"]);
+    b.sync(Resolve::Auto).unwrap();
+    assert_eq!(b.config().tier_zero, ["Y", "X"]);
+
+    // One setting with two values; A takes the repository's, for that
+    // entry only.
+    a.edit(|d| d.set_rules(&rules(60), &stamp("ned", "A")).unwrap());
+    b.edit(|d| d.set_rules(&rules(70), &stamp("ned", "A")).unwrap());
     b.sync(Resolve::Auto).unwrap();
     assert!(a.sync(Resolve::Auto).unwrap().conflict());
     let e = a
         .sync(Resolve::UseRepo(vec!["tierzero".into()]))
         .unwrap_err();
     assert!(e.to_string().contains("not a shared section"), "{e}");
-    let o = a.sync(Resolve::UseRepo(vec!["tier_zero".into()])).unwrap();
-    assert_eq!(o.done.applied, ["Tier Zero additions"], "{:?}", o.done);
-    assert_eq!(a.config().tier_zero, ["Y"]);
+    let e = a
+        .sync(Resolve::UseRepo(vec!["rules.krbtgt_age_days".into()]))
+        .unwrap_err();
+    assert!(e.to_string().contains("nothing to choose"), "{e}");
+    let o = a
+        .sync(Resolve::UseRepo(vec!["RULES.stale_days".into()]))
+        .unwrap();
+    assert_eq!(
+        o.done.settled,
+        ["Stale Tier Zero account: now 70 days, from the shared settings."],
+        "{:?}",
+        o.done
+    );
+    assert_eq!(a.config().rules.stale_days, 70);
     assert_eq!(a.status().state, Changed::InStep);
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -1308,7 +1342,8 @@ fn a_new_computer_takes_the_historys_settings() {
     w.sync(Resolve::Auto).unwrap();
     assert_eq!(w.config().rules.stale_days, 45);
 
-    // Edits on two computers after the first sync still differ from the shared ones.
+    // The same setting edited on two computers after the first sync has
+    // two values.
     w.edit(|d| d.set_rules(&rules(50, &[]), &stamp("ned", "W")).unwrap());
     w.sync(Resolve::Auto).unwrap();
     n.edit(|d| d.set_rules(&rules(60, &[]), &stamp("arya", "N")).unwrap());
@@ -1318,10 +1353,7 @@ fn a_new_computer_takes_the_historys_settings() {
     assert_eq!(section(&n.status(), "rules"), Changed::Both);
     let s = o.page_sentence().unwrap();
     assert!(
-        s.contains(
-            "This computer's rule settings differ from the shared ones. Both changed since this \
-             computer last synced."
-        ),
+        s.contains("Stale Tier Zero account has two values. Choose on Settings."),
         "{s}"
     );
     assert!(
@@ -1379,8 +1411,9 @@ fn zone(name: &str) -> config_edit::ZoneEdit {
 }
 
 /// A reader's section kept only on this computer is a section synced as
-/// absent: a shared version that arrives later differs from the shared ones, never
-/// replacing it as a first sync would.
+/// absent: a shared version that arrives later is merged with it entry by
+/// entry, never replacing it as a first sync would; an entry of the same
+/// name with other contents has two values.
 #[test]
 fn a_readers_own_section_is_not_replaced_later() {
     if !have_git() {
@@ -1399,10 +1432,38 @@ fn a_readers_own_section_is_not_replaced_later() {
     w.edit(|d| d.upsert_zone(None, None, &zone("Theirs")).unwrap());
     w.sync(Resolve::Auto).unwrap();
     let o = r.sync(Resolve::Auto).unwrap();
-    assert_eq!(o.done.conflict, ["Zones"], "{:?}", o.done);
+    assert!(o.done.conflict.is_empty(), "{:?}", o.done);
     assert!(o.done.taken.is_empty(), "{:?}", o.done);
-    assert_eq!(r.config().zones.len(), 1);
-    assert_eq!(r.config().zones[0].name, "Mine");
+    assert_eq!(o.done.merged, ["Zone Theirs added"], "{:?}", o.done);
+    assert_eq!(o.done.here_only, ["Zones"], "{:?}", o.done);
+    let names: Vec<String> = r.config().zones.iter().map(|z| z.name.clone()).collect();
+    assert_eq!(names, ["Mine", "Theirs"]);
+    assert_eq!(section(&r.status(), "zone"), Changed::Here);
+    // The writer shares a "Mine" of its own: two values for it.
+    w.edit(|d| {
+        let mut z = zone("Mine");
+        z.groups = vec!["OTHER ADMINS@NORTH.LOCAL".into()];
+        d.upsert_zone(None, None, &z).unwrap()
+    });
+    w.sync(Resolve::Auto).unwrap();
+    let o = r.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.conflict, ["Zones"], "{:?}", o.done);
+    assert_eq!(
+        o.status.clashes[0].id, "zone.mine",
+        "{:?}",
+        o.status.clashes
+    );
+    let mine = r
+        .config()
+        .zones
+        .into_iter()
+        .find(|z| z.name == "Mine")
+        .unwrap();
+    assert_eq!(
+        mine.groups,
+        ["SERVER ADMINS@NORTH.LOCAL"],
+        "this computer's, until chosen"
+    );
     assert_eq!(section(&r.status(), "zone"), Changed::Both);
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -1517,5 +1578,428 @@ fn the_first_sync_notice_waits_until_shown() {
     let a = settings_sync::unseen_applied(&n.store(), false).unwrap();
     assert!(a.first.is_none() && a.backups.is_empty(), "{a:?}");
     assert_eq!(a.sections, ["Tier Zero additions"]);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Writes machine `m`'s `pathwarden.toml` whole: `top` (top-level keys),
+/// its [state], then `tables`.
+fn write_whole(m: &Machine, remote: &Path, push: bool, top: &str, tables: &str) {
+    m.write(&format!(
+        "# hand-written\n{top}\n[state]\nbackend = \"git\"\nremote = \"{}\"\npath = \"state\"\nkeep = \"full\"\n{}\n{tables}",
+        remote.to_string_lossy().replace('\\', "/"),
+        if push { "" } else { "push = false\n" },
+    ));
+}
+
+fn pack(name: &str, color: &str) -> String {
+    PACK.replace("acme", name).replace("#abc", color)
+}
+
+fn lower_sorted(v: &[String]) -> Vec<String> {
+    let mut v: Vec<String> = v.iter().map(|s| s.to_lowercase()).collect();
+    v.sort();
+    v
+}
+
+fn risk(rule: &str, reason: &str) -> String {
+    format!("[[suppress]]\nrule = \"{rule}\"\nreason = \"{reason}\"\n\n")
+}
+
+fn zone_t(name: &str, groups: &str) -> String {
+    format!("[[zone]]\nname = \"{name}\"\ngroups = [{groups}]\n\n")
+}
+
+/// The tables of a test's `pathwarden.toml`.
+fn tables(
+    stale: u32,
+    pwd: u32,
+    disabled: &str,
+    risks: &str,
+    zones: &str,
+    planes: &str,
+    packs: &[&str],
+) -> String {
+    let mut t = format!(
+        "[rules]\nstale_days = {stale} # stale\npassword_age_days = {pwd}\ndisabled = [{disabled}]\n\n{risks}\n{zones}\n[management_planes]\nnot_tier_zero = [{planes}]\n"
+    );
+    for p in packs {
+        t.push_str(&format!("\n[[mapping]]\npath = \"packs/{p}.toml\"\n"));
+    }
+    t
+}
+
+/// Every section merges entry by entry: additions on both sides are both
+/// kept, a removal on one side goes, and edits to different entries both
+/// apply, without asking. The merged result is pushed, a third computer
+/// gets it, comments in pathwarden.toml stay, and the repository's file
+/// stays one an older release reads.
+#[test]
+fn every_section_merges_entry_by_entry() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("merge-all");
+    let remote = bare(&root);
+    let a = Machine::new(&root, "a", &remote, true, "");
+    let b = Machine::new(&root, "b", &remote, true, "");
+    for m in [&a, &b] {
+        std::fs::create_dir_all(m.dir.join("packs")).unwrap();
+    }
+    std::fs::write(a.dir.join("packs/a.toml"), pack("pa", "#aaa")).unwrap();
+    std::fs::write(a.dir.join("packs/b.toml"), pack("pb", "#bbb")).unwrap();
+    let folders = |list: &[&str]| -> String {
+        let quoted: Vec<String> = list.iter().map(|f| format!("'\\\\fs01\\{f}'")).collect();
+        format!("settings_folders = [{}]", quoted.join(", "))
+    };
+    write_whole(
+        &a,
+        &remote,
+        true,
+        &format!(
+            "tier_zero = [\n  \"T1\", # the first\n  \"T2\", # the second\n]\n{}",
+            folders(&["t0a", "t0b"])
+        ),
+        &tables(
+            30,
+            365,
+            "\"PW-002\", \"PW-003\"",
+            &(risk("PW-011", "eleven") + &risk("PW-012", "twelve")),
+            &(zone_t("Z1", "\"G1@NORTH.LOCAL\"") + &zone_t("Z2", "\"G2@NORTH.LOCAL\"")),
+            "\"M1.NORTH.LOCAL\", \"M2.NORTH.LOCAL\"",
+            &["a", "b"],
+        ),
+    );
+    assert!(!pushed(&a.sync(Resolve::Auto).unwrap()).is_empty());
+    b.sync(Resolve::Auto).unwrap();
+    assert_eq!(b.status().state, Changed::InStep);
+
+    // A: adds T3, removes T1, adds a folder, changes stale days, turns
+    // PW-004 off, accepts PW-013 and drops PW-011, adds Z3, M3 and pack c.
+    std::fs::write(a.dir.join("packs/c.toml"), pack("pc", "#ccc")).unwrap();
+    write_whole(
+        &a,
+        &remote,
+        true,
+        &format!(
+            "tier_zero = [\"T2\", \"T3\"]\n{}",
+            folders(&["t0a", "t0b", "t0c"])
+        ),
+        &tables(
+            40,
+            365,
+            "\"PW-002\", \"PW-003\", \"PW-004\"",
+            &(risk("PW-012", "twelve") + &risk("PW-013", "thirteen")),
+            &(zone_t("Z1", "\"G1@NORTH.LOCAL\"")
+                + &zone_t("Z2", "\"G2@NORTH.LOCAL\"")
+                + &zone_t("Z3", "\"G3@NORTH.LOCAL\"")),
+            "\"M1.NORTH.LOCAL\", \"M2.NORTH.LOCAL\", \"M3.NORTH.LOCAL\"",
+            &["a", "b", "c"],
+        ),
+    );
+    // B, offline: adds T4, drops folder a, changes the password age, turns
+    // PW-003 on, edits PW-012, edits Z2 and drops Z1, drops M1, edits pack b.
+    std::fs::write(b.dir.join("packs/b.toml"), pack("pb", "#b0b")).unwrap();
+    write_whole(
+        &b,
+        &remote,
+        true,
+        &format!(
+            "tier_zero = [\n  \"T1\", # the first\n  \"T2\", # the second\n  \"T4\",\n]\n{}",
+            folders(&["t0b"])
+        ),
+        &tables(
+            30,
+            400,
+            "\"PW-002\"",
+            &(risk("PW-011", "eleven") + &risk("PW-012", "twelve, reviewed")),
+            &zone_t("Z2", "\"G2@NORTH.LOCAL\", \"G9@NORTH.LOCAL\""),
+            "\"M2.NORTH.LOCAL\"",
+            &["a", "b"],
+        ),
+    );
+    assert!(!pushed(&a.sync(Resolve::Auto).unwrap()).is_empty());
+    let s = b.status();
+    for x in &s.sections {
+        assert_eq!(x.state, Changed::Merge, "{}", x.key);
+    }
+    let o = b.sync(Resolve::Auto).unwrap();
+    assert!(!o.conflict(), "{:?}", o.done);
+    assert!(o.status.clashes.is_empty(), "{:?}", o.status.clashes);
+    for m in [
+        "T3 added to Tier Zero",
+        "T1 removed from Tier Zero",
+        "Stale Tier Zero account: 40 days",
+        "PW-004 turned off",
+        "Zone Z3 added",
+        "Accepted risk for every PW-011 finding removed",
+    ] {
+        assert!(
+            o.done.merged.iter().any(|x| x == m),
+            "{m}: {:?}",
+            o.done.merged
+        );
+    }
+    for m in [
+        "T4 added to Tier Zero",
+        "PW-003 turned on",
+        "Zone Z1 removed",
+        "Zone Z2 changed",
+    ] {
+        assert!(
+            o.done.shared.iter().any(|x| x == m),
+            "{m}: {:?}",
+            o.done.shared
+        );
+    }
+    assert!(!pushed(&o).is_empty());
+    let s = o.sentence().unwrap();
+    assert!(s.contains("Merged from the shared settings: "), "{s}");
+    assert!(
+        s.contains("Shared from this computer, in plain text (not encrypted): "),
+        "{s}"
+    );
+    assert_eq!(o.status.state, Changed::InStep);
+    // The comments on entries kept stay.
+    let text = b.text();
+    for c in ["# hand-written", "# the second", "# stale"] {
+        assert!(text.contains(c), "{c}: {text}");
+    }
+    // The repository's file reads as before: the sections, format and keys
+    // an older release knows.
+    let shared = remote_file(&remote, SETTINGS_FILE);
+    let raw: toml::Table = shared.parse().unwrap();
+    for k in raw.keys() {
+        assert!(
+            config_edit::is_shared_key(k) || k == "mapping_files",
+            "{k}: {shared}"
+        );
+    }
+    assert!(raw.get("format").is_none_or(|f| f.as_integer() == Some(1)));
+    assert_eq!(
+        raw["mapping_files"].as_array().unwrap().len(),
+        3,
+        "{shared}"
+    );
+    assert!(
+        shared.contains("#b0b") && shared.contains("#ccc"),
+        "{shared}"
+    );
+
+    // A gets B's side; a third computer gets the merged result.
+    a.sync(Resolve::Auto).unwrap();
+    let c = Machine::new(&root, "c", &remote, true, "");
+    c.sync(Resolve::Auto).unwrap();
+    for m in [&a, &b, &c] {
+        let cfg = m.config();
+        assert_eq!(
+            lower_sorted(&cfg.tier_zero),
+            ["t2", "t3", "t4"],
+            "{}",
+            m.text()
+        );
+        assert_eq!(cfg.settings_folders.len(), 2, "{}", m.text());
+        assert_eq!(cfg.rules.stale_days, 40);
+        assert_eq!(cfg.rules.password_age_days, 400);
+        assert_eq!(lower_sorted(&cfg.rules.disabled), ["pw-002", "pw-004"]);
+        let risks: Vec<(String, String)> = cfg
+            .suppress
+            .iter()
+            .map(|s| (s.rule.clone().unwrap_or_default(), s.reason.clone()))
+            .collect();
+        assert_eq!(risks.len(), 2, "{risks:?}");
+        assert!(
+            risks.contains(&("PW-012".into(), "twelve, reviewed".into())),
+            "{risks:?}"
+        );
+        assert!(risks.iter().any(|r| r.0 == "PW-013"), "{risks:?}");
+        let mut zones: Vec<(String, usize)> = cfg
+            .zones
+            .iter()
+            .map(|z| (z.name.clone(), z.groups.len()))
+            .collect();
+        zones.sort();
+        assert_eq!(zones, [("Z2".to_string(), 2), ("Z3".to_string(), 1)]);
+        assert_eq!(
+            lower_sorted(&cfg.management_planes.not_tier_zero),
+            ["m2.north.local", "m3.north.local"]
+        );
+        assert_eq!(cfg.mappings.len(), 3);
+        assert!(std::fs::read_to_string(m.dir.join("packs/b.toml"))
+            .unwrap()
+            .contains("#b0b"));
+        assert!(m.dir.join("packs/c.toml").exists());
+        assert_eq!(m.status().state, Changed::InStep);
+    }
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Only a real clash waits: the same entry edited to different values on
+/// both sides, or edited on one and removed on the other. Everything else
+/// merges, the clash keeps this computer's value here, and a choice
+/// without a section settles every clash.
+#[test]
+fn only_real_clashes_wait() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("merge-clash");
+    let remote = bare(&root);
+    let a = Machine::new(&root, "a", &remote, true, "");
+    a.edit(|d| {
+        accept(d, "PW-011", "eleven", &stamp("ned", "A"));
+        accept(d, "PW-012", "twelve", &stamp("ned", "A"));
+        d.upsert_zone(None, None, &zone("Z1")).unwrap();
+        d.set_tier_zero(&["T1".into()]).unwrap();
+    });
+    a.sync(Resolve::Auto).unwrap();
+    let b = Machine::new(&root, "b", &remote, true, "");
+    b.sync(Resolve::Auto).unwrap();
+    let reason = |d: &mut ConfigDoc, i: usize, rule: &str, text: &str| {
+        d.upsert_suppression(
+            Some(i),
+            None,
+            Some(rule),
+            &SuppressionEdit {
+                fingerprint: None,
+                rule: Some(rule.into()),
+                reason: text.into(),
+                expires: None,
+            },
+            &stamp("arya", "B"),
+        )
+        .unwrap()
+    };
+    // A edits PW-011, removes Z1, adds T2; B edits PW-011 too, edits Z1,
+    // and edits PW-012 alone.
+    a.edit(|d| {
+        reason(d, 0, "PW-011", "eleven, by A");
+        d.remove_zone(0, "Z1").unwrap();
+        d.set_tier_zero(&["T1".into(), "T2".into()]).unwrap();
+    });
+    a.sync(Resolve::Auto).unwrap();
+    b.edit(|d| {
+        reason(d, 0, "PW-011", "eleven, by B");
+        reason(d, 1, "PW-012", "twelve, by B");
+        let mut z = zone("Z1");
+        z.groups.push("MORE@NORTH.LOCAL".into());
+        d.upsert_zone(Some(0), Some("Z1"), &z).unwrap();
+    });
+    let o = b.sync(Resolve::Auto).unwrap();
+    let ids: Vec<&str> = o.status.clashes.iter().map(|c| c.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        ["suppress.pw-011", "zone.z1"],
+        "{:?}",
+        o.status.clashes
+    );
+    assert_eq!(o.done.conflict, ["Accepted risks", "Zones"], "{:?}", o.done);
+    let z1 = &o.status.clashes[1];
+    assert_eq!(
+        (z1.here.as_str(), z1.shared.as_str()),
+        ("Z1: 2 members, groups and OUs", "removed")
+    );
+    assert_eq!(
+        settings_sync::clash_words(&o.status.clashes),
+        "Accepted risk for every PW-011 finding and 1 more have two values."
+    );
+    // Everything else merged: B has T2, its PW-012 went to the repository.
+    assert_eq!(b.config().tier_zero, ["T1", "T2"]);
+    let cfg = b.config();
+    assert_eq!(
+        cfg.suppress[0].reason, "eleven, by B",
+        "this computer's, until chosen"
+    );
+    assert_eq!(cfg.zones.len(), 1);
+    let shared = remote_file(&remote, SETTINGS_FILE);
+    assert!(
+        shared.contains("twelve, by B") && shared.contains("eleven, by A"),
+        "{shared}"
+    );
+    assert!(
+        !shared.contains("eleven, by B") && !shared.contains("[[zone]]"),
+        "{shared}"
+    );
+    // The same clashes on the next pull, with the same key for a dismissal.
+    let key = o.status.differs_key.clone().unwrap();
+    let o = b.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.status.differs_key.as_deref(), Some(key.as_str()));
+    assert!(
+        o.done.merged.is_empty() && o.done.summary.is_none(),
+        "{:?}",
+        o.done
+    );
+    // A has nothing to choose: the repository still holds its values, and
+    // B's PW-012 is a shared update for it.
+    let s = a.status();
+    assert!(s.clashes.is_empty(), "{:?}", s.clashes);
+    assert_eq!(section(&s, "suppress"), Changed::Repository);
+    assert_eq!(a.config().suppress[0].reason, "eleven, by A");
+    // B keeps its values for every clash at once.
+    let o = b.sync(Resolve::KeepLocal(vec![])).unwrap();
+    assert_eq!(o.done.settled.len(), 2, "{:?}", o.done);
+    assert!(o.status.clashes.is_empty());
+    a.sync(Resolve::Auto).unwrap();
+    let cfg = a.config();
+    assert_eq!(cfg.suppress[0].reason, "eleven, by B");
+    assert_eq!(cfg.zones.len(), 1);
+    assert_eq!(cfg.zones[0].groups.len(), 2);
+    assert_eq!(a.status().state, Changed::InStep);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A computer that only reads merges too: the repository's entries arrive,
+/// its own stay here unpushed, and a clash keeps its value until it takes
+/// the shared one.
+#[test]
+fn a_reader_merges_too() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("merge-reader");
+    let remote = bare(&root);
+    let w = Machine::new(&root, "w", &remote, true, "");
+    w.edit(|d| {
+        d.set_tier_zero(&["T1".into()]).unwrap();
+        d.set_rules(&rules_with(30), &stamp("ned", "W")).unwrap();
+    });
+    w.sync(Resolve::Auto).unwrap();
+    let r = Machine::new(&root, "r", &remote, false, "");
+    r.sync(Resolve::Auto).unwrap();
+    r.edit(|d| {
+        d.set_tier_zero(&["T1".into(), "R1".into()]).unwrap();
+        d.set_rules(&rules_with(33), &stamp("arya", "R")).unwrap();
+    });
+    w.edit(|d| {
+        d.set_tier_zero(&["T1".into(), "W1".into()]).unwrap();
+        d.set_rules(&rules_with(44), &stamp("ned", "W")).unwrap();
+    });
+    w.sync(Resolve::Auto).unwrap();
+    let head = git(&remote, &["rev-parse", "main"]);
+    let o = r.sync(Resolve::Auto).unwrap();
+    assert_eq!(o.done.merged, ["W1 added to Tier Zero"], "{:?}", o.done);
+    assert_eq!(r.config().tier_zero, ["T1", "R1", "W1"]);
+    assert_eq!(
+        r.config().rules.stale_days,
+        33,
+        "this computer's, until chosen"
+    );
+    assert_eq!(o.status.clashes.len(), 1);
+    assert_eq!(o.status.clashes[0].id, "rules.stale_days");
+    assert_eq!(
+        git(&remote, &["rev-parse", "main"]),
+        head,
+        "a reader pushes nothing"
+    );
+    let e = r.sync(Resolve::KeepLocal(vec![])).unwrap_err();
+    assert!(e.to_string().contains("doesn't push"), "{e}");
+    // Taking the shared value for that setting keeps R1 here.
+    let o = r
+        .sync(Resolve::UseRepo(vec!["rules.stale_days".into()]))
+        .unwrap();
+    assert!(o.status.clashes.is_empty(), "{:?}", o.status.clashes);
+    assert_eq!(r.config().rules.stale_days, 44);
+    assert_eq!(r.config().tier_zero, ["T1", "R1", "W1"]);
+    assert_eq!(section(&r.status(), "tier_zero"), Changed::Here);
+    assert_eq!(section(&r.status(), "rules"), Changed::InStep);
     let _ = std::fs::remove_dir_all(&root);
 }

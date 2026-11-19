@@ -130,6 +130,14 @@ notes say so under **Upgrade notes**.
 | `<file>.age` binding line | Binding version 1. | Refused: "needs a newer Pathwarden". |
 | `.pathwarden-state` | A marker. Its text is for people. | Nothing to read. |
 | `.pathwarden.lock`, `.pathwarden-last-pull.json` | This computer's, never committed. | A lock is respected while fresh, whoever wrote it. |
+| `.git/pathwarden-settings-base.json` | This computer's, never committed: each shared section as it was at the last sync (`digest`, and `value` as JSON). The three-way merge compares each entry here, in this computer's `pathwarden.toml` and in `settings/pathwarden.toml`. An entry with two values is recorded as it was before both changes, so it stays a clash until someone chooses. A section with no `value` (or a file that can't be read) is settled whole. | Read as far as it reads; a section it can't read is settled whole. |
+| `.git/pathwarden-settings-dismissed.json` | This computer's: the clashes the app's note was dismissed for (`key`, a hash of each clash and both sides' values). | Ignored. |
+| `.git/pathwarden-settings-merged.json` | This computer's (from 1.0.0-rc.3): what the last merge brought here (`entries`: `section`, `id`, `label`, `added`, `words`), who made the shared change and when (`by`, `on`, `changed_at`), and whether the app said it (`seen`, `dismissed`). Replaced by the next sync that merges entries in. | Ignored. |
+
+The merge never changes `settings/pathwarden.toml`'s form: each merged
+entry is written into the sections older releases read, and the file stays
+at format 1, so a release on the same history that settles sections whole
+still reads a valid file (it sees the merged result as one change).
 
 ### The app's workspace (`%LOCALAPPDATA%\Pathwarden`)
 

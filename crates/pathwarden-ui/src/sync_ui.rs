@@ -20,7 +20,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use pathwarden_core::settings_sync::{
-    self, Applied, Changed, Note, Place, Resolve, SectionDiff, Status,
+    self, Applied, Changed, Clash, MergedHere, Note, Place, Resolve, SectionDiff, Status,
 };
 use serde::Deserialize;
 
@@ -43,6 +43,13 @@ pub struct View {
     /// The differences on show were dismissed on this computer: the note
     /// is one line, and the rail shows no dot.
     pub dismissed: bool,
+    /// What the last merge brought here: its entries are marked "shared"
+    /// until a later sync brings others.
+    pub merged: Option<MergedHere>,
+    /// Say what the last merge brought, under the note ("Merged from the
+    /// shared settings: …"): until dismissed with it, or once when there is
+    /// no note.
+    pub merged_line: bool,
 }
 
 /// The shared settings of `ws`, when its history shares them. `mark_seen`:
@@ -70,6 +77,18 @@ pub fn view(ws: &Workspace, flag: Option<&Path>, mark_seen: bool) -> Option<View
     if status.differs_key.is_none() && status.unreadable.is_none() {
         settings_sync::clear_dismissed(&loc.store);
     }
+    let merged = settings_sync::merged_here(&loc.store);
+    let merged_line = merged.as_ref().is_some_and(|m| {
+        if status.clashes.is_empty() {
+            !m.seen
+        } else {
+            !m.dismissed && !dismissed
+        }
+    });
+    // Said once with nothing else to say.
+    if merged_line && mark_seen && status.clashes.is_empty() {
+        settings_sync::mark_merged(&loc.store, false);
+    }
     Some(View {
         status,
         diffs,
@@ -77,6 +96,8 @@ pub fn view(ws: &Workspace, flag: Option<&Path>, mark_seen: bool) -> Option<View
         remote: loc.git.map(|(r, _)| short_remote(&r)).unwrap_or_default(),
         pushes: loc.push,
         dismissed,
+        merged,
+        merged_line,
     })
 }
 
@@ -160,8 +181,9 @@ fn sections_words(names: &[&str]) -> String {
 
 /// What a configuration page says at its top about the shared settings,
 /// only when there is something to act on: the repository's settings can't
-/// be read here, or a section changed here and in the repository (the note
-/// that asks for a choice, on one line once dismissed). Otherwise nothing.
+/// be read here, or some setting has two values (the note names the first,
+/// its ⓘ all of them; one quiet line once dismissed), and under it what
+/// the last merge brought. Otherwise nothing.
 pub fn sync_line(v: &View, page: &str) -> String {
     let s = &v.status;
     // Not "up to date": nothing here says what the repository holds.
@@ -172,64 +194,216 @@ pub fn sync_line(v: &View, page: &str) -> String {
             esc(&words)
         );
     }
-    let both_keys: Vec<&str> = s
-        .sections
-        .iter()
-        .filter(|x| x.state == Changed::Both)
-        .map(|x| x.key)
-        .collect();
-    let both: Vec<&str> = both_keys
-        .iter()
-        .map(|k| settings_sync::section_name(k))
-        .collect();
-    // Chosen on this page, or on the page the section is on.
-    let elsewhere = both_keys.iter().map(|k| page_of(k)).find(|p| p.0 != page);
-    let choose = match elsewhere {
-        None => "Choose which to keep below.".to_string(),
-        Some((_, href, name)) => format!(r#"Choose which to keep on <a href="{href}">{name}</a>."#),
-    };
-    let others_in_step = s
-        .sections
-        .iter()
-        .all(|x| x.state == Changed::InStep || x.state == Changed::Both);
-    if !both.is_empty() && v.dismissed {
+    let merged = merged_words(v);
+    let clashes = &s.clashes;
+    if clashes.is_empty() {
+        return merged;
+    }
+    let first = settings_sync::clash_words(clashes);
+    if v.dismissed {
         return format!(
-            r#"<div class="note warn sync-conflict dismissed" role="status">{}<div><p>{}: {}.</p></div></div>"#,
+            r#"<p class="sync-quiet" role="status">{}<span>{}</span></p>"#,
             icon("i-alert"),
-            crate::pages::SETTINGS_DIFFER,
-            esc(&settings_sync::names_in_a_sentence(&both, false))
+            esc(&first)
         );
     }
-    if !both.is_empty() {
-        let rows = vec![
-            (
-                "Runs".to_string(),
-                "Use this computer's settings until you choose".to_string(),
-            ),
-            (
-                "Shared through".to_string(),
-                format!("<code>{}</code>", esc(&v.remote)),
-            ),
-            (
-                "Other settings".to_string(),
-                if others_in_step {
-                    "Up to date".to_string()
+    let shared_by = shared_by(v);
+    let mut rows: Vec<(String, String)> = Vec::new();
+    match clashes.as_slice() {
+        [one] if !one.whole => {
+            rows.push(("This computer".into(), esc(&one.here)));
+            rows.push((
+                "Shared".into(),
+                if shared_by.is_empty() {
+                    esc(&one.shared)
                 } else {
-                    esc(&s.changed_words())
+                    format!("{}, {shared_by}", esc(&one.shared))
                 },
-            ),
-        ];
-        return format!(
-            r#"<div class="note warn sync-conflict dismissable" role="status">{}<div><p><strong>{}</strong> Both changed since this computer last synced. {choose} Until then, runs here use this computer's. {}</p></div><button type="button" class="linkish sync-dismiss" data-sync-dismiss="{}" title="Hides the dot on Settings until something else differs">Dismiss</button></div>"#,
-            icon("i-alert"),
-            esc(&settings_sync::differ_words(&both)),
-            tip(&format!("conf-{page}"), "While this is open", &rows, false),
-            esc(s.differs_key.as_deref().unwrap_or_default()),
-        );
+            ));
+            rows.push((
+                "Until you choose".into(),
+                format!(
+                    "Runs here use {}. Everything else is merged.",
+                    esc(&one.here)
+                ),
+            ));
+        }
+        _ => {
+            for c in clashes {
+                rows.push((
+                    c.name.clone(),
+                    if c.whole {
+                        "Changed here and in the shared settings".into()
+                    } else {
+                        format!("{} here, {} shared", esc(&c.here), esc(&c.shared))
+                    },
+                ));
+            }
+            rows.push((
+                "Until you choose".into(),
+                "Runs here use this computer's values. Everything else is merged.".into(),
+            ));
+        }
     }
-    // Nothing to act on: nothing at the top of the page. Where the history
-    // lives, and whether it is encrypted, is History storage's to say.
-    String::new()
+    // Chosen next to the setting, on this page or the one it is on.
+    let elsewhere = clashes
+        .iter()
+        .map(|c| page_of(c.section))
+        .find(|p| p.0 != page)
+        .filter(|_| clashes.iter().all(|c| page_of(c.section).0 != page))
+        .map(|(_, href, name)| format!(r#" Choose on <a href="{href}">{name}</a>."#))
+        .unwrap_or_default();
+    format!(
+        r#"<div class="note warn sync-conflict dismissable" role="status">{}<div><p><strong>{}</strong> {}{elsewhere}</p></div><button type="button" class="linkish sync-dismiss" data-sync-dismiss="{}" title="Hides the dot on Settings until something else has two values">Dismiss</button></div>{merged}"#,
+        icon("i-alert"),
+        esc(&first),
+        tip(&format!("conf-{page}"), "Two values", &rows, false),
+        esc(s.differs_key.as_deref().unwrap_or_default()),
+    )
+}
+
+/// "Merged from the shared settings: <b>CASTELBLACK$</b> added to Tier
+/// Zero.", while it is to be said ([`View::merged_line`]).
+fn merged_words(v: &View) -> String {
+    let Some(m) = v.merged.as_ref().filter(|_| v.merged_line) else {
+        return String::new();
+    };
+    if m.entries.is_empty() {
+        return String::new();
+    }
+    let parts: Vec<String> = m
+        .entries
+        .iter()
+        .map(|e| {
+            let words = esc(&e.words);
+            let label = esc(&e.label);
+            match words.strip_prefix(&label) {
+                Some(rest) if !label.is_empty() => format!("<strong>{label}</strong>{rest}"),
+                _ => words,
+            }
+        })
+        .collect();
+    format!(
+        r#"<p class="sync-merged">{}<span>Merged from the shared settings: {}.</span></p>"#,
+        icon("i-sync"),
+        parts.join("; ")
+    )
+}
+
+/// "MAINDESKTOP\benja, Nov 18, 5:55 PM": who made the last shared change,
+/// and when.
+fn shared_by(v: &View) -> String {
+    let Some(c) = &v.status.last_change else {
+        return String::new();
+    };
+    let who =
+        c.by.clone()
+            .map(|b| who(&Some(b), &None).unwrap_or_default())
+            .or_else(|| who(&None, &c.on))
+            .map(|w| esc(&w));
+    match who {
+        Some(w) => format!("{w}, {}", when(&c.at)),
+        None => when(&c.at),
+    }
+}
+
+/// The clashes of section `key`.
+pub fn clashes_in<'a>(v: &'a View, key: &str) -> Vec<&'a Clash> {
+    v.status
+        .clashes
+        .iter()
+        .filter(|c| c.section == key && !c.whole)
+        .collect()
+}
+
+/// Whether the jump link to section `key` gets the amber dot: it has a
+/// setting with two values, not dismissed.
+pub fn jump_dot(v: &View, key: &str) -> bool {
+    !v.dismissed && v.status.clashes.iter().any(|c| c.section == key)
+}
+
+/// The choice for one setting with two values, right under its field
+/// (`id`: `rules.stale_days`): the shared value, who and when, and the
+/// buttons ("Use 60", "Keep 30"; only "Use" on a computer that doesn't
+/// push). `None` when it has one value.
+pub fn clash_row(v: &View, id: &str) -> Option<String> {
+    let c = v.status.clashes.iter().find(|c| c.id == id && !c.whole)?;
+    Some(clash_html(v, c, false))
+}
+
+/// The choices for the settings with two values of section `key` that
+/// have no field of their own (all but `fields`), at the top of its card.
+pub fn clash_list(v: &View, key: &str, fields: &[&str]) -> String {
+    let rows: String = clashes_in(v, key)
+        .into_iter()
+        .filter(|c| !fields.contains(&c.id.as_str()))
+        .map(|c| clash_html(v, c, true))
+        .collect();
+    if rows.is_empty() {
+        rows
+    } else {
+        format!(r#"<div class="clash-list">{rows}</div>"#)
+    }
+}
+
+fn clash_html(v: &View, c: &Clash, named: bool) -> String {
+    let by = shared_by(v);
+    let use_label = match &c.shared_short {
+        Some(s) => format!("Use {}", esc(s)),
+        None => "Use shared".into(),
+    };
+    let keep_label = match &c.here_short {
+        Some(s) => format!("Keep {}", esc(s)),
+        None => "Keep this computer's".into(),
+    };
+    let keep = if v.pushes {
+        format!(
+            r#"<button type="button" class="btn small-btn" data-sync-action="keep_local" data-sync-section="{id}">{keep_label}</button>"#,
+            id = esc(&c.id)
+        )
+    } else {
+        String::new()
+    };
+    let head = if named {
+        format!("<strong>{}</strong>: {} here. ", esc(&c.name), esc(&c.here))
+    } else {
+        String::new()
+    };
+    format!(
+        r#"<div class="clash-row" role="group" aria-label="{name} has two values"><p>{head}Shared: <strong>{shared}</strong>{who}</p><div class="acts"><button type="button" class="btn small-btn" data-sync-action="use_repo" data-sync-section="{id}">{use_label}</button>{keep}<span class="save-status muted small" aria-live="polite"></span></div></div>"#,
+        name = pages::attr(&c.name),
+        shared = esc(&c.shared),
+        who = if by.is_empty() {
+            String::new()
+        } else {
+            format!(r#"<span class="who">{by}</span>"#)
+        },
+        id = esc(&c.id),
+    )
+}
+
+/// The mark on an entry the last merge brought here ("shared ·
+/// MAINDESKTOP\benja, Nov 18"), or nothing.
+pub fn merged_mark(v: &View, key: &str, id: &str) -> String {
+    let Some(m) = &v.merged else {
+        return String::new();
+    };
+    if !m.entries.iter().any(|e| e.section == key && e.id == id) {
+        return String::new();
+    }
+    let day = m
+        .changed_at
+        .as_deref()
+        .and_then(pathwarden_core::time::parse_rfc3339)
+        .map(|t| pages::time_as(t, "day"));
+    let who = m.by.clone().or_else(|| m.on.clone()).map(|w| esc(&w));
+    let rest = match (who, day) {
+        (Some(w), Some(d)) => format!(" · {w}, {d}"),
+        (Some(w), None) => format!(" · {w}"),
+        (None, Some(d)) => format!(" · {d}"),
+        (None, None) => String::new(),
+    };
+    format!(r#"<span class="chip-from">shared{rest}</span>"#)
 }
 
 /// A section's state in the pages' words: "Not shared yet" ("Only on this
@@ -240,6 +414,7 @@ pub fn state_words(v: &View, c: Changed) -> &'static str {
         Changed::Here if v.pushes => "Not shared yet",
         Changed::Here => "Only on this computer",
         Changed::Repository => "Shared update: applied at the next sync",
+        Changed::Merge => "Shared update: merged at the next sync",
         Changed::Both => BOTH_TAG,
         Changed::InStep => "Up to date",
     }
@@ -254,9 +429,26 @@ pub fn tag(v: &View, key: &str) -> String {
     let Some(x) = v.status.sections.iter().find(|x| x.key == key) else {
         return String::new();
     };
+    // An entry with two values: how many, in the section's words.
+    let n = clashes_in(v, key).len();
+    if n > 0 {
+        let (one, many) = match key {
+            "suppress" => ("accepted risk", "accepted risks"),
+            "zone" => ("zone", "zones"),
+            "mapping" => ("mapping pack", "mapping packs"),
+            "tier_zero" | "settings_folders" => ("entry", "entries"),
+            _ => ("setting", "settings"),
+        };
+        let words = if n == 1 {
+            format!("1 {one} has two values")
+        } else {
+            format!("{n} {many} have two values")
+        };
+        return format!(r#"<span class="stag clash">{words}</span>"#);
+    }
     let class = match x.state {
-        Changed::Here | Changed::Repository => "stag chg",
-        Changed::Both => "stag both",
+        Changed::Here | Changed::Repository | Changed::Merge => "stag chg",
+        Changed::Both => "stag clash",
         Changed::InStep if v.status.state == Changed::Both => "stag",
         Changed::InStep => return String::new(),
     };
@@ -274,11 +466,14 @@ fn state(v: &View, key: &str) -> Changed {
         .map_or(Changed::InStep, |x| x.state)
 }
 
-/// For a section changed here and in the repository: what each side holds,
-/// marked against the last sync, and the two ways out (one on a computer
-/// that doesn't push). `None` for any other section.
+/// For a section settled whole that changed here and in the repository
+/// (it can't be merged entry by entry): what each side holds, marked
+/// against the last sync, and the two ways out (one on a computer that
+/// doesn't push). `None` for any other section.
 pub fn conflict(v: &View, key: &str) -> Option<String> {
-    if state(v, key) != Changed::Both {
+    if state(v, key) != Changed::Both
+        || !v.status.clashes.iter().any(|c| c.section == key && c.whole)
+    {
         return None;
     }
     let d = v.diffs.iter().find(|d| d.key == key)?;
@@ -445,9 +640,10 @@ pub fn storage_row(v: &View) -> String {
             .iter()
             .find(|x| x.state == Changed::Both)
             .map_or(("settings", "/settings", "Settings"), |x| page_of(x.key));
+        let words = settings_sync::clash_words(&s.clashes);
         format!(
-            r#" · <span class="sync-chg">{} differ from the shared ones</span> · <a href="{href}">Review</a>"#,
-            esc(&settings_sync::names_in_a_sentence(&both, false))
+            r#" · <span class="sync-chg">{}</span> · <a href="{href}">Review</a>"#,
+            esc(words.trim_end_matches('.'))
         )
     } else if s.state == Changed::InStep && s.in_repository {
         " · up to date".to_string()

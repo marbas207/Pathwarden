@@ -6,7 +6,8 @@
 //! environment is and which Pathwarden wrote them.
 //!
 //! It is on when the history is a git repository and keeps "Full runs and
-//! settings" (`[state] keep = "full"`). Each section is settled on its own:
+//! settings" (`[state] keep = "full"`). Each section is settled on its own,
+//! and a section changed on both sides entry by entry (`settings_merge.rs`):
 //!
 //! - **A machine that pushes** commits a change to the shared settings as
 //!   soon as it is saved (the app, `pathwarden config`, `pathwarden zones`):
@@ -17,9 +18,15 @@
 //!   never committed): changed in the repository only, the repository's is
 //!   applied here; changed here only (an offline edit, a push that failed),
 //!   it is pushed, on top of the repository's other sections; changed on
-//!   both sides, that section is left as it is on both and reported until
-//!   `pathwarden config sync --use-repo` or `--keep-local` settles it. Runs
-//!   go on with the settings here.
+//!   both sides, it is merged entry by entry (a Tier Zero object, an
+//!   accepted risk, a zone, a single rule setting, ...): each side's
+//!   changes to different entries go to the other. Only an entry changed
+//!   to different values on both sides, or changed on one and removed on
+//!   the other, is a clash ([`Clash`]): it keeps this computer's value
+//!   here and the repository's there until `pathwarden config sync
+//!   --use-repo` or `--keep-local` (or the app's choice next to it)
+//!   settles it. Runs go on with the settings here. A section this version
+//!   can't take apart, or whose last sync isn't known, is settled whole.
 //! - **A computer's first sync** with a history (a section never synced
 //!   here) has nothing to compare against: every section the repository
 //!   holds is applied here, whatever this computer had (a new install's
@@ -54,6 +61,10 @@ use crate::config::{Keep, StateBackend, StateConfig};
 use crate::config_edit::{self, ConfigDoc, MAPPING_FILES, NEVER_SHARED, SHARED_SECTIONS};
 use crate::store::{KeptUnpushed, Published, Store, ENVIRONMENT_FILE, SETTINGS_FILE};
 
+#[path = "settings_merge.rs"]
+mod merge;
+use merge::{Pick, Split};
+
 /// This Pathwarden's version, as `environment.json` records the writer's.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -72,6 +83,10 @@ const APPLIED_FILE: &str = "pathwarden-settings-applied.json";
 /// In `.git`: the differences this computer's app was told about and
 /// dismissed ([`dismiss`]), by [`Status::differs_key`]. Never committed.
 const DISMISSED_FILE: &str = "pathwarden-settings-dismissed.json";
+
+/// In `.git`: the entries the last merge brought here from the
+/// repository ([`MergedHere`]). Never committed.
+const MERGED_FILE: &str = "pathwarden-settings-merged.json";
 
 /// Largest `settings/pathwarden.toml` read.
 const MAX_SETTINGS_BYTES: usize = 4 << 20;
@@ -614,6 +629,29 @@ impl Base {
         self.sections.get(key).map(|s| s.digest.as_deref())
     }
 
+    /// Records section `key` as `value` at this sync (`None`: absent).
+    fn set_value(&mut self, key: &str, value: Option<toml::Value>) {
+        self.sections.insert(
+            key.to_string(),
+            BaseSection {
+                digest: value.as_ref().map(digest),
+                value: value.and_then(|v| serde_json::to_value(v).ok()),
+            },
+        );
+    }
+
+    /// Section `key` as entries, when the base knows it entry by entry:
+    /// `None` when it was never synced, or its value isn't known.
+    fn entries(&self, key: &str) -> Option<merge::Entries> {
+        let s = self.sections.get(key)?;
+        let v: Option<toml::Value> = match (&s.digest, &s.value) {
+            (None, _) => None,
+            (Some(_), Some(v)) => Some(serde_json::from_value(v.clone()).ok()?),
+            (Some(_), None) => return None,
+        };
+        merge::entries(key, v.as_ref())
+    }
+
     fn set(&mut self, key: &str, side: &Side) {
         let value = side
             .table
@@ -641,8 +679,12 @@ pub enum Changed {
     Here,
     /// Changed in the repository, not here.
     Repository,
-    /// Changed here and in the repository.
+    /// Changed here and in the repository: some entry has two values
+    /// ([`Clash`]), or the section can't be merged entry by entry.
     Both,
+    /// Changed here and in the repository, in different entries: merged at
+    /// the next sync.
+    Merge,
 }
 
 impl Changed {
@@ -652,6 +694,7 @@ impl Changed {
             Changed::Here => "not shared yet",
             Changed::Repository => "shared update: applied at the next sync",
             Changed::Both => "differs from the shared settings",
+            Changed::Merge => "changed here and in the shared settings: merged at the next sync",
         }
     }
 }
@@ -764,6 +807,62 @@ pub struct Section {
     pub state: Changed,
 }
 
+/// An entry with two values: changed to different values here and in the
+/// repository since the last sync, or changed on one side and removed on
+/// the other. Until someone chooses, this computer keeps its value for it
+/// (and the repository its own); everything else merges.
+#[derive(Debug, Clone, Serialize)]
+pub struct Clash {
+    /// The section's key (`rules`).
+    pub section: &'static str,
+    /// What `pathwarden config sync --section` takes for it:
+    /// `rules.stale_days`; the section's own key when the whole section
+    /// is settled as one ([`Clash::whole`]).
+    pub id: String,
+    /// In plain words: "Stale Tier Zero account", "Rule settings".
+    pub name: String,
+    /// This computer's value in words ("30 days", "removed"); empty for a
+    /// whole section.
+    pub here: String,
+    /// The repository's.
+    pub shared: String,
+    /// The values, short enough for a button ("30"), when they are.
+    pub here_short: Option<String>,
+    pub shared_short: Option<String>,
+    /// The whole section has two versions: it can't be merged entry by
+    /// entry (a form this version can't take apart, or a last sync that
+    /// isn't known).
+    pub whole: bool,
+    /// The entry's ID within its section (`stale_days`).
+    #[serde(skip)]
+    pub entry: String,
+    /// What each side holds, for [`Status::differs_key`].
+    #[serde(skip)]
+    sides: String,
+}
+
+impl Clash {
+    /// "Stale Tier Zero account: 30 days here, 60 days shared".
+    pub fn words(&self) -> String {
+        if self.whole {
+            format!("{}: changed here and in the shared settings", self.name)
+        } else {
+            format!("{}: {} here, {} shared", self.name, self.here, self.shared)
+        }
+    }
+}
+
+/// "Stale Tier Zero account has two values.", "Stale Tier Zero account and 2
+/// more have two values.": the first clash, and how many more.
+pub fn clash_words(clashes: &[Clash]) -> String {
+    match clashes {
+        [] => String::new(),
+        [one] if one.whole => format!("{} have two versions.", one.name),
+        [one] => format!("{} has two values.", one.name),
+        [first, rest @ ..] => format!("{} and {} more have two values.", first.name, rest.len()),
+    }
+}
+
 /// The last change to the shared settings in the repository.
 #[derive(Debug, Clone, Serialize)]
 pub struct LastChange {
@@ -819,9 +918,12 @@ pub struct Status {
     /// What is left out, and why: packs that don't travel, sections a newer
     /// version wrote.
     pub notes: Vec<String>,
-    /// The sections that differ from the shared settings (changed on both
-    /// sides), with what each side holds, as one digest: `None` when none
-    /// does. A dismissal holds for this exact set ([`dismiss`]).
+    /// The entries with two values, section by section in the order they
+    /// are shown, then by entry.
+    pub clashes: Vec<Clash>,
+    /// The entries with two values ([`Status::clashes`]), with what each
+    /// side holds, as one digest: `None` when there are none. A dismissal
+    /// holds for this exact set ([`dismiss`]).
     pub differs_key: Option<String>,
 }
 
@@ -882,6 +984,7 @@ impl Status {
                         Changed::Here if self.pushes => "not shared yet",
                         Changed::Here => "only on this computer",
                         Changed::Repository => "shared update",
+                        Changed::Merge => "merged at the next sync",
                         _ => "differ from the shared ones",
                     }
                 )
@@ -916,6 +1019,8 @@ struct Read {
     repo_text: Option<String>,
     repo: Side,
     base: Option<Base>,
+    /// The sections changed on both sides that merge entry by entry.
+    splits: BTreeMap<&'static str, Split>,
     status: Status,
 }
 
@@ -1103,24 +1208,21 @@ fn read_all_or(p: &Place, refused: Option<anyhow::Error>) -> Result<Read> {
             written_by_version.as_deref().unwrap_or_default()
         ));
     }
-    let sections: Vec<Section> = SHARED_SECTIONS
-        .iter()
-        .map(|(key, name)| Section {
-            key,
-            name,
-            state: if unreadable.is_some() {
-                Changed::InStep
-            } else {
-                compare(
-                    local.get(key),
-                    repo.get(key),
-                    base.as_ref().and_then(|b| b.get(key)),
-                )
-            },
-        })
-        .collect();
+    let (sections, splits, clashes) = if unreadable.is_some() {
+        let sections = SHARED_SECTIONS
+            .iter()
+            .map(|(key, name)| Section {
+                key,
+                name,
+                state: Changed::InStep,
+            })
+            .collect();
+        (sections, BTreeMap::new(), Vec::new())
+    } else {
+        judge_all(&local, &repo, base.as_ref())
+    };
     let state = overall(&sections);
-    let differs_key = key_of_differences(&sections, &local, &repo);
+    let differs_key = key_of_differences(&clashes);
     let status = Status {
         state,
         sections,
@@ -1128,6 +1230,7 @@ fn read_all_or(p: &Place, refused: Option<anyhow::Error>) -> Result<Read> {
         unreadable,
         unreadable_page,
         damaged: damaged_file,
+        clashes,
         differs_key,
         newer_format: newer_file,
         encrypted: p.store.is_encrypted(),
@@ -1151,8 +1254,103 @@ fn read_all_or(p: &Place, refused: Option<anyhow::Error>) -> Result<Read> {
         repo_text,
         repo,
         base,
+        splits,
         status,
     })
+}
+
+/// Each section's state; the sections changed on both sides that merge
+/// entry by entry; and the entries with two values.
+fn judge_all(
+    local: &Side,
+    repo: &Side,
+    base: Option<&Base>,
+) -> (Vec<Section>, BTreeMap<&'static str, Split>, Vec<Clash>) {
+    let mut sections = Vec::new();
+    let mut splits = BTreeMap::new();
+    let mut clashes = Vec::new();
+    for (key, name) in SHARED_SECTIONS {
+        let (l, r) = (local.get(key), repo.get(key));
+        let b = base.and_then(|b| b.get(key));
+        let split = (l != r && b.is_some())
+            .then(|| {
+                Some(Split {
+                    base: base?.entries(key)?,
+                    local: merge::entries(key, local.table.get(*key))?,
+                    repo: merge::entries(key, repo.table.get(*key))?,
+                })
+            })
+            .flatten();
+        let state = match &split {
+            Some(sp) => {
+                let plan = sp.plan(&|_| None);
+                clashes.extend(entry_clashes(key, sp, &plan.clashes));
+                match (
+                    !plan.clashes.is_empty(),
+                    !plan.to_local.is_empty(),
+                    !plan.to_repo.is_empty(),
+                ) {
+                    (true, _, _) => Changed::Both,
+                    (_, true, true) => Changed::Merge,
+                    (_, false, true) => Changed::Here,
+                    (_, true, false) => Changed::Repository,
+                    _ => Changed::InStep,
+                }
+            }
+            None => {
+                let c = compare(l, r, b);
+                if c == Changed::Both {
+                    clashes.push(Clash {
+                        section: key,
+                        id: key.to_string(),
+                        name: name.to_string(),
+                        here: String::new(),
+                        shared: String::new(),
+                        here_short: None,
+                        shared_short: None,
+                        whole: true,
+                        entry: String::new(),
+                        sides: format!("{}|{}", l.unwrap_or("-"), r.unwrap_or("-")),
+                    });
+                }
+                c
+            }
+        };
+        if let (Some(sp), true) = (split, matches!(state, Changed::Both | Changed::Merge)) {
+            splits.insert(*key, sp);
+        }
+        sections.push(Section { key, name, state });
+    }
+    (sections, splits, clashes)
+}
+
+/// The clashes `ids` of section `key`, in words.
+fn entry_clashes(key: &'static str, sp: &Split, ids: &[String]) -> Vec<Clash> {
+    ids.iter()
+        .map(|id| {
+            let (l, r) = (sp.local.get(id), sp.repo.get(id));
+            let name = l
+                .or(r)
+                .or(sp.base.get(id))
+                .map_or_else(|| id.clone(), |e| e.label.clone());
+            Clash {
+                section: key,
+                id: format!("{key}.{id}"),
+                name,
+                here: merge::words(key, id, l),
+                shared: merge::words(key, id, r),
+                here_short: merge::short(key, id, l),
+                shared_short: merge::short(key, id, r),
+                whole: false,
+                entry: id.clone(),
+                sides: format!(
+                    "{}|{}",
+                    l.map_or("-", |e| e.eff.as_str()),
+                    r.map_or("-", |e| e.eff.as_str())
+                ),
+            }
+        })
+        .collect()
 }
 
 /// Whether section `key` was never synced here: no base, or none for it.
@@ -1181,10 +1379,12 @@ fn compare(local: Option<&str>, repo: Option<&str>, base: Option<Option<&str>>) 
 
 fn overall(sections: &[Section]) -> Changed {
     let has = |c: Changed| sections.iter().any(|s| s.state == c);
-    // Each section is settled on its own: only one changed on both sides
-    // needs a choice.
+    // Each section is settled on its own: only one with an entry of two
+    // values needs a choice.
     if has(Changed::Both) {
         Changed::Both
+    } else if has(Changed::Merge) {
+        Changed::Merge
     } else if has(Changed::Here) {
         Changed::Here
     } else if has(Changed::Repository) {
@@ -1194,21 +1394,14 @@ fn overall(sections: &[Section]) -> Changed {
     }
 }
 
-/// [`Status::differs_key`]: each section changed on both sides, with both
-/// sides' digests.
-fn key_of_differences(sections: &[Section], local: &Side, repo: &Side) -> Option<String> {
+/// [`Status::differs_key`]: each entry with two values, with what each
+/// side holds.
+fn key_of_differences(clashes: &[Clash]) -> Option<String> {
     let mut h = Sha256::new();
-    let mut any = false;
-    for s in sections.iter().filter(|s| s.state == Changed::Both) {
-        any = true;
-        h.update(format!(
-            "{}={}|{}\n",
-            s.key,
-            local.get(s.key).unwrap_or("-"),
-            repo.get(s.key).unwrap_or("-")
-        ));
+    for c in clashes {
+        h.update(format!("{}={}\n", c.id, c.sides));
     }
-    any.then(|| format!("{:x}", h.finalize()))
+    (!clashes.is_empty()).then(|| format!("{:x}", h.finalize()))
 }
 
 /// [`Status::differs_key`] for the working copy as the last pull left it,
@@ -1221,19 +1414,7 @@ pub fn differs_key(p: &Place) -> Option<String> {
     let (local, _, _) = local_side(&read_local(p).ok()?, p.dir()).ok()?;
     let repo = repo_side(&read_repo(p.store).ok()??).ok()?.0;
     let base = Base::read(p.store);
-    let sections: Vec<Section> = SHARED_SECTIONS
-        .iter()
-        .map(|(key, name)| Section {
-            key,
-            name,
-            state: compare(
-                local.get(key),
-                repo.get(key),
-                base.as_ref().and_then(|b| b.get(key)),
-            ),
-        })
-        .collect();
-    key_of_differences(&sections, &local, &repo)
+    key_of_differences(&judge_all(&local, &repo, base.as_ref()).2)
 }
 
 /// A file [`differs_key`] (and so the rail's dot) depends on, with when it
@@ -1306,12 +1487,100 @@ pub fn dismissed_key(store: &Store) -> Option<String> {
 /// clone's `.git`, never shared. A new difference, or either side changing
 /// again, is another key and shows again.
 pub fn dismiss(store: &Store, key: &str) -> Result<()> {
+    // The line about what was merged goes with the note.
+    mark_merged(store, true);
     store.write_local_file(
         DISMISSED_FILE,
         &serde_json::to_vec_pretty(&Dismissed {
             key: Some(key.to_string()),
         })?,
     )
+}
+
+/// An entry the last merge brought here from the repository.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergedEntry {
+    /// Its section's key (`tier_zero`).
+    pub section: String,
+    /// Its ID in the section.
+    pub id: String,
+    /// What a person reads: "CASTELBLACK$".
+    pub label: String,
+    /// It is new here (not a change to one this computer had).
+    #[serde(default)]
+    pub added: bool,
+    /// What happened, in words: "CASTELBLACK$ added to Tier Zero".
+    pub words: String,
+}
+
+/// What the last merge brought here from the repository, with who made the
+/// last shared change and when: the app marks those entries "shared" until
+/// a later sync brings others, and says it once.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergedHere {
+    /// When it was merged (Unix seconds).
+    pub at: i64,
+    pub entries: Vec<MergedEntry>,
+    pub by: Option<String>,
+    pub on: Option<String>,
+    /// When the repository's change was made (RFC 3339).
+    pub changed_at: Option<String>,
+    /// The app showed its line once with nothing else to say.
+    #[serde(default)]
+    pub seen: bool,
+    /// Dismissed with the note about entries with two values.
+    #[serde(default)]
+    pub dismissed: bool,
+}
+
+impl MergedHere {
+    /// "CASTELBLACK$ added to Tier Zero": what came, in a sentence's words.
+    pub fn words(&self) -> String {
+        self.entries
+            .iter()
+            .map(|e| e.words.as_str())
+            .collect::<Vec<_>>()
+            .join("; ")
+    }
+}
+
+fn record_merged(store: &Store, entries: Vec<MergedEntry>) {
+    let last = last_change(store);
+    let rec = MergedHere {
+        at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs() as i64),
+        entries,
+        by: last.as_ref().and_then(|c| c.by.clone()),
+        on: last.as_ref().and_then(|c| c.on.clone()),
+        changed_at: last.as_ref().map(|c| c.at.clone()),
+        seen: false,
+        dismissed: false,
+    };
+    if let Ok(b) = serde_json::to_vec_pretty(&rec) {
+        let _ = store.write_local_file(MERGED_FILE, &b);
+    }
+}
+
+/// What the last merge brought here, if anything.
+pub fn merged_here(store: &Store) -> Option<MergedHere> {
+    serde_json::from_slice(&store.read_local_file(MERGED_FILE)?).ok()
+}
+
+/// Marks what the last merge brought as shown (`dismissed`: with the note's
+/// Dismiss), so its line isn't shown again.
+pub fn mark_merged(store: &Store, dismissed: bool) {
+    let Some(mut m) = merged_here(store) else {
+        return;
+    };
+    if m.seen && (m.dismissed || !dismissed) {
+        return;
+    }
+    m.seen = true;
+    m.dismissed |= dismissed;
+    if let Ok(b) = serde_json::to_vec_pretty(&m) {
+        let _ = store.write_local_file(MERGED_FILE, &b);
+    }
 }
 
 /// Forgets a dismissal: once nothing differs, the next difference shows.
@@ -1554,8 +1823,19 @@ pub struct Done {
     pub kept: Option<KeptUnpushed>,
     /// Changed here on a computer that doesn't push: they stay here.
     pub here_only: Vec<&'static str>,
-    /// Changed on both sides: left as they are on both.
+    /// Sections with an entry of two values (or, settled whole, changed
+    /// on both sides): left as they are on both.
     pub conflict: Vec<&'static str>,
+    /// What the merge brought here from the repository, in words
+    /// ("CASTELBLACK$ added to Tier Zero").
+    pub merged: Vec<String>,
+    /// The sections those entries are in (keys).
+    pub merged_sections: Vec<&'static str>,
+    /// What the merge shared from here, in words.
+    pub shared: Vec<String>,
+    /// The entries with two values a choice settled, one sentence each
+    /// ("Stale Tier Zero account: now 60 days, from the shared settings.").
+    pub settled: Vec<String>,
     /// The repository has no shared settings yet, and this computer doesn't
     /// push.
     pub nothing_shared: bool,
@@ -1580,7 +1860,7 @@ pub struct Outcome {
 impl Outcome {
     /// Whether the settings here changed (a run then reads them again).
     pub fn applied(&self) -> bool {
-        !self.done.applied.is_empty()
+        !self.done.applied.is_empty() || !self.done.merged.is_empty()
     }
 
     /// Whether some section changed on both sides is left to settle.
@@ -1597,16 +1877,22 @@ impl Outcome {
     /// A few sentences for the command line, or `None` when there is
     /// nothing to say.
     pub fn sentence(&self) -> Option<String> {
-        self.words(false)
+        self.words(false, true)
+    }
+
+    /// [`Outcome::sentence`] without the entries with two values: for
+    /// `pathwarden config sync`, which lists them on lines of their own.
+    pub fn sentence_without_clashes(&self) -> Option<String> {
+        self.words(false, false)
     }
 
     /// [`Outcome::sentence`] for the app's pages: plain words, no
     /// commands (they live in the docs).
     pub fn page_sentence(&self) -> Option<String> {
-        self.words(true)
+        self.words(true, true)
     }
 
-    fn words(&self, page: bool) -> Option<String> {
+    fn words(&self, page: bool, clashes: bool) -> Option<String> {
         let d = &self.done;
         let mut out = Vec::new();
         if d.unreadable.is_some() {
@@ -1630,6 +1916,12 @@ impl Outcome {
                 updates.join(", ")
             ));
         }
+        if !d.merged.is_empty() {
+            out.push(format!(
+                "Merged from the shared settings: {}.",
+                d.merged.join("; ")
+            ));
+        }
         if let (Some(s), Some(p)) = (&d.summary, &d.published) {
             if p.pushed {
                 let plain = if self.status.encrypted {
@@ -1637,13 +1929,24 @@ impl Outcome {
                 } else {
                     ", in plain text (not encrypted)"
                 };
-                // The first share says no more than that it is shared.
-                out.push(match s.strip_prefix("pathwarden settings: ").unwrap_or(s) {
-                    "shared from this environment" => format!("Shared with this history{plain}."),
-                    what => format!("Shared with this history{plain}: {what}."),
-                });
+                // Only merged entries went: they are named.
+                if d.pushed.is_empty() && !d.shared.is_empty() {
+                    out.push(format!(
+                        "Shared from this computer{plain}: {}.",
+                        d.shared.join("; ")
+                    ));
+                } else {
+                    // The first share says no more than that it is shared.
+                    out.push(match s.strip_prefix("pathwarden settings: ").unwrap_or(s) {
+                        "shared from this environment" => {
+                            format!("Shared with this history{plain}.")
+                        }
+                        what => format!("Shared with this history{plain}: {what}."),
+                    });
+                }
             }
         }
+        out.extend(d.settled.iter().cloned());
         if let Some(k) = &d.kept {
             out.push(k.sentence("The shared settings change is committed"));
         }
@@ -1663,19 +1966,36 @@ impl Outcome {
                 )
             });
         }
-        if !d.conflict.is_empty() {
+        let waiting = &self.status.clashes;
+        if clashes && !waiting.is_empty() {
+            let first = clash_words(waiting);
+            let each: Vec<String> = waiting.iter().map(Clash::words).collect();
+            out.push(if page {
+                format!("{first} Choose on Settings. Until then, runs here use this computer's.")
+            } else {
+                let ids: Vec<&str> = waiting.iter().map(|c| c.id.as_str()).collect();
+                let keep = if self.status.pushes {
+                    ", `--keep-local` keeps this computer's and shares it"
+                } else {
+                    ""
+                };
+                format!(
+                    "{first} {}. Until you choose, runs here use this computer's; everything \
+                     else is merged. `pathwarden config sync --use-repo` takes the shared \
+                     value{keep} (`--section` {} for one).",
+                    each.join("; "),
+                    ids.join(" or ")
+                )
+            });
+        } else if clashes && !d.conflict.is_empty() {
+            // Changed again on another computer while this one pushed.
             let differ = differ_words(&d.conflict);
             out.push(if page {
-                format!(
-                    "{differ} Both changed since this computer last synced. Choose which to keep \
-                     on Settings. Until then, runs here use this computer's."
-                )
+                format!("{differ} Choose on Settings. Until then, runs here use this computer's.")
             } else {
                 format!(
-                    "{differ} Both changed since this computer last synced. Keep the shared \
-                     settings with `pathwarden config sync --use-repo`, or this computer's with \
-                     `--keep-local` (`--status` shows each section). Until then, runs here use \
-                     this computer's."
+                    "{differ} `pathwarden config sync` merges them again. Until then, runs here \
+                     use this computer's."
                 )
             });
         }
@@ -1696,17 +2016,43 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
         Resolve::UseRepo(k) => (k.clone(), true),
         Resolve::KeepLocal(k) => (k.clone(), false),
     };
+    // Each choice names a section, or one entry with two values
+    // (`rules.stale_days`).
+    let mut sections_named: Vec<&'static str> = Vec::new();
+    let mut entries_named: Vec<(&'static str, String)> = Vec::new();
     for k in &chosen {
-        if section_key(k).is_none() {
+        let k = k.trim();
+        if let Some(s) = section_key(k) {
+            sections_named.push(s);
+            continue;
+        }
+        if let Some(c) = r
+            .status
+            .clashes
+            .iter()
+            .find(|c| !c.whole && c.id.eq_ignore_ascii_case(k))
+        {
+            entries_named.push((c.section, c.entry.clone()));
+            continue;
+        }
+        if r.status.unreadable.is_none()
+            && k.split_once('.')
+                .is_some_and(|(s, _)| section_key(s).is_some())
+        {
             bail!(
-                "`{k}` is not a shared section; use one of {}",
-                SHARED_SECTIONS
-                    .iter()
-                    .map(|(k, _)| *k)
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "`{k}` has one value here and in the shared settings, so there is nothing to \
+                 choose. `pathwarden config sync --status` lists the settings with two values."
             );
         }
+        bail!(
+            "`{k}` is not a shared section; use one of {}, or a setting with two values \
+             (`pathwarden config sync --status` lists them)",
+            SHARED_SECTIONS
+                .iter()
+                .map(|(k, _)| *k)
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
     match &resolve {
         Resolve::UseRepo(_) if r.repo_text.is_none() => {
@@ -1745,16 +2091,16 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
                 status: r.status,
             });
         }
-    } else if let Resolve::KeepLocal(keys) = &resolve {
+    } else if let Resolve::KeepLocal(_) = &resolve {
         // Only what changed here can be kept: never a section the
         // repository changed alone, which keeping would undo.
         // On a first sync, this computer's own section may be kept too
         // when it is named: the history's would replace it otherwise.
         let unsynced_here = |k: &str| never_synced(r.base.as_ref(), k) && r.local.get(k).is_some();
-        for k in keys {
-            let s = r.status.sections.iter().find(|s| s.key == k.as_str());
+        for k in &sections_named {
+            let s = r.status.sections.iter().find(|s| s.key == *k);
             let keepable = |s: &&Section| {
-                matches!(s.state, Changed::Here | Changed::Both)
+                matches!(s.state, Changed::Here | Changed::Both | Changed::Merge)
                     || (s.state == Changed::Repository && unsynced_here(s.key))
             };
             if let Some(s) = s.filter(|s| !keepable(s)) {
@@ -1773,9 +2119,51 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
     let keep_local = matches!(resolve, Resolve::KeepLocal(_));
     let mut take_repo: Vec<&'static str> = Vec::new();
     let mut take_local: Vec<&'static str> = Vec::new();
+    // Sections merged entry by entry, and what each moves.
+    let mut merged: Vec<(&'static str, merge::Plan)> = Vec::new();
     let mut done = Done::default();
     for s in &r.status.sections {
-        let named = chosen.iter().any(|k| k == s.key);
+        let named = sections_named.contains(&s.key);
+        if let Some(sp) = r.splits.get(s.key) {
+            // A reader that takes the shared settings drops its own
+            // changes, as for a section changed only here.
+            if use_repo && !p.pushes && (named || chosen.is_empty()) {
+                take_repo.push(s.key);
+                continue;
+            }
+            let pick = |id: &str| -> Option<Pick> {
+                if resolve == Resolve::Auto {
+                    return None;
+                }
+                let picked = named
+                    || chosen.is_empty()
+                    || entries_named.iter().any(|(k, e)| *k == s.key && e == id);
+                picked.then_some(if use_repo { Pick::Shared } else { Pick::Here })
+            };
+            let plan = sp.plan(&pick);
+            if !plan.clashes.is_empty() {
+                done.conflict.push(s.name);
+            }
+            for id in &plan.settled {
+                let c = r
+                    .status
+                    .clashes
+                    .iter()
+                    .find(|c| c.section == s.key && &c.entry == id);
+                if let Some(c) = c {
+                    done.settled.push(if plan.to_local.contains(id) {
+                        format!("{}: now {}, from the shared settings.", c.name, c.shared)
+                    } else {
+                        format!(
+                            "{}: kept {} and pushed it to the shared settings.",
+                            c.name, c.here
+                        )
+                    });
+                }
+            }
+            merged.push((s.key, plan));
+            continue;
+        }
         // Keeping this computer's on a first sync keeps what it had of the
         // sections never synced here, rather than taking the history's.
         let unsynced_here = s.state == Changed::Repository
@@ -1793,7 +2181,14 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
             Changed::Repository => take_repo.push(s.key),
             Changed::Here if p.pushes => take_local.push(s.key),
             Changed::Here => done.here_only.push(s.name),
-            Changed::Both => done.conflict.push(s.name),
+            Changed::Both | Changed::Merge => done.conflict.push(s.name),
+        }
+        if picked && s.state == Changed::Both {
+            done.settled.push(if use_repo {
+                format!("{}: the shared settings are used here.", s.name)
+            } else {
+                format!("{}: this computer's are kept and shared.", s.name)
+            });
         }
     }
     let mut base = r.base.clone().unwrap_or_default();
@@ -1810,7 +2205,14 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
             base.set_absent(s.key);
         }
     }
-    if !take_repo.is_empty() {
+    // What this computer takes of the merged sections' entries.
+    let merged_here: Vec<(&'static str, Vec<String>)> = merged
+        .iter()
+        .filter(|(_, p)| !p.to_local.is_empty())
+        .map(|(k, p)| (*k, p.to_local.clone()))
+        .collect();
+    let mut left_out: Vec<(&'static str, String)> = Vec::new();
+    if !take_repo.is_empty() || !merged_here.is_empty() {
         // Never synced here: the history's replace this computer's, which
         // are saved first.
         let unsynced: Vec<&'static str> = take_repo
@@ -1818,7 +2220,7 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
             .copied()
             .filter(|k| never_synced(r.base.as_ref(), k))
             .collect();
-        let applied = apply_repo(p, &r, &take_repo, &unsynced)?;
+        let applied = apply_repo(p, &r, &take_repo, &unsynced, &merged_here)?;
         done.applied = applied.names;
         done.first = applied.first.iter().map(|k| section_name(k)).collect();
         done.taken = unsynced.iter().map(|k| section_name(k)).collect();
@@ -1826,31 +2228,107 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
         done.backup_names = applied.backup_names;
         done.folder_rights = applied.folder_rights;
         done.skipped = applied.skipped;
+        left_out = applied.left_out;
         for k in &take_repo {
             base.set(k, &r.repo);
         }
+        // In words, and kept for the app: what came from the repository.
+        let mut entries = Vec::new();
+        for (key, ids) in &merged_here {
+            let sp = &r.splits[key];
+            for id in ids {
+                if left_out.iter().any(|(k, i)| k == key && i == id) {
+                    continue;
+                }
+                let (old, new) = (sp.local.get(id), sp.repo.get(id));
+                entries.push(MergedEntry {
+                    section: key.to_string(),
+                    id: id.clone(),
+                    label: new.or(old).map(|e| e.label.clone()).unwrap_or_default(),
+                    added: old.is_none() && new.is_some(),
+                    words: merge::change(key, id, old, new),
+                });
+            }
+        }
+        done.merged = entries.iter().map(|e| e.words.clone()).collect();
+        for e in &entries {
+            if let Some(k) = section_key(&e.section) {
+                if !done.merged_sections.contains(&k) {
+                    done.merged_sections.push(k);
+                }
+            }
+        }
+        if !entries.is_empty() {
+            record_merged(p.store, entries);
+        }
     }
-    if p.pushes && (!take_local.is_empty() || r.repo_text.is_none()) {
+    // What the repository takes of the merged sections' entries.
+    let merged_there: Vec<(&'static str, Vec<String>, Option<toml::Value>)> = merged
+        .iter()
+        .filter(|(_, plan)| p.pushes && !plan.to_repo.is_empty())
+        .map(|(k, plan)| {
+            let sp = &r.splits[k];
+            (*k, plan.to_repo.clone(), merge::build(k, &sp.in_repo(plan)))
+        })
+        .collect();
+    let mut pushed: Vec<&'static str> = Vec::new();
+    let mut raced: Vec<&'static str> = Vec::new();
+    if p.pushes && (!take_local.is_empty() || r.repo_text.is_none() || !merged_there.is_empty()) {
         let forced = matches!(resolve, Resolve::KeepLocal(_));
-        let (pushed, raced) = push_local(p, &r, &take_local, forced, &mut done)?;
+        let (went, lost) = push_local(p, &r, &take_local, &merged_there, forced, &mut done)?;
         if done.kept.is_none() {
             // The pushed sections are this side's now; the repository's
             // others stay as the last sync left them.
             let local = local_side(&read_local(p)?, p.dir())?.0;
-            for k in &pushed {
+            for k in went.iter().filter(|k| !r.splits.contains_key(*k)) {
                 base.set(k, &local);
             }
         }
-        done.pushed = pushed.iter().map(|k| section_name(k)).collect();
-        done.conflict.extend(raced.iter().map(|k| section_name(k)));
+        done.pushed = went
+            .iter()
+            .filter(|k| take_local.contains(k) || r.repo_text.is_none())
+            .map(|k| section_name(k))
+            .collect();
+        done.conflict.extend(lost.iter().map(|k| section_name(k)));
+        pushed = went;
+        raced = lost;
     }
+    for (key, plan) in &merged {
+        if raced.contains(key) {
+            // Another computer changed it meanwhile: the next sync merges
+            // it again.
+            continue;
+        }
+        let sp = &r.splits[key];
+        let went = plan.to_repo.is_empty() || pushed.contains(key);
+        if went && p.pushes {
+            let sp_words = plan
+                .to_repo
+                .iter()
+                .map(|id| merge::change(key, id, sp.repo.get(id), sp.local.get(id)));
+            done.shared.extend(sp_words);
+        }
+        let left: Vec<String> = left_out
+            .iter()
+            .filter(|(k, _)| k == key)
+            .map(|(_, i)| i.clone())
+            .collect();
+        base.set_value(
+            key,
+            merge::build(key, &sp.after(plan, went && p.pushes, &left)),
+        );
+        if !p.pushes && !plan.to_repo.is_empty() && !done.here_only.contains(&section_name(key)) {
+            done.here_only.push(section_name(key));
+        }
+    }
+    done.conflict.dedup();
     if r.repo_text.is_none() && !p.pushes {
         done.nothing_shared = true;
     }
     if r.base.as_ref() != Some(&base) && r.repo_text.is_some() || done.published.is_some() {
         base.write(p.store)?;
     }
-    let changed = !done.applied.is_empty() || done.summary.is_some();
+    let changed = !done.applied.is_empty() || !done.merged.is_empty() || done.summary.is_some();
     let status = if changed {
         read_all(p)?.status
     } else {
@@ -1870,12 +2348,14 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
 /// its own (non-empty) version of are a first sync's ([`Applied::first`]):
 /// before anything is replaced, `pathwarden.toml` and every pack file it
 /// overwrites are saved beside them ([`save_before_connect`]), and if a
-/// copy fails nothing is replaced.
+/// copy fails nothing is replaced. `merged`: entries of sections merged
+/// entry by entry, taken one by one ([`merge::apply`]).
 fn apply_repo(
     p: &Place,
     r: &Read,
     keys: &[&'static str],
     unsynced: &[&'static str],
+    merged: &[(&'static str, Vec<String>)],
 ) -> Result<ApplyDone> {
     let repo_text = r.repo_text.as_deref().unwrap_or_default();
     let dir = p.dir().to_path_buf();
@@ -1885,10 +2365,21 @@ fn apply_repo(
     let lower = |p: &Path| PathBuf::from(p.to_string_lossy().replace('\\', "/").to_lowercase());
     let last = last_change(p.store);
     let mut skipped: Vec<String> = Vec::new();
+    let mut left_out: Vec<(&'static str, String)> = Vec::new();
+    // The mapping packs merged in: by ID.
+    let merged_packs: Vec<String> = merged
+        .iter()
+        .filter(|(k, _)| *k == "mapping")
+        .flat_map(|(_, ids)| ids.clone())
+        .collect();
     let done = config_edit::with_lock(p.config_path, || {
         let original = std::fs::read_to_string(p.config_path).unwrap_or_default();
         let (now, _, _) = local_side(&original, &dir).map_err(|e| format!("{e:#}"))?;
-        if keys.iter().any(|k| now.get(k) != r.local.get(k)) {
+        if keys
+            .iter()
+            .chain(merged.iter().map(|(k, _)| k))
+            .any(|k| now.get(k) != r.local.get(k))
+        {
             return Err(format!(
                 "{} changed while the repository's settings were read; nothing was changed. \
                  Run `pathwarden config sync` again.",
@@ -1903,7 +2394,8 @@ fn apply_repo(
         // Pack files here the repository's replace: (file, its name from
         // this folder).
         let mut overwritten: Vec<(PathBuf, String)> = Vec::new();
-        if keys.contains(&"mapping") {
+        let packs_too = keys.contains(&"mapping") || !merged_packs.is_empty();
+        if packs_too {
             let canon_dir = std::fs::canonicalize(&dir).unwrap_or_else(|_| dir.clone());
             let packs = r
                 .repo
@@ -1912,7 +2404,13 @@ fn apply_repo(
                 .and_then(toml::Value::as_array)
                 .into_iter()
                 .flatten()
-                .filter_map(|t| t.as_table());
+                .filter_map(|t| t.as_table())
+                .filter(|t| {
+                    keys.contains(&"mapping")
+                        || mapping_path(t).is_some_and(|p| {
+                            merged_packs.contains(&crate::pack_origin::path_key(p))
+                        })
+                });
             for t in packs {
                 let Some(path) = mapping_path(t) else {
                     continue;
@@ -2003,10 +2501,30 @@ fn apply_repo(
                     .is_some_and(|path| bad.contains(&crate::pack_origin::path_key(path)))
             },
         )?;
+        if !merged.is_empty() {
+            let from = ConfigDoc::parse(config_edit::strip_header(repo_text))
+                .map_err(|e| format!("the repository's settings are not valid TOML: {e}"))?;
+            for (key, ids) in merged {
+                // A pack that can't be written here stays as it is here.
+                let ids: Vec<String> = ids
+                    .iter()
+                    .filter(|id| {
+                        let out = *key == "mapping" && bad.contains(id);
+                        if out {
+                            left_out.push((*key, (*id).clone()));
+                        }
+                        !out
+                    })
+                    .cloned()
+                    .collect();
+                merge::apply(doc.doc_mut(), key, &ids, from.doc())?;
+            }
+            doc.renumber();
+        }
         let text = config_edit::same_line_ends(&original, &doc.text());
         config_edit::check(&text)
             .map_err(|e| format!("The repository's settings can't be used here: {e}"))?;
-        if keys.contains(&"mapping") {
+        if packs_too {
             let mut o = serde_json::to_string_pretty(&origins).map_err(|e| e.to_string())?;
             o.push('\n');
             files.push((dir.join(crate::pack_origin::FILE), o));
@@ -2065,6 +2583,18 @@ fn apply_repo(
     .map_err(anyhow::Error::msg)?;
     let (first, copies, folder_rights) = done;
     let names: Vec<&'static str> = keys.iter().map(|k| section_name(k)).collect();
+    if keys.is_empty() {
+        // Only entries merged: the merge's own record says what came.
+        return Ok(ApplyDone {
+            names,
+            first,
+            backups: Vec::new(),
+            backup_names: Vec::new(),
+            folder_rights,
+            skipped,
+            left_out,
+        });
+    }
     // A first sync's notice the app hasn't shown yet stays: this record
     // adds to it.
     let earlier = unseen_applied(p.store, false).filter(|a| a.first.is_some());
@@ -2115,6 +2645,7 @@ fn apply_repo(
         backup_names: copies.into_iter().map(|(_, n)| n).collect(),
         folder_rights,
         skipped,
+        left_out,
     })
 }
 
@@ -2133,6 +2664,9 @@ struct ApplyDone {
     folder_rights: bool,
     /// Packs left out, and why.
     skipped: Vec<String>,
+    /// Entries merged in that were left out (packs that can't be written
+    /// here): (section, ID).
+    left_out: Vec<(&'static str, String)>,
 }
 
 #[cfg(test)]
@@ -2293,14 +2827,21 @@ fn write_all(files: &[(PathBuf, String)]) -> Result<(), String> {
     Ok(())
 }
 
+/// A section merged entry by entry, for [`push_local`]: its key, the entries
+/// the repository takes from here, and the section that makes.
+type MergedThere = (&'static str, Vec<String>, Option<toml::Value>);
+
 /// Commits the sections `keys` from here, on top of the repository's
 /// other sections, and pushes. `forced`: even when the repository changed
-/// them meanwhile (`--keep-local`). Returns the sections pushed, and those
-/// another machine changed while this was pushing (left as they are).
+/// them meanwhile (`--keep-local`). `merged`: sections merged entry by
+/// entry, with the entries the repository takes from here and the section
+/// that makes. Returns the sections pushed, and those another machine
+/// changed while this was pushing (left as they are).
 fn push_local(
     p: &Place,
     r: &Read,
     keys: &[&'static str],
+    merged: &[MergedThere],
     forced: bool,
     done: &mut Done,
 ) -> Result<(Vec<&'static str>, Vec<&'static str>)> {
@@ -2322,14 +2863,87 @@ fn push_local(
         keys.to_vec()
     };
     let mut raced: Vec<&'static str> = Vec::new();
+    let mut merging: Vec<&'static str> = merged.iter().map(|(k, ..)| *k).collect();
+    // The repository's file with the merged sections' entries from here.
+    let merge_into = |repo: Option<&str>, merging: &[&'static str]| -> Result<Option<String>> {
+        if merging.is_empty() {
+            return Ok(repo.map(str::to_string));
+        }
+        let mut rd = ConfigDoc::parse(repo.map(config_edit::strip_header).unwrap_or_default())
+            .map_err(anyhow::Error::msg)?;
+        for (k, ids, _) in merged.iter().filter(|(k, ..)| merging.contains(k)) {
+            merge::apply(rd.doc_mut(), k, ids, doc.doc()).map_err(anyhow::Error::msg)?;
+            if *k == "mapping" {
+                // The packs' text travels beside them: this computer's for
+                // the packs from here, the repository's for the others.
+                let text_of = |side: &Side, key: &str| -> Option<String> {
+                    side.table
+                        .get("mapping")?
+                        .as_array()?
+                        .iter()
+                        .filter_map(|t| t.as_table())
+                        .find(|t| {
+                            mapping_path(t).map(crate::pack_origin::path_key).as_deref()
+                                == Some(key)
+                        })?
+                        .get("text")?
+                        .as_str()
+                        .map(str::to_string)
+                };
+                let paths: Vec<String> = rd
+                    .doc()
+                    .get("mapping")
+                    .and_then(toml_edit::Item::as_array_of_tables)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|t| t.get("path").and_then(|v| v.as_str()).map(str::to_string))
+                    .collect();
+                let mut files = toml_edit::ArrayOfTables::new();
+                for path in paths {
+                    let key = crate::pack_origin::path_key(&path);
+                    let side = if ids.contains(&key) {
+                        &r.local
+                    } else {
+                        &r.repo
+                    };
+                    if let Some(text) = text_of(side, &key) {
+                        let mut t = toml_edit::Table::new();
+                        t.insert("path", toml_edit::value(path.as_str()));
+                        t.insert("text", toml_edit::value(text));
+                        files.push(t);
+                    }
+                }
+                let root = rd.doc_mut().as_table_mut();
+                root.remove(MAPPING_FILES);
+                if !files.is_empty() {
+                    root.insert(MAPPING_FILES, toml_edit::Item::ArrayOfTables(files));
+                }
+            }
+        }
+        rd.renumber();
+        Ok(Some(rd.text()))
+    };
     let build = |repo: Option<&str>,
-                 taken: &[&'static str]|
+                 taken: &[&'static str],
+                 merging: &[&'static str]|
      -> Result<(String, ChangeRecord, String)> {
-        let text = doc.shared_text(HEADER, &|k| taken.contains(&k), &share, &r.packs, repo);
+        let into = merge_into(repo, merging)?;
+        let text = doc.shared_text(
+            HEADER,
+            &|k| taken.contains(&k),
+            &share,
+            &r.packs,
+            into.as_deref(),
+        );
         let (after, _) = repo_side(&text)?;
         for k in taken {
             if after.get(k) != r.local.get(k) {
                 bail!("the shared settings written for the repository don't read back the same");
+            }
+        }
+        for (k, _, want) in merged.iter().filter(|(k, ..)| merging.contains(k)) {
+            if !merge::same(k, after.table.get(*k), want.as_ref()) {
+                bail!("the shared settings merged for the repository don't read back the same");
             }
         }
         let before = match repo {
@@ -2347,6 +2961,7 @@ fn push_local(
         }
         let changed: Vec<&str> = taken
             .iter()
+            .chain(merging)
             .copied()
             .filter(|k| before.get(k) != after.get(k))
             .collect();
@@ -2386,7 +3001,7 @@ fn push_local(
         *said.borrow_mut() = notes;
         Ok(())
     };
-    let (text, rec, message) = build(r.repo_text.as_deref(), &taken)?;
+    let (text, rec, message) = build(r.repo_text.as_deref(), &taken, &merging)?;
     write(&text, &rec)?;
     let summary = rec.summary.clone();
     let result = p.store.publish_with(&message, || {
@@ -2408,15 +3023,23 @@ fn push_local(
                 .partition(|k| initial || now_side.get(k) == r.repo.get(k));
             raced.extend(lost);
             taken = keep;
+            merging.retain(|k| {
+                let same = now_side.get(k) == r.repo.get(k);
+                if !same {
+                    raced.push(k);
+                }
+                same
+            });
         }
-        if taken.is_empty() {
+        if taken.is_empty() && merging.is_empty() {
             return Ok(None);
         }
-        let (text, rec, message) = build(now.as_deref(), &taken)?;
+        let (text, rec, message) = build(now.as_deref(), &taken, &merging)?;
         write(&text, &rec)?;
         Ok(Some(message))
     });
     done.notes = crate::store::once_each(said.take());
+    taken.extend(merging);
     match result {
         Ok(published) => {
             if !taken.is_empty() {
@@ -2909,7 +3532,7 @@ pub struct AfterPull {
     /// The sections the repository's were applied here, by key
     /// (`tier_zero`, `rules`, ...).
     pub applied: Vec<&'static str>,
-    /// Some section differs from the shared settings (changed on both sides).
+    /// Some entry has two values ([`Clash`]).
     pub conflict: bool,
 }
 
@@ -2921,17 +3544,25 @@ pub fn after_pull_detail(p: &Place) -> AfterPull {
             note: o
                 .sentence()
                 .map(|text| Note::both(text, o.page_sentence().unwrap_or_default(), o.problem())),
-            applied: o
-                .done
-                .applied
-                .iter()
-                .filter_map(|name| {
-                    SHARED_SECTIONS
-                        .iter()
-                        .find(|(_, n)| n == name)
-                        .map(|(k, _)| *k)
-                })
-                .collect(),
+            applied: {
+                let mut keys: Vec<&'static str> = o
+                    .done
+                    .applied
+                    .iter()
+                    .filter_map(|name| {
+                        SHARED_SECTIONS
+                            .iter()
+                            .find(|(_, n)| n == name)
+                            .map(|(k, _)| *k)
+                    })
+                    .collect();
+                for k in &o.done.merged_sections {
+                    if !keys.contains(k) {
+                        keys.push(k);
+                    }
+                }
+                keys
+            },
             conflict: o.conflict(),
         },
         Err(e) => {
@@ -3194,8 +3825,15 @@ mod tests {
         let newer = "format = 2\ntier_zero = [\"C\"]\n";
         std::fs::write(&repo, newer).unwrap();
         for forced in [true, false] {
-            let e =
-                push_local(&place, &r, &["tier_zero"], forced, &mut Done::default()).unwrap_err();
+            let e = push_local(
+                &place,
+                &r,
+                &["tier_zero"],
+                &[],
+                forced,
+                &mut Done::default(),
+            )
+            .unwrap_err();
             assert_eq!(format!("{e:#}"), NEWER_SETTINGS_WORDS, "{forced}");
             assert_eq!(std::fs::read_to_string(&repo).unwrap(), newer, "{forced}");
         }
@@ -3203,7 +3841,8 @@ mod tests {
         std::fs::write(&repo, "tier_zero = [\"A\"]\n").unwrap();
         let env = state.join(ENVIRONMENT_FILE);
         std::fs::write(&env, "{\"format\": 2}").unwrap();
-        let e = push_local(&place, &r, &["tier_zero"], true, &mut Done::default()).unwrap_err();
+        let e =
+            push_local(&place, &r, &["tier_zero"], &[], true, &mut Done::default()).unwrap_err();
         assert!(
             format!("{e:#}").contains("was saved by a newer Pathwarden"),
             "{e:#}"
@@ -3216,7 +3855,7 @@ mod tests {
         // A push that goes through writes last-change.json at format 1,
         // which reads back; one of a newer format isn't read.
         std::fs::remove_file(&env).unwrap();
-        push_local(&place, &r, &["tier_zero"], true, &mut Done::default()).unwrap();
+        push_local(&place, &r, &["tier_zero"], &[], true, &mut Done::default()).unwrap();
         let last = state.join(LAST_CHANGE_FILE);
         let v: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(&last).unwrap()).unwrap();

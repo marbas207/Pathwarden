@@ -78,9 +78,10 @@ async fn list_page(State(st): State<Shared>) -> Html<String> {
             .as_ref()
             .map(|v| {
                 let mut s = crate::sync_ui::sync_line(v, "zones");
+                s.push_str(&crate::sync_ui::clash_list(v, "zone", &[]));
                 if let Some(block) = crate::sync_ui::conflict(v, "zone") {
                     s.push_str(&format!(
-                        r#"<section class="card setting" id="zones-sync"><header><h2 class="sub">Zones<span class="stag both">{}</span></h2></header>{block}</section>"#,
+                        r#"<section class="card setting" id="zones-sync"><header><h2 class="sub">Zones<span class="stag clash">{}</span></h2></header>{block}</section>"#,
                         crate::sync_ui::BOTH_TAG
                     ));
                 }

@@ -1271,9 +1271,9 @@
   // "Use shared settings" / "Use local settings" for one section.
   all("[data-sync-action]").forEach(function (b) {
     b.addEventListener("click", function () {
-      var holder = b.closest(".cmp-actions, .card-actions, .card") || document.body;
+      var holder = b.closest(".clash-row, .cmp-actions, .card-actions, .card") || document.body;
       all("[data-sync-action]").forEach(function (x) { x.disabled = true; });
-      status(holder, b.getAttribute("data-sync-action") === "keep_local" ? "Sharing…" : "Taking the shared settings…");
+      status(holder, b.getAttribute("data-sync-action") === "keep_local" ? "Sharing…" : "Taking the shared value…");
       api("POST", "/api/settings/sync", {
         action: b.getAttribute("data-sync-action"),
         section: b.getAttribute("data-sync-section")

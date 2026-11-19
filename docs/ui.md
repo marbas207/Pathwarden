@@ -86,17 +86,34 @@ and **Mappings** ([opengraph.md](opengraph.md)) edit the environment's
 `pathwarden.toml` (its folder is on **Environments**). Changes apply from
 the next analysis. A page says something at its top only when there is
 something to do: the file can't be loaded, the shared settings can't be
-read, or they differ from this computer's.
+read, or a setting has two values.
 
 In a git history that keeps **Full runs and settings**, these settings are
 shared; **History storage** says where the history is and whether it is
-encrypted. When this computer's and the shared ones both changed since this
-computer last synced, the page shows both sides: **Use shared settings**
-or **Use local settings**. Until you choose, runs here use this
-computer's. An amber dot beside **Settings** in the sidebar marks it on
-every page; **Dismiss** on the note hides the dot on this computer until
-something else differs. The CLI equivalents are `pathwarden config sync --use-repo` and
-`--keep-local` (`--status` shows each section).
+encrypted. When this computer and another both changed shared settings
+since this computer last synced, they are merged entry by entry: a Tier
+Zero object, an accepted risk, a Tier Zero settings folder, a zone, a
+management plane, a mapping pack, or a single rule setting. Changes to
+different entries are kept on both sides without asking; a line under the
+page's title says what came ("Merged from the shared settings: CASTELBLACK$
+added to Tier Zero."), and each entry that came is marked **shared** with
+who shared it and when, until a later sync brings others.
+
+Only a real clash asks: the same entry changed to different values on both
+computers, or changed on one and removed on the other. The note names it
+("Stale Tier Zero account has two values.", or "… and 2 more have two
+values"; its ⓘ lists them all), and the choice is next to the setting:
+**Use 60** takes the shared value, **Keep 30** keeps this computer's and
+shares it (a **Read only** computer has only **Use**). Until you choose,
+runs here use this computer's value for that entry only; everything else
+is merged. The section's tag says how many settings have two values, and an
+amber dot marks its link at the top of Settings and **Settings** in the
+sidebar on every page. **Dismiss** on the note hides the dots and the merged
+line on this computer until a new clash appears; the note stays as one
+line. A section this version can't take apart entry by entry, or whose last
+sync isn't known, shows both sides whole, with **Use shared settings** and
+**Use local settings**. The CLI equivalent is `pathwarden config sync`
+([running.md](running.md#shared-settings)).
 
 ## Act on a finding
 
@@ -208,7 +225,7 @@ With **Full runs and settings**, the first sync takes the history's shared
 settings (rules, Tier Zero additions, accepted risks, zones, management
 planes, mapping packs). Settings only this computer has are kept and
 shared; on a **Read only** computer they stay, and a shared version that
-arrives later shows as differing from the shared ones. When the history's replace settings
+arrives later is merged with them entry by entry. When the history's replace settings
 this computer had, its `pathwarden.toml` is saved first, next to it, as
 `pathwarden.toml.before-connect-<date>`, and so is each mapping pack it
 replaces (`packs/<name>.toml.before-connect-<date>`). If a copy can't be

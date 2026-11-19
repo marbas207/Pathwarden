@@ -656,7 +656,7 @@ pub(crate) fn shell(
 }
 
 /// What the rail's dot on Settings says.
-pub const SETTINGS_DIFFER: &str = "Settings differ from the shared ones";
+pub const SETTINGS_DIFFER: &str = "A setting has two values";
 
 /// The rail's Settings link `link`, with an amber dot when some shared
 /// section differs from the shared settings: no text on the page, the words

@@ -278,44 +278,93 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         .unwrap();
         assert!(o.applied(), "{:?}", o.done);
     }
+    // Both add Tier Zero, and both set the stale days: Tier Zero merges,
+    // the one setting asks.
+    let rules = |days: i64| pathwarden_core::config_edit::RulesEdit {
+        disabled: Vec::new(),
+        stale_days: days,
+        password_age_days: 365,
+        krbtgt_age_days: 180,
+        sso_key_age_days: None,
+        severity: "exposure".into(),
+        severities: Default::default(),
+    };
+    let by = pathwarden_core::config_edit::Stamp {
+        by: Some(r"NORTH\eddard.stark".into()),
+        on: Some("PW-SCHED01".into()),
+        at: "2026-11-18T17:55:00Z".into(),
+    };
+    let with = |path: &Path, extra: &str| {
+        let text = std::fs::read_to_string(path).unwrap();
+        let mut list = pathwarden_core::config_edit::check(&text)
+            .unwrap()
+            .tier_zero;
+        list.push(extra.into());
+        list
+    };
+    let theirs = with(&other_toml, "CASTELBLACK$");
     apply_sharing(other_toml.clone(), &Share::default(), |d| {
-        d.set_tier_zero(&["VAULT01$".into(), "CASTELBLACK$".into()])
+        d.set_tier_zero(&theirs)?;
+        d.set_rules(&rules(60), &by)
     })
     .unwrap();
+    let mine = with(&ws.config_path(), "WINTERFELL$");
     apply(ws.config_path(), |d| {
-        d.set_tier_zero(&["WINTERFELL$".into()])
+        d.set_tier_zero(&mine)?;
+        d.set_rules(&rules(30), &by)
     })
     .unwrap();
     let (_, page) = a.get("/settings").await;
     assert!(
-        page.contains("This computer&#39;s Tier Zero additions differ from the shared ones.")
-            || page.contains("This computer's Tier Zero additions differ from the shared ones."),
-        "{page}"
+        page.contains("<strong>Stale Tier Zero account has two values.</strong>"),
+        "the note names it: {page}"
     );
     assert!(
-        page.contains("Until then, runs here use this computer"),
+        page.contains(
+            "Merged from the shared settings: <strong>CASTELBLACK$</strong> added to Tier Zero."
+        ),
+        "what merged: {page}"
+    );
+    assert!(
+        page.contains("Runs here use 30 days. Everything else is merged."),
         "what happens meanwhile: {page}"
     );
     assert!(
-        page.contains("Use local settings")
-            && page.contains("Use shared settings")
-            && page.contains("Differs from the shared settings")
-            && page.contains("Replaces local settings with the shared ones")
-            && page.contains("Overwrites the settings in the shared repository"),
+        page.contains(r#"<span class="stag clash">1 setting has two values</span>"#)
+            && page.contains(r#"class="field has-clash""#)
+            && page.contains(r#"data-sync-section="rules.stale_days">Use 60</button>"#)
+            && page.contains(r#"data-sync-section="rules.stale_days">Keep 30</button>"#)
+            && page.contains("Shared: <strong>60 days</strong>"),
+        "the choice next to the setting: {page}"
+    );
+    assert!(
+        page.contains(
+            r##"<a href="#rules" title="A setting has two values">Rules<span class="sr-only">"##
+        ),
+        "the jump link's dot: {page}"
+    );
+    assert!(
+        !page.contains(r##"<a href="#tier-zero" title"##),
+        "Tier Zero merged, no dot: {page}"
+    );
+    assert!(
+        page.contains(
+            r#"<span class="chip-text">CASTELBLACK$</span><span class="chip-from">shared · "#
+        ),
+        "the merged entry's mark: {page}"
+    );
+    assert!(
+        page.contains("WINTERFELL$") && !page.contains("Differs from the shared settings"),
         "{page}"
     );
     assert!(
-        !page.contains("in the repository") && !page.contains("Keep mine"),
-        "plain words: {page}"
-    );
-    assert!(
-        page.contains("CASTELBLACK$") && page.contains("WINTERFELL$"),
-        "{page}"
+        !page.contains("pathwarden config") && !page.contains("stag both"),
+        "plain words, amber only: {page}"
     );
     let (_, page) = a.get("/automate/history").await;
     assert!(
         page.contains("What it keeps")
-            && page.contains("Tier Zero additions differ from the shared ones")
+            && page.contains("Stale Tier Zero account has two values")
             && page.contains(">Review</a>"),
         "{page}"
     );
@@ -326,7 +375,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     let (_, page) = a.get("/runs").await;
     assert!(dot(&page), "{page}");
     assert!(
-        page.contains(r#"<span class="sr-only">: settings differ from the shared ones</span>"#),
+        page.contains(r#"<span class="sr-only">: a setting has two values</span>"#),
         "a name for screen readers: {page}"
     );
     let foot = page
@@ -334,10 +383,11 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         .nth(1)
         .unwrap_or_default();
     assert!(
-        !foot.contains("differ") && !foot.contains("choice"),
+        !foot.contains("two values") && !foot.contains("choice"),
         "the footer: {foot}"
     );
-    // Dismiss: no dot, the note on one line, the comparison stays.
+    // Dismiss: no dot, the note on one line without the merged line, the
+    // choice stays.
     let (_, page) = a.get("/settings").await;
     let key = page
         .split(r#"data-sync-dismiss=""#)
@@ -354,17 +404,21 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     let (_, page) = a.get("/runs").await;
     assert!(!dot(&page), "dismissed: {page}");
     let (_, page) = a.get("/settings").await;
-    assert!(!dot(&page), "{page}");
+    assert!(!dot(&page), "no dot on the rail nor the links: {page}");
     assert!(
-        page.contains("Settings differ from the shared ones: Tier Zero additions.</p>"),
+        page.contains(r#"<p class="sync-quiet" role="status">"#)
+            && page.contains("<span>Stale Tier Zero account has two values.</span>"),
         "the note on one line: {page}"
     );
-    assert!(!page.contains("data-sync-dismiss"), "{page}");
     assert!(
-        page.contains("CASTELBLACK$") && page.contains("Use local settings"),
-        "the comparison stays: {page}"
+        !page.contains("data-sync-dismiss") && !page.contains("Merged from the shared settings"),
+        "{page}"
     );
-    // The same difference after a restart: still dismissed.
+    assert!(
+        page.contains("Use 60") && page.contains(r#"<span class="chip-from">shared · "#),
+        "the choice and the mark stay: {page}"
+    );
+    // The same clash after a restart: still dismissed.
     {
         let st2 = Arc::new(AppState::new(ws.clone(), Token::generate().unwrap(), 4251));
         let b = App {
@@ -375,26 +429,32 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         let (_, page) = b.get("/runs").await;
         assert!(!dot(&page), "after a restart: {page}");
     }
-    // Either side changing again is a new difference: the dot is back.
-    apply(ws.config_path(), |d| {
-        d.set_tier_zero(&["WINTERFELL$".into(), "HIGHGARDEN$".into()])
-    })
-    .unwrap();
+    // A new value on either side is a new clash: the dot is back.
+    apply(ws.config_path(), |d| d.set_rules(&rules(31), &by)).unwrap();
     let (_, page) = a.get("/runs").await;
-    assert!(dot(&page), "a changed difference: {page}");
-    // Use local settings: shared, up to date again.
+    assert!(dot(&page), "a changed clash: {page}");
+    // Keep 31: shared, up to date again.
     let (s, r) = a
         .post(
             "/api/settings/sync",
-            json!({ "action": "keep_local", "section": "tier_zero" }),
+            json!({ "action": "keep_local", "section": "rules.stale_days" }),
         )
         .await;
     assert_eq!(s, StatusCode::OK, "{r}");
+    assert!(
+        r["note"]
+            .as_str()
+            .is_some_and(|n| n.contains("Stale Tier Zero account: kept 31 days")),
+        "{r}"
+    );
     let (_, page) = a.get("/settings").await;
-    assert!(!page.contains("sync-conflict"), "{page}");
-    assert!(!page.contains("Use local settings"));
+    assert!(
+        !page.contains("sync-conflict") && !page.contains("sync-quiet"),
+        "{page}"
+    );
+    assert!(!page.contains("Keep 31"));
     assert!(!dot(&page), "resolved: {page}");
-    // Resolved: the dismissal is gone, so the next difference shows.
+    // Resolved: the dismissal is gone, so the next clash shows.
     {
         let loc = pathwarden_ui::history_ui::locate(&ws, None).unwrap();
         assert_eq!(

@@ -517,12 +517,55 @@ fn render(
         sync.map(|v| crate::sync_ui::reader_action(v, key))
             .unwrap_or_default()
     };
+    // The settings with two values of a section that have no field of
+    // their own, at the top of its card.
+    let clash_list = |key: &str, fields: &[&str]| {
+        sync.map(|v| crate::sync_ui::clash_list(v, key, fields))
+            .unwrap_or_default()
+    };
+    let mark = |key: &str, id: &str| {
+        sync.map(|v| crate::sync_ui::merged_mark(v, key, id))
+            .unwrap_or_default()
+    };
+    // The section links, each with the amber dot while its section has a
+    // setting with two values.
+    let mut jump = String::new();
+    for (href, key, name) in [
+        ("tier-zero", "tier_zero", "Tier Zero"),
+        (
+            "settings-folders",
+            "settings_folders",
+            "Tier Zero settings folders",
+        ),
+        ("rules", "rules", "Rules"),
+        ("risks", "suppress", "Accepted risks"),
+        ("evidence", "", "Evidence packs"),
+    ] {
+        let dot = !key.is_empty() && sync.is_some_and(|v| crate::sync_ui::jump_dot(v, key));
+        let _ = write!(
+            jump,
+            r##"<a href="#{href}"{title}>{name}{dot}</a>"##,
+            title = if dot {
+                format!(r#" title="{}""#, pages::SETTINGS_DIFFER)
+            } else {
+                String::new()
+            },
+            dot = if dot {
+                format!(
+                    r#"<span class="sr-only">: {}</span><span class="nav-dot" aria-hidden="true"></span>"#,
+                    pages::SETTINGS_DIFFER.to_lowercase()
+                )
+            } else {
+                String::new()
+            },
+        );
+    }
     let _ = write!(
         b,
         r##"<div class="page-head"><div><p class="eyebrow">Configure</p><h1 class="panel-title">Settings</h1>
 <p class="lead">Set up how {env} is judged: extra Tier Zero objects, rules, accepted risks and evidence signing.</p></div></div>
 {file}{line}
-<nav class="jump" aria-label="Sections"><a href="#tier-zero">Tier Zero</a><a href="#settings-folders">Tier Zero settings folders</a><a href="#rules">Rules</a><a href="#risks">Accepted risks</a><a href="#evidence">Evidence packs</a></nav>
+<nav class="jump" aria-label="Sections">{jump}</nav>
 "##,
         file = file_line(st, loaded),
         env = if ctx.env_name.trim().is_empty() {
@@ -541,10 +584,11 @@ fn render(
         .unwrap_or_default();
     let mut chips = String::new();
     for t in &c.tier_zero {
+        let from = mark("tier_zero", &t.trim().to_lowercase());
         if here.contains(t) {
             chip_here(&mut chips, t);
         } else {
-            chip(&mut chips, t);
+            chip_marked(&mut chips, t, &from);
         }
     }
     let t0_editor = format!(
@@ -563,7 +607,7 @@ fn render(
     // for the page's script).
     let t0_body = match conflict("tier_zero") {
         Some(block) => format!("{block}<div hidden>{t0_editor}</div>"),
-        None => t0_editor,
+        None => format!("{}{t0_editor}", clash_list("tier_zero", &[])),
     };
     let _ = write!(
         b,
@@ -603,7 +647,11 @@ fn render(
         } else if here.contains(f) {
             chip_here(&mut chips, f);
         } else {
-            chip(&mut chips, f);
+            chip_marked(
+                &mut chips,
+                f,
+                &mark("settings_folders", &pathwarden_core::folder_origin::key(f)),
+            );
         }
     }
     let sf_editor = format!(
@@ -618,7 +666,7 @@ fn render(
     );
     let sf_body = match conflict("settings_folders") {
         Some(block) => format!("{block}<div hidden>{sf_editor}</div>"),
-        None => sf_editor,
+        None => format!("{}{sf_editor}", clash_list("settings_folders", &[])),
     };
     let _ = write!(
         b,
@@ -650,17 +698,39 @@ fn render(
         );
     }
     let rules_body = conflict("rules");
+    // A setting with two values: marked, with its choice under its field.
+    let field = |id: &str| -> (&'static str, String) {
+        match sync.and_then(|v| crate::sync_ui::clash_row(v, &format!("rules.{id}"))) {
+            Some(row) => (" has-clash", row),
+            None => ("", String::new()),
+        }
+    };
+    let (c_stale, r_stale) = field("stale_days");
+    let (c_pwd, r_pwd) = field("password_age_days");
+    let (c_krb, r_krb) = field("krbtgt_age_days");
+    let (c_sso, r_sso) = field("sso_key_age_days");
+    let (c_sev, r_sev) = field("severity");
+    let rules_list = clash_list(
+        "rules",
+        &[
+            "rules.stale_days",
+            "rules.password_age_days",
+            "rules.krbtgt_age_days",
+            "rules.sso_key_age_days",
+            "rules.severity",
+        ],
+    );
     let _ = write!(
         b,
         r#"<section class="card setting" id="rules" data-section="rules" data-loaded="{loaded}">
 <header><h2 class="sub">Rules{tag}</h2><p class="muted">When an account or password counts as old, how attack paths are rated, and which rules run.</p></header>
-{conflict}<div class="fields3"{hidden}>
-  <div class="field"><label for="stale_days">Stale Tier Zero account</label><div class="unit"><input class="input" type="number" id="stale_days" min="1" max="36500" step="1" value="{stale}" required><span>days</span></div><p class="hint">Tier Zero accounts with no logon for this long are reported. It also sets which accounts count as active for exposure.</p></div>
-  <div class="field"><label for="password_age_days">Old Tier Zero password</label><div class="unit"><input class="input" type="number" id="password_age_days" min="1" max="36500" step="1" value="{pwd}" required><span>days</span></div><p class="hint">Tier Zero passwords older than this are reported.</p></div>
-  <div class="field"><label for="krbtgt_age_days">Old krbtgt password</label><div class="unit"><input class="input" type="number" id="krbtgt_age_days" min="1" max="36500" step="1" value="{krbtgt}" required><span>days</span></div><p class="hint">The krbtgt account signs every Kerberos ticket.</p></div>
-  <div class="field"><label for="sso_key_age_days">Old Seamless SSO key</label><div class="unit"><input class="input" type="number" id="sso_key_age_days" min="1" max="36500" step="1" value="{sso}" required><span>days</span></div><p class="hint">The Seamless SSO key signs in to Entra ID as any synced user.</p></div>
+{conflict}{rules_list}<div class="fields3"{hidden}>
+  <div class="field{c_stale}"><label for="stale_days">Stale Tier Zero account</label><div class="unit"><input class="input" type="number" id="stale_days" min="1" max="36500" step="1" value="{stale}" required><span>days</span></div>{r_stale}<p class="hint">Tier Zero accounts with no logon for this long are reported. It also sets which accounts count as active for exposure.</p></div>
+  <div class="field{c_pwd}"><label for="password_age_days">Old Tier Zero password</label><div class="unit"><input class="input" type="number" id="password_age_days" min="1" max="36500" step="1" value="{pwd}" required><span>days</span></div>{r_pwd}<p class="hint">Tier Zero passwords older than this are reported.</p></div>
+  <div class="field{c_krb}"><label for="krbtgt_age_days">Old krbtgt password</label><div class="unit"><input class="input" type="number" id="krbtgt_age_days" min="1" max="36500" step="1" value="{krbtgt}" required><span>days</span></div>{r_krb}<p class="hint">The krbtgt account signs every Kerberos ticket.</p></div>
+  <div class="field{c_sso}"><label for="sso_key_age_days">Old Seamless SSO key</label><div class="unit"><input class="input" type="number" id="sso_key_age_days" min="1" max="36500" step="1" value="{sso}" required><span>days</span></div>{r_sso}<p class="hint">The Seamless SSO key signs in to Entra ID as any synced user.</p></div>
 </div>
-<fieldset class="choice"{hidden}><legend>How attack paths are rated</legend>
+<fieldset class="choice{c_sev}"{hidden}><legend>How attack paths are rated</legend>{r_sev}
   <label class="option card"><input type="radio" name="severity" value="exposure"{exp_on}><span><span class="opt-title"><strong>By exposure</strong> <span class="tag">Default</span></span><span class="muted">A path many users and computers can use is critical; one only a few can reach is lower, as in BloodHound Enterprise.</span></span></label>
   <label class="option card"><input type="radio" name="severity" value="static"{static_on}><span><strong>By rule</strong><span class="muted">Each rule keeps its own severity, however many accounts can use the path.</span></span></label>
 </fieldset>
@@ -729,7 +799,17 @@ fn render(
             "reason": s.reason,
             "expires": s.expires,
         });
-        let tag = if from_repository(s, &me.computer, shared_through_repository(c)) {
+        let risk_id = s
+            .fingerprint
+            .as_deref()
+            .or(s.rule.as_deref())
+            .unwrap_or_default()
+            .trim()
+            .to_lowercase();
+        let merged = mark("suppress", &risk_id);
+        let tag = if !merged.is_empty() {
+            merged
+        } else if from_repository(s, &me.computer, shared_through_repository(c)) {
             format!(
                 r#"<span class="risk-tag">{}From the repository</span>"#,
                 icon("i-history")
@@ -846,10 +926,11 @@ fn render(
         risks_tip = pages::tip("tip-risks", "Accepted risks", RISKS_TIP),
         risk_conflict = conflict("suppress").unwrap_or_else(|| {
             let r = reader("suppress");
+            let list = clash_list("suppress", &[]);
             if r.is_empty() {
-                r
+                list
             } else {
-                format!(r#"<div class="card-actions">{r}<span class="save-status muted small" aria-live="polite"></span></div>"#)
+                format!(r#"{list}<div class="card-actions">{r}<span class="save-status muted small" aria-live="polite"></span></div>"#)
             }
         }),
     );
@@ -863,8 +944,13 @@ fn render(
     ] {
         let body = conflict(key).or_else(|| {
             let r = reader(key);
-            (!r.is_empty()).then(|| {
-                format!(r#"<div class="card-actions">{r}<span class="save-status muted small" aria-live="polite"></span></div>"#)
+            let list = clash_list(key, &[]);
+            (!r.is_empty() || !list.is_empty()).then(|| {
+                if r.is_empty() {
+                    list
+                } else {
+                    format!(r#"{list}<div class="card-actions">{r}<span class="save-status muted small" aria-live="polite"></span></div>"#)
+                }
             })
         });
         if let Some(body) = body {
@@ -1124,6 +1210,21 @@ pub(crate) fn chip_here(b: &mut String, value: &str) {
     let _ = write!(
         b,
         r#"<li class="chip-item here" data-value="{raw}"><span class="chip-text">{v}</span><span class="here-mark">here</span><button type="button" class="fl-remove" data-remove aria-label="Remove {v}">{x}</button></li>"#,
+        raw = pages::attr(value),
+        v = esc(value),
+        x = icon("i-x"),
+    );
+}
+
+/// [`chip`] with `mark` after its text (an entry the last merge brought:
+/// "shared · who, date"); a plain chip without one.
+pub(crate) fn chip_marked(b: &mut String, value: &str, mark: &str) {
+    if mark.is_empty() {
+        return chip(b, value);
+    }
+    let _ = write!(
+        b,
+        r#"<li class="chip-item" data-value="{raw}"><span class="chip-text">{v}</span>{mark}<button type="button" class="fl-remove" data-remove aria-label="Remove {v}">{x}</button></li>"#,
         raw = pages::attr(value),
         v = esc(value),
         x = icon("i-x"),

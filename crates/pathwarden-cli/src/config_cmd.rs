@@ -121,19 +121,20 @@ enum ConfigWhat {
     /// takes the history's settings and saves its own pathwarden.toml
     /// beside it first.
     Sync {
-        /// Use shared settings: for sections that differ from them, and
-        /// on a computer that only reads those only on this computer too
-        /// (replaces this computer's); or the ones --section names.
+        /// Use the shared value for every setting with two values (on a
+        /// computer that only reads, also drop the changes only here); or
+        /// for what --section names. Everything else merges as on every
+        /// pull.
         #[arg(long, conflicts_with_all = ["keep_local", "status"])]
         use_repo: bool,
-        /// Use local settings: keep this computer's sections and share them
-        /// (a computer that pushes): those that differ from the shared
-        /// settings, or the ones --section names.
+        /// Keep this computer's value for every setting with two values and
+        /// share it (a computer that pushes); or for what --section names.
         #[arg(long, conflicts_with = "status")]
         keep_local: bool,
-        /// With --use-repo or --keep-local: only this section: tier_zero,
-        /// settings_folders, rules, suppress, zone, management_planes,
-        /// mapping; repeatable.
+        /// With --use-repo or --keep-local: only this setting with two
+        /// values (`rules.stale_days`, as `config sync` and `--status` name
+        /// it) or this whole section: tier_zero, settings_folders, rules,
+        /// suppress, zone, management_planes, mapping; repeatable.
         #[arg(long, value_name = "KEY")]
         section: Vec<String>,
         /// Only show where the shared settings changed, section by section
@@ -544,7 +545,8 @@ fn sync(t: &Target, resolve: Option<Resolve>, json: bool, state: Option<PathBuf>
             v["branch"] = remote.as_ref().map(|r| r.1.clone()).into();
             return crate::emit_json(&v);
         }
-        print_status(t, &s, remote.as_ref());
+        let merged = settings_sync::merged_here(&store);
+        print_status(t, &s, remote.as_ref(), merged.as_ref());
         return Ok(());
     };
     let o = settings_sync::sync(&place, resolve)?;
@@ -557,20 +559,123 @@ fn sync(t: &Target, resolve: Option<Resolve>, json: bool, state: Option<PathBuf>
     } else if o.sentence().is_none() && o.status.state == Changed::InStep {
         println!("The shared settings are up to date on this computer.");
     }
-    if let Some(s) = o.sentence() {
-        if o.done.unreadable.is_some() {
-            bail!("{s}");
-        }
-        if o.conflict() {
-            print_status(t, &o.status, remote.as_ref());
-            bail!("{s}");
-        }
+    if o.done.unreadable.is_some() {
+        bail!("{}", o.sentence().unwrap_or_default());
+    }
+    // What was merged, shared and settled; the settings with two values on
+    // lines of their own.
+    if let Some(s) = o.sentence_without_clashes() {
         print_lines(&s);
+    }
+    if !o.status.clashes.is_empty() {
+        print_clashes(&o.status);
+        for n in kept.iter().chain(&o.status.notes) {
+            print_lines(n);
+        }
+        bail!(
+            "{} Until you choose, runs here use this computer's.",
+            settings_sync::clash_words(&o.status.clashes)
+        );
+    }
+    if o.conflict() {
+        print_status(t, &o.status, remote.as_ref(), None);
+        bail!("{}", o.sentence().unwrap_or_default());
+    }
+    if !o.done.settled.is_empty() && o.status.state == Changed::InStep {
+        println!("Everything is up to date.");
     }
     for n in kept.iter().chain(&o.status.notes) {
         print_lines(n);
     }
     Ok(())
+}
+
+/// "MAINDESKTOP\benja on MAINDESKTOP, Nov 18, 2026, 5:55 PM": who made the
+/// last shared change, where and when.
+fn last_change_words(s: &settings_sync::Status) -> String {
+    let Some(c) = &s.last_change else {
+        return String::new();
+    };
+    let who = match (&c.by, &c.on) {
+        (Some(b), Some(o)) => format!("{b} on {o}"),
+        (Some(b), None) => b.clone(),
+        (None, Some(o)) => format!("on {o}"),
+        (None, None) => String::new(),
+    };
+    let at = pathwarden_core::time::parse_rfc3339(&c.at)
+        .map(pathwarden_core::time::format_local)
+        .unwrap_or_else(|| c.at.clone());
+    if who.is_empty() {
+        at
+    } else {
+        format!("{who}, {at}")
+    }
+}
+
+/// The settings with two values, each with this computer's value and the
+/// shared one, and how to choose.
+fn print_clashes(s: &settings_sync::Status) {
+    let (b, d) = (ui::BOLD, ui::DIM);
+    let n = s.clashes.len();
+    println!();
+    if n == 1 {
+        println!("1 setting has two values:");
+    } else {
+        println!("{n} settings have two values:");
+    }
+    println!();
+    let who = last_change_words(s);
+    for c in &s.clashes {
+        println!("  {b}{}{b:#} ({})", ui::safe(&c.name), ui::safe(&c.id));
+        if c.whole {
+            println!(
+                "    {d}Changed here and in the shared settings; `pathwarden config sync --status` \
+                 shows the section.{d:#}"
+            );
+        } else {
+            println!("    {d}This computer{d:#}   {}", ui::safe(&c.here));
+            println!(
+                "    {d}Shared{d:#}          {}   {d}{}{d:#}",
+                ui::safe(&c.shared),
+                ui::safe(&who)
+            );
+        }
+    }
+    println!();
+    match s.clashes.as_slice() {
+        [one] if !one.whole => {
+            println!(
+                "Until you choose, runs here use {}. Everything else is up to date.",
+                ui::safe(&one.here)
+            );
+            println!("Choose one:");
+            println!(
+                "  pathwarden config sync --use-repo --section {}   use {} here",
+                ui::safe(&one.id),
+                ui::safe(&one.shared)
+            );
+            if s.pushes {
+                println!(
+                    "  pathwarden config sync --keep-local --section {}   keep {} and share it",
+                    ui::safe(&one.id),
+                    ui::safe(&one.here)
+                );
+            }
+        }
+        _ => {
+            println!(
+                "Until you choose, runs here use this computer's values. Everything else is up \
+                 to date."
+            );
+            println!("Choose for all at once, or add --section KEY for one:");
+            println!("  pathwarden config sync --use-repo     use the shared values here");
+            if s.pushes {
+                println!(
+                    "  pathwarden config sync --keep-local   keep this computer's and share them"
+                );
+            }
+        }
+    }
 }
 
 /// A note that may hold git's own lines, each on a line of its own.
@@ -580,8 +685,14 @@ fn print_lines(text: &str) {
     }
 }
 
-/// The status as text: the repository, the last change and each section.
-fn print_status(t: &Target, s: &settings_sync::Status, remote: Option<&(String, String)>) {
+/// The status as text: the repository, the last change and each section
+/// (with what the last merge brought, `merged`).
+fn print_status(
+    t: &Target,
+    s: &settings_sync::Status,
+    remote: Option<&(String, String)>,
+    merged: Option<&settings_sync::MergedHere>,
+) {
     let (b, d) = (ui::BOLD, ui::DIM);
     println!(
         "{b}Shared settings{b:#} of {}{}",
@@ -630,15 +741,60 @@ fn print_status(t: &Target, s: &settings_sync::Status, remote: Option<&(String, 
     }
     let width = s.sections.iter().map(|x| x.name.len()).max().unwrap_or(0) + 2;
     for x in &s.sections {
-        let words = if x.state == Changed::Here && !s.pushes {
-            "only on this computer"
+        let clashes: Vec<&settings_sync::Clash> = s
+            .clashes
+            .iter()
+            .filter(|c| c.section == x.key && !c.whole)
+            .collect();
+        let words = if !clashes.is_empty() {
+            let each: Vec<String> = clashes
+                .iter()
+                .map(|c| {
+                    format!(
+                        "{} (here {}, shared {})",
+                        c.entry,
+                        c.here_short.as_deref().unwrap_or(&c.here),
+                        c.shared_short.as_deref().unwrap_or(&c.shared)
+                    )
+                })
+                .collect();
+            let n = clashes.len();
+            format!(
+                "{} two values: {}",
+                if n == 1 {
+                    "1 setting has".to_string()
+                } else {
+                    format!("{n} settings have")
+                },
+                each.join(", ")
+            )
+        } else if x.state == Changed::Here && !s.pushes {
+            "only on this computer".to_string()
         } else {
-            x.state.words()
+            x.state.words().to_string()
         };
+        // What the last merge brought, while the section is up to date.
+        let brought: Vec<&str> = merged
+            .filter(|_| x.state == Changed::InStep)
+            .map(|m| {
+                m.entries
+                    .iter()
+                    .filter(|e| e.section == x.key)
+                    .map(|e| e.label.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
         let words = if x.state == Changed::InStep {
-            format!("{d}{words}{d:#}")
+            if brought.is_empty() {
+                format!("{d}{words}{d:#}")
+            } else {
+                format!(
+                    "{d}{words} (merged: {}){d:#}",
+                    ui::safe(&brought.join(", "))
+                )
+            }
         } else {
-            format!("{b}{words}{b:#}")
+            format!("{b}{}{b:#}", ui::safe(&words))
         };
         println!("  {:<width$}{words}", x.name);
     }
@@ -661,18 +817,21 @@ fn print_status(t: &Target, s: &settings_sync::Status, remote: Option<&(String, 
                 "Shared updates: `pathwarden config sync` applies them here (so does every run \
                  and pull)."
             }
+            Changed::Merge => {
+                "Changed here and in the shared settings, in different entries: `pathwarden \
+                 config sync` merges them (so does every run and pull)."
+            }
             Changed::Both if !s.pushes => {
-                "This computer's settings differ from the shared ones: both changed since this \
-                 computer last synced. `pathwarden config sync --use-repo` takes the shared \
-                 settings; the other sections follow them on every pull. Until then, runs here \
-                 use this computer's."
+                "Some settings have two values: this computer's and the shared one. `pathwarden \
+                 config sync --use-repo` takes the shared ones (`--section KEY` for one); \
+                 everything else merges on every pull. Until then, runs here use this \
+                 computer's."
             }
             Changed::Both => {
-                "This computer's settings differ from the shared ones: both changed since this \
-                 computer last synced. Choose which to keep for each: `pathwarden config sync \
-                 --use-repo` takes the shared settings, `--keep-local` keeps this computer's \
-                 and shares them (`--section KEY` for one). Until then, runs here use this \
-                 computer's."
+                "Some settings have two values: this computer's and the shared one. `pathwarden \
+                 config sync --use-repo` takes the shared ones, `--keep-local` keeps this \
+                 computer's and shares them (`--section KEY` for one); everything else merges \
+                 on every pull. Until then, runs here use this computer's."
             }
         }
     };
