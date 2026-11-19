@@ -1264,7 +1264,11 @@
         if (window.Pathwarden) window.Pathwarden.leaving = true;
         location.reload();
       };
-      api("POST", "/api/settings/dismiss", { key: b.getAttribute("data-sync-dismiss") }).then(again, again);
+      var at = b.getAttribute("data-merged-at");
+      api("POST", "/api/settings/dismiss", {
+        key: b.getAttribute("data-sync-dismiss"),
+        merged_at: at ? Number(at) : null
+      }).then(again, again);
     });
   });
 

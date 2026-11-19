@@ -290,8 +290,8 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         severities: Default::default(),
     };
     let by = pathwarden_core::config_edit::Stamp {
-        by: Some(r"NORTH\eddard.stark".into()),
-        on: Some("PW-SCHED01".into()),
+        by: Some(r"CORP\a.admin".into()),
+        on: Some("ADMIN-WS01".into()),
         at: "2026-11-18T17:55:00Z".into(),
     };
     let with = |path: &Path, extra: &str| {
@@ -302,13 +302,13 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         list.push(extra.into());
         list
     };
-    let theirs = with(&other_toml, "CASTELBLACK$");
+    let theirs = with(&other_toml, "APP01$");
     apply_sharing(other_toml.clone(), &Share::default(), |d| {
         d.set_tier_zero(&theirs)?;
         d.set_rules(&rules(60), &by)
     })
     .unwrap();
-    let mine = with(&ws.config_path(), "WINTERFELL$");
+    let mine = with(&ws.config_path(), "VAULT02$");
     apply(ws.config_path(), |d| {
         d.set_tier_zero(&mine)?;
         d.set_rules(&rules(30), &by)
@@ -321,7 +321,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     );
     assert!(
         page.contains(
-            "Merged from the shared settings: <strong>CASTELBLACK$</strong> added to Tier Zero."
+            "Merged from the shared settings: <strong>APP01$</strong> added to Tier Zero."
         ),
         "what merged: {page}"
     );
@@ -348,13 +348,11 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         "Tier Zero merged, no dot: {page}"
     );
     assert!(
-        page.contains(
-            r#"<span class="chip-text">CASTELBLACK$</span><span class="chip-from">shared · "#
-        ),
+        page.contains(r#"<span class="chip-text">APP01$</span><span class="chip-from">shared · "#),
         "the merged entry's mark: {page}"
     );
     assert!(
-        page.contains("WINTERFELL$") && !page.contains("Differs from the shared settings"),
+        page.contains("VAULT02$") && !page.contains("Differs from the shared settings"),
         "{page}"
     );
     assert!(
@@ -399,7 +397,18 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         .post("/api/settings/dismiss", json!({ "key": "stale" }))
         .await;
     assert_eq!(s, StatusCode::CONFLICT, "{r}");
-    let (s, r) = a.post("/api/settings/dismiss", json!({ "key": key })).await;
+    let merged_at: i64 = page
+        .split(r#"data-merged-at=""#)
+        .nth(1)
+        .and_then(|r| r.split('"').next())
+        .and_then(|t| t.parse().ok())
+        .unwrap_or_else(|| panic!("the merge's record goes with Dismiss: {page}"));
+    let (s, r) = a
+        .post(
+            "/api/settings/dismiss",
+            json!({ "key": key, "merged_at": merged_at }),
+        )
+        .await;
     assert_eq!(s, StatusCode::OK, "{r}");
     let (_, page) = a.get("/runs").await;
     assert!(!dot(&page), "dismissed: {page}");

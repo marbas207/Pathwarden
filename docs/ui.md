@@ -95,7 +95,7 @@ since this computer last synced, they are merged entry by entry: a Tier
 Zero object, an accepted risk, a Tier Zero settings folder, a zone, a
 management plane, a mapping pack, or a single rule setting. Changes to
 different entries are kept on both sides without asking; a line under the
-page's title says what came ("Merged from the shared settings: CASTELBLACK$
+page's title says what came ("Merged from the shared settings: APP01$
 added to Tier Zero."), and each entry that came is marked **shared** with
 who shared it and when, until a later sync brings others.
 

@@ -1485,10 +1485,12 @@ pub fn dismissed_key(store: &Store) -> Option<String> {
 /// Dismisses the rail's notice of these differences (`key`, a
 /// [`Status::differs_key`]) on this computer, for this history: kept in the
 /// clone's `.git`, never shared. A new difference, or either side changing
-/// again, is another key and shows again.
-pub fn dismiss(store: &Store, key: &str) -> Result<()> {
-    // The line about what was merged goes with the note.
-    mark_merged(store, true);
+/// again, is another key and shows again. The line about what the merge
+/// recorded at `merged_at` brought goes with it.
+pub fn dismiss(store: &Store, key: &str, merged_at: Option<i64>) -> Result<()> {
+    if merged_at.is_some() {
+        mark_merged(store, true, merged_at);
+    }
     store.write_local_file(
         DISMISSED_FILE,
         &serde_json::to_vec_pretty(&Dismissed {
@@ -1504,13 +1506,17 @@ pub struct MergedEntry {
     pub section: String,
     /// Its ID in the section.
     pub id: String,
-    /// What a person reads: "CASTELBLACK$".
+    /// What a person reads: "APP01$".
     pub label: String,
     /// It is new here (not a change to one this computer had).
     #[serde(default)]
     pub added: bool,
-    /// What happened, in words: "CASTELBLACK$ added to Tier Zero".
+    /// What happened, in words: "APP01$ added to Tier Zero".
     pub words: String,
+    /// The entry as it came (what the merge compares): once it is edited
+    /// here, it is this computer's again and no longer marked.
+    #[serde(default)]
+    pub eff: String,
 }
 
 /// What the last merge brought here from the repository, with who made the
@@ -1534,7 +1540,7 @@ pub struct MergedHere {
 }
 
 impl MergedHere {
-    /// "CASTELBLACK$ added to Tier Zero": what came, in a sentence's words.
+    /// "APP01$ added to Tier Zero": what came, in a sentence's words.
     pub fn words(&self) -> String {
         self.entries
             .iter()
@@ -1567,12 +1573,41 @@ pub fn merged_here(store: &Store) -> Option<MergedHere> {
     serde_json::from_slice(&store.read_local_file(MERGED_FILE)?).ok()
 }
 
+/// The entries the last merge brought that this computer still holds as
+/// they came, as (section, ID): what the app marks "shared". One edited here
+/// since is this computer's again.
+pub fn merged_marks(p: &Place, m: &MergedHere) -> Vec<(String, String)> {
+    let Some(local) = read_local(p)
+        .ok()
+        .and_then(|t| local_side(&t, p.dir()).ok())
+        .map(|s| s.0)
+    else {
+        return Vec::new();
+    };
+    m.entries
+        .iter()
+        .filter(|e| {
+            let Some(key) = section_key(&e.section) else {
+                return false;
+            };
+            merge::entries(key, local.table.get(key))
+                .and_then(|es| es.get(&e.id).map(|x| e.eff.is_empty() || x.eff == e.eff))
+                .unwrap_or(false)
+        })
+        .map(|e| (e.section.clone(), e.id.clone()))
+        .collect()
+}
+
 /// Marks what the last merge brought as shown (`dismissed`: with the note's
-/// Dismiss), so its line isn't shown again.
-pub fn mark_merged(store: &Store, dismissed: bool) {
+/// Dismiss), so its line isn't shown again. `at`: only the record the page
+/// showed ([`MergedHere::at`]); a newer one a sync wrote since stays.
+pub fn mark_merged(store: &Store, dismissed: bool, at: Option<i64>) {
     let Some(mut m) = merged_here(store) else {
         return;
     };
+    if at.is_some_and(|a| a != m.at) {
+        return;
+    }
     if m.seen && (m.dismissed || !dismissed) {
         return;
     }
@@ -1827,7 +1862,7 @@ pub struct Done {
     /// on both sides): left as they are on both.
     pub conflict: Vec<&'static str>,
     /// What the merge brought here from the repository, in words
-    /// ("CASTELBLACK$ added to Tier Zero").
+    /// ("APP01$ added to Tier Zero").
     pub merged: Vec<String>,
     /// The sections those entries are in (keys).
     pub merged_sections: Vec<&'static str>,
@@ -2121,6 +2156,9 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
     let mut take_local: Vec<&'static str> = Vec::new();
     // Sections merged entry by entry, and what each moves.
     let mut merged: Vec<(&'static str, merge::Plan)> = Vec::new();
+    // Clashes (or whole sections) this computer's value was kept for:
+    // (section, name, value).
+    let mut kept_here: Vec<(&'static str, String, String)> = Vec::new();
     let mut done = Done::default();
     for s in &r.status.sections {
         let named = sections_named.contains(&s.key);
@@ -2151,14 +2189,15 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
                     .iter()
                     .find(|c| c.section == s.key && &c.entry == id);
                 if let Some(c) = c {
-                    done.settled.push(if plan.to_local.contains(id) {
-                        format!("{}: now {}, from the shared settings.", c.name, c.shared)
+                    if plan.to_local.contains(id) {
+                        done.settled.push(format!(
+                            "{}: now {}, from the shared settings.",
+                            c.name, c.shared
+                        ));
                     } else {
-                        format!(
-                            "{}: kept {} and pushed it to the shared settings.",
-                            c.name, c.here
-                        )
-                    });
+                        // Said once the push is known.
+                        kept_here.push((s.key, c.name.clone(), c.here.clone()));
+                    }
                 }
             }
             merged.push((s.key, plan));
@@ -2184,11 +2223,12 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
             Changed::Both | Changed::Merge => done.conflict.push(s.name),
         }
         if picked && s.state == Changed::Both {
-            done.settled.push(if use_repo {
-                format!("{}: the shared settings are used here.", s.name)
+            if use_repo {
+                done.settled
+                    .push(format!("{}: the shared settings are used here.", s.name));
             } else {
-                format!("{}: this computer's are kept and shared.", s.name)
-            });
+                kept_here.push((s.key, s.name.to_string(), String::new()));
+            }
         }
     }
     let mut base = r.base.clone().unwrap_or_default();
@@ -2247,6 +2287,7 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
                     label: new.or(old).map(|e| e.label.clone()).unwrap_or_default(),
                     added: old.is_none() && new.is_some(),
                     words: merge::change(key, id, old, new),
+                    eff: new.map(|e| e.eff.clone()).unwrap_or_default(),
                 });
             }
         }
@@ -2261,6 +2302,27 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
         if !entries.is_empty() {
             record_merged(p.store, entries);
         }
+    }
+    // The merged sections as the repository holds them, with what came here
+    // and nothing of this computer's yet: recorded before pushing, so a push
+    // that fails, races or is kept never makes what came look like this
+    // computer's change.
+    let left_of = |key: &str| -> Vec<String> {
+        left_out
+            .iter()
+            .filter(|(k, _)| *k == key)
+            .map(|(_, i)| i.clone())
+            .collect()
+    };
+    for (key, plan) in &merged {
+        let sp = &r.splits[key];
+        base.set_value(
+            key,
+            merge::build(key, &sp.after(plan, false, &left_of(key))),
+        );
+    }
+    if !merged_here.is_empty() && r.repo_text.is_some() && r.base.as_ref() != Some(&base) {
+        base.write(p.store)?;
     }
     // What the repository takes of the merged sections' entries.
     let merged_there: Vec<(&'static str, Vec<String>, Option<toml::Value>)> = merged
@@ -2293,33 +2355,36 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
         pushed = went;
         raced = lost;
     }
+    let went_up = |key: &str| pushed.contains(&key) && !raced.contains(&key) && done.kept.is_none();
     for (key, plan) in &merged {
-        if raced.contains(key) {
-            // Another computer changed it meanwhile: the next sync merges
-            // it again.
-            continue;
-        }
         let sp = &r.splits[key];
-        let went = plan.to_repo.is_empty() || pushed.contains(key);
-        if went && p.pushes {
-            let sp_words = plan
-                .to_repo
-                .iter()
-                .map(|id| merge::change(key, id, sp.repo.get(id), sp.local.get(id)));
-            done.shared.extend(sp_words);
+        if !plan.to_repo.is_empty() && went_up(key) {
+            done.shared.extend(
+                plan.to_repo
+                    .iter()
+                    .map(|id| merge::change(key, id, sp.repo.get(id), sp.local.get(id))),
+            );
+            base.set_value(key, merge::build(key, &sp.after(plan, true, &left_of(key))));
         }
-        let left: Vec<String> = left_out
-            .iter()
-            .filter(|(k, _)| k == key)
-            .map(|(_, i)| i.clone())
-            .collect();
-        base.set_value(
-            key,
-            merge::build(key, &sp.after(plan, went && p.pushes, &left)),
-        );
         if !p.pushes && !plan.to_repo.is_empty() && !done.here_only.contains(&section_name(key)) {
             done.here_only.push(section_name(key));
         }
+    }
+    for (key, name, value) in &kept_here {
+        let what = if value.is_empty() {
+            "this computer's are kept".to_string()
+        } else {
+            format!("kept {value}")
+        };
+        done.settled.push(if went_up(key) {
+            if value.is_empty() {
+                format!("{name}: this computer's are kept and shared.")
+            } else {
+                format!("{name}: {what} and pushed it to the shared settings.")
+            }
+        } else {
+            format!("{name}: {what}; it goes to the shared settings with the next sync.")
+        });
     }
     done.conflict.dedup();
     if r.repo_text.is_none() && !p.pushes {
@@ -2501,6 +2566,23 @@ fn apply_repo(
                     .is_some_and(|path| bad.contains(&crate::pack_origin::path_key(path)))
             },
         )?;
+        if !merged_packs.is_empty() {
+            // A pack the merge removes here takes its record with it.
+            let still: Vec<String> = r
+                .repo
+                .table
+                .get("mapping")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|t| t.as_table().and_then(mapping_path))
+                .map(crate::pack_origin::path_key)
+                .collect();
+            origins.packs.retain(|o| {
+                let k = crate::pack_origin::path_key(&o.path);
+                !merged_packs.contains(&k) || still.contains(&k)
+            });
+        }
         if !merged.is_empty() {
             let from = ConfigDoc::parse(config_edit::strip_header(repo_text))
                 .map_err(|e| format!("the repository's settings are not valid TOML: {e}"))?;

@@ -19,7 +19,7 @@ use toml_edit::{ArrayOfTables, DocumentMut, Item, Table, TableLike};
 /// One entry of a section, on one side.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct Ent {
-    /// What a person reads: "CASTELBLACK$", "Stale Tier Zero account".
+    /// What a person reads: "APP01$", "Stale Tier Zero account".
     pub label: String,
     /// As written; `None` for a rule setting left at its default.
     pub raw: Option<Value>,
@@ -27,6 +27,9 @@ pub(super) struct Ent {
     pub eff: String,
     /// The key as written (a `[rules.severities]` key).
     pub name: String,
+    /// Where it is in its list (0 for a key of a table): a section is
+    /// recorded in the order its side writes it.
+    pub pos: usize,
 }
 
 /// A section's entries, by ID.
@@ -116,15 +119,23 @@ pub(super) fn entries(key: &str, v: Option<&Value>) -> Option<Entries> {
                    label: &dyn Fn(&str) -> String|
      -> Option<()> {
         let Some(v) = v else { return Some(()) };
-        for x in v.as_array()? {
+        for (pos, x) in v.as_array()?.iter().enumerate() {
             let s = x.as_str()?;
             let id = format!("{prefix}{}", string_id(list, s));
-            out.entry(id).or_insert_with(|| Ent {
-                label: label(s.trim()),
-                raw: Some(x.clone()),
-                eff: "1".into(),
-                name: s.to_string(),
-            });
+            // Written twice: settled whole, so nothing is lost.
+            if out.contains_key(&id) {
+                return None;
+            }
+            out.insert(
+                id,
+                Ent {
+                    label: label(s.trim()),
+                    raw: Some(x.clone()),
+                    eff: "1".into(),
+                    name: s.to_string(),
+                    pos,
+                },
+            );
         }
         Some(())
     };
@@ -148,6 +159,7 @@ pub(super) fn entries(key: &str, v: Option<&Value>) -> Option<Entries> {
                             label: format!("Management planes {k}"),
                             raw: Some(x.clone()),
                             eff: super::digest(x),
+                            pos: 0,
                             name: k.clone(),
                         },
                     );
@@ -169,6 +181,7 @@ pub(super) fn entries(key: &str, v: Option<&Value>) -> Option<Entries> {
                             label: label.to_string(),
                             raw: None,
                             eff: rule_eff(k, &d),
+                            pos: 0,
                             name: k.to_string(),
                         },
                     );
@@ -188,6 +201,7 @@ pub(super) fn entries(key: &str, v: Option<&Value>) -> Option<Entries> {
                                     label: format!("Severity of {}", rule.trim().to_uppercase()),
                                     raw: Some(e.clone()),
                                     eff: severity_level(e),
+                                    pos: 0,
                                     name: rule.clone(),
                                 },
                             );
@@ -209,6 +223,7 @@ pub(super) fn entries(key: &str, v: Option<&Value>) -> Option<Entries> {
                                 label,
                                 raw: Some(x.clone()),
                                 eff: rule_eff(k, x),
+                                pos: 0,
                                 name: k.clone(),
                             },
                         );
@@ -218,7 +233,7 @@ pub(super) fn entries(key: &str, v: Option<&Value>) -> Option<Entries> {
         }
         "suppress" | "zone" | "mapping" => {
             let Some(v) = v else { return Some(out) };
-            for x in v.as_array()? {
+            for (pos, x) in v.as_array()?.iter().enumerate() {
                 let t = x.as_table()?;
                 let id = table_id(key, t)?;
                 if out.contains_key(&id) {
@@ -231,6 +246,7 @@ pub(super) fn entries(key: &str, v: Option<&Value>) -> Option<Entries> {
                         raw: Some(x.clone()),
                         eff: super::digest(x),
                         name: String::new(),
+                        pos,
                     },
                 );
             }
@@ -252,10 +268,10 @@ pub(super) fn same(key: &str, a: Option<&Value>, b: Option<&Value>) -> bool {
     }
 }
 
-/// Section `key` from its entries (`None` when it has none): how the base
-/// records it.
-pub(super) fn build(key: &str, e: &Entries) -> Option<Value> {
-    let raws = || e.values().filter_map(|x| x.raw.clone());
+/// Section `key` from its entries, in the order given (`None` when it has
+/// none): how the base records it.
+pub(super) fn build(key: &str, e: &[(String, Ent)]) -> Option<Value> {
+    let raws = || e.iter().filter_map(|(_, x)| x.raw.clone());
     let v = match key {
         "tier_zero" | "settings_folders" | "suppress" | "zone" | "mapping" => {
             Value::Array(raws().collect())
@@ -266,6 +282,7 @@ pub(super) fn build(key: &str, e: &Entries) -> Option<Value> {
             let mut severities = toml::Table::new();
             for (id, x) in e {
                 let Some(raw) = x.raw.clone() else { continue };
+                let id: &String = id;
                 if id.starts_with("not_tier_zero.") || id.starts_with("disabled.") {
                     list.push(raw);
                 } else if id.starts_with("severities.") {
@@ -364,13 +381,33 @@ impl Split {
                 p.settled.push(id.clone());
             }
         }
+        // Each side takes entries in the order the other writes them.
+        let pos = |e: &Entries, id: &str| e.get(id).map_or(usize::MAX, |x| x.pos);
+        p.to_local.sort_by_key(|id| pos(&self.repo, id));
+        p.to_repo.sort_by_key(|id| pos(&self.local, id));
         p
+    }
+
+    /// `picked` entries (from each ID's side) in the order the repository
+    /// writes them: its own in its order, then the others in this
+    /// computer's order (as [`apply`] adds them), then the base's.
+    fn ordered(&self, picked: Vec<(String, Ent)>) -> Vec<(String, Ent)> {
+        let mut v = picked;
+        v.sort_by_key(
+            |(id, _)| match (self.repo.get(id), self.local.get(id), self.base.get(id)) {
+                (Some(e), _, _) => (0, e.pos),
+                (None, Some(e), _) => (1, e.pos),
+                (None, None, Some(e)) => (2, e.pos),
+                _ => (3, 0),
+            },
+        );
+        v
     }
 
     /// The section as the repository holds it once this computer's
     /// entries [`Plan::to_repo`] went there: a clash keeps its value.
-    pub fn in_repo(&self, plan: &Plan) -> Entries {
-        let mut out = Entries::new();
+    pub fn in_repo(&self, plan: &Plan) -> Vec<(String, Ent)> {
+        let mut out = Vec::new();
         for id in self.ids() {
             let from = if plan.to_repo.contains(id) {
                 &self.local
@@ -378,17 +415,17 @@ impl Split {
                 &self.repo
             };
             if let Some(e) = from.get(id) {
-                out.insert(id.clone(), e.clone());
+                out.push((id.clone(), e.clone()));
             }
         }
-        out
+        self.ordered(out)
     }
 
     /// The section as the base records it after a sync with `plan`: each
     /// entry as the repository now holds it (with this computer's changes
     /// when `pushed`), clashes and `left_out` entries as they were.
-    pub fn after(&self, plan: &Plan, pushed: bool, left_out: &[String]) -> Entries {
-        let mut out = Entries::new();
+    pub fn after(&self, plan: &Plan, pushed: bool, left_out: &[String]) -> Vec<(String, Ent)> {
+        let mut out = Vec::new();
         for id in self.ids() {
             let from = if plan.clashes.contains(id) || left_out.contains(id) {
                 &self.base
@@ -398,10 +435,10 @@ impl Split {
                 &self.repo
             };
             if let Some(e) = from.get(id) {
-                out.insert(id.clone(), e.clone());
+                out.push((id.clone(), e.clone()));
             }
         }
-        out
+        self.ordered(out)
     }
 }
 
@@ -465,7 +502,7 @@ pub(super) fn short(key: &str, id: &str, e: Option<&Ent>) -> Option<String> {
         .flatten()
 }
 
-/// What moved for entry `id` of section `key`, from `old` to `new`: "CASTELBLACK$
+/// What moved for entry `id` of section `key`, from `old` to `new`: "APP01$
 /// added to Tier Zero", "Stale Tier Zero account: 60 days".
 pub(super) fn change(key: &str, id: &str, old: Option<&Ent>, new: Option<&Ent>) -> String {
     let label = new.or(old).map(|e| e.label.clone()).unwrap_or_default();

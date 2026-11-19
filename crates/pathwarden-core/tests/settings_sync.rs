@@ -411,8 +411,14 @@ fn each_section_is_settled_on_its_own() {
 
     // One setting with two values; A takes the repository's, for that
     // entry only.
-    a.edit(|d| d.set_rules(&rules(60), &stamp("ned", "A")).unwrap());
-    b.edit(|d| d.set_rules(&rules(70), &stamp("ned", "A")).unwrap());
+    a.edit(|d| {
+        d.set_rules(&rules(60), &stamp(r"CORP\a.admin", "A"))
+            .unwrap()
+    });
+    b.edit(|d| {
+        d.set_rules(&rules(70), &stamp(r"CORP\a.admin", "A"))
+            .unwrap()
+    });
     b.sync(Resolve::Auto).unwrap();
     assert!(a.sync(Resolve::Auto).unwrap().conflict());
     let e = a
@@ -1442,7 +1448,7 @@ fn a_readers_own_section_is_not_replaced_later() {
     // The writer shares a "Mine" of its own: two values for it.
     w.edit(|d| {
         let mut z = zone("Mine");
-        z.groups = vec!["OTHER ADMINS@NORTH.LOCAL".into()];
+        z.groups = vec!["OTHER ADMINS@CORP.LOCAL".into()];
         d.upsert_zone(None, None, &z).unwrap()
     });
     w.sync(Resolve::Auto).unwrap();
@@ -1461,7 +1467,7 @@ fn a_readers_own_section_is_not_replaced_later() {
         .unwrap();
     assert_eq!(
         mine.groups,
-        ["SERVER ADMINS@NORTH.LOCAL"],
+        zone("Mine").groups,
         "this computer's, until chosen"
     );
     assert_eq!(section(&r.status(), "zone"), Changed::Both);
@@ -1664,8 +1670,8 @@ fn every_section_merges_entry_by_entry() {
             365,
             "\"PW-002\", \"PW-003\"",
             &(risk("PW-011", "eleven") + &risk("PW-012", "twelve")),
-            &(zone_t("Z1", "\"G1@NORTH.LOCAL\"") + &zone_t("Z2", "\"G2@NORTH.LOCAL\"")),
-            "\"M1.NORTH.LOCAL\", \"M2.NORTH.LOCAL\"",
+            &(zone_t("Z1", "\"G1@CORP.LOCAL\"") + &zone_t("Z2", "\"G2@CORP.LOCAL\"")),
+            "\"M1.CORP.LOCAL\", \"M2.CORP.LOCAL\"",
             &["a", "b"],
         ),
     );
@@ -1689,10 +1695,10 @@ fn every_section_merges_entry_by_entry() {
             365,
             "\"PW-002\", \"PW-003\", \"PW-004\"",
             &(risk("PW-012", "twelve") + &risk("PW-013", "thirteen")),
-            &(zone_t("Z1", "\"G1@NORTH.LOCAL\"")
-                + &zone_t("Z2", "\"G2@NORTH.LOCAL\"")
-                + &zone_t("Z3", "\"G3@NORTH.LOCAL\"")),
-            "\"M1.NORTH.LOCAL\", \"M2.NORTH.LOCAL\", \"M3.NORTH.LOCAL\"",
+            &(zone_t("Z1", "\"G1@CORP.LOCAL\"")
+                + &zone_t("Z2", "\"G2@CORP.LOCAL\"")
+                + &zone_t("Z3", "\"G3@CORP.LOCAL\"")),
+            "\"M1.CORP.LOCAL\", \"M2.CORP.LOCAL\", \"M3.CORP.LOCAL\"",
             &["a", "b", "c"],
         ),
     );
@@ -1712,8 +1718,8 @@ fn every_section_merges_entry_by_entry() {
             400,
             "\"PW-002\"",
             &(risk("PW-011", "eleven") + &risk("PW-012", "twelve, reviewed")),
-            &zone_t("Z2", "\"G2@NORTH.LOCAL\", \"G9@NORTH.LOCAL\""),
-            "\"M2.NORTH.LOCAL\"",
+            &zone_t("Z2", "\"G2@CORP.LOCAL\", \"G9@CORP.LOCAL\""),
+            "\"M2.CORP.LOCAL\"",
             &["a", "b"],
         ),
     );
@@ -1821,7 +1827,7 @@ fn every_section_merges_entry_by_entry() {
         assert_eq!(zones, [("Z2".to_string(), 2), ("Z3".to_string(), 1)]);
         assert_eq!(
             lower_sorted(&cfg.management_planes.not_tier_zero),
-            ["m2.north.local", "m3.north.local"]
+            ["m2.corp.local", "m3.corp.local"]
         );
         assert_eq!(cfg.mappings.len(), 3);
         assert!(std::fs::read_to_string(m.dir.join("packs/b.toml"))
@@ -1846,8 +1852,8 @@ fn only_real_clashes_wait() {
     let remote = bare(&root);
     let a = Machine::new(&root, "a", &remote, true, "");
     a.edit(|d| {
-        accept(d, "PW-011", "eleven", &stamp("ned", "A"));
-        accept(d, "PW-012", "twelve", &stamp("ned", "A"));
+        accept(d, "PW-011", "eleven", &stamp(r"CORP\a.admin", "A"));
+        accept(d, "PW-012", "twelve", &stamp(r"CORP\a.admin", "A"));
         d.upsert_zone(None, None, &zone("Z1")).unwrap();
         d.set_tier_zero(&["T1".into()]).unwrap();
     });
@@ -1865,7 +1871,7 @@ fn only_real_clashes_wait() {
                 reason: text.into(),
                 expires: None,
             },
-            &stamp("arya", "B"),
+            &stamp(r"CORP\b.admin", "B"),
         )
         .unwrap()
     };
@@ -1881,7 +1887,7 @@ fn only_real_clashes_wait() {
         reason(d, 0, "PW-011", "eleven, by B");
         reason(d, 1, "PW-012", "twelve, by B");
         let mut z = zone("Z1");
-        z.groups.push("MORE@NORTH.LOCAL".into());
+        z.groups.push("MORE@CORP.LOCAL".into());
         d.upsert_zone(Some(0), Some("Z1"), &z).unwrap();
     });
     let o = b.sync(Resolve::Auto).unwrap();
@@ -1960,18 +1966,21 @@ fn a_reader_merges_too() {
     let w = Machine::new(&root, "w", &remote, true, "");
     w.edit(|d| {
         d.set_tier_zero(&["T1".into()]).unwrap();
-        d.set_rules(&rules_with(30), &stamp("ned", "W")).unwrap();
+        d.set_rules(&rules_with(30), &stamp(r"CORP\a.admin", "W"))
+            .unwrap();
     });
     w.sync(Resolve::Auto).unwrap();
     let r = Machine::new(&root, "r", &remote, false, "");
     r.sync(Resolve::Auto).unwrap();
     r.edit(|d| {
         d.set_tier_zero(&["T1".into(), "R1".into()]).unwrap();
-        d.set_rules(&rules_with(33), &stamp("arya", "R")).unwrap();
+        d.set_rules(&rules_with(33), &stamp(r"CORP\b.admin", "R"))
+            .unwrap();
     });
     w.edit(|d| {
         d.set_tier_zero(&["T1".into(), "W1".into()]).unwrap();
-        d.set_rules(&rules_with(44), &stamp("ned", "W")).unwrap();
+        d.set_rules(&rules_with(44), &stamp(r"CORP\a.admin", "W"))
+            .unwrap();
     });
     w.sync(Resolve::Auto).unwrap();
     let head = git(&remote, &["rev-parse", "main"]);
@@ -2001,5 +2010,166 @@ fn a_reader_merges_too() {
     assert_eq!(r.config().tier_zero, ["T1", "R1", "W1"]);
     assert_eq!(section(&r.status(), "tier_zero"), Changed::Here);
     assert_eq!(section(&r.status(), "rules"), Changed::InStep);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+fn place_of<'a>(m: &Machine, store: &'a Store, config_path: &'a Path) -> Place<'a> {
+    Place {
+        store,
+        config_path,
+        pushes: m.config().state.pushes(),
+        env_name: None,
+    }
+}
+
+/// An entry the merge brought is marked until it is edited here.
+#[test]
+fn a_merged_entry_is_marked_until_edited_here() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("merge-mark");
+    let remote = bare(&root);
+    let a = Machine::new(&root, "a", &remote, true, "");
+    a.edit(|d| d.set_tier_zero(&["T1".into()]).unwrap());
+    a.sync(Resolve::Auto).unwrap();
+    let b = Machine::new(&root, "b", &remote, true, "");
+    b.sync(Resolve::Auto).unwrap();
+    a.edit(|d| accept(d, "PW-013", "thirteen", &stamp(r"CORP\a.admin", "A")));
+    a.sync(Resolve::Auto).unwrap();
+    b.edit(|d| accept(d, "PW-014", "fourteen", &stamp(r"CORP\b.admin", "B")));
+    let o = b.sync(Resolve::Auto).unwrap();
+    assert_eq!(
+        o.done.merged,
+        ["Accepted risk for every PW-013 finding added"],
+        "{:?}",
+        o.done
+    );
+    let store = b.store();
+    let path = b.config_path();
+    let m = settings_sync::merged_here(&store).unwrap();
+    let marks = settings_sync::merged_marks(&place_of(&b, &store, &path), &m);
+    assert_eq!(marks, [("suppress".to_string(), "pw-013".to_string())]);
+    b.edit(|d| {
+        d.upsert_suppression(
+            Some(1),
+            None,
+            Some("PW-013"),
+            &SuppressionEdit {
+                fingerprint: None,
+                rule: Some("PW-013".into()),
+                reason: "thirteen, reviewed".into(),
+                expires: None,
+            },
+            &stamp(r"CORP\b.admin", "B"),
+        )
+        .unwrap()
+    });
+    assert!(settings_sync::merged_marks(&place_of(&b, &store, &path), &m).is_empty());
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// What came from the repository is recorded as the repository's even when
+/// the push of this computer's entries races another: a third computer's
+/// revert that lands meanwhile is taken, never undone.
+#[test]
+fn what_came_stays_the_repositorys_when_the_push_races() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("merge-race");
+    let remote = bare(&root);
+    let a = Machine::new(&root, "a", &remote, true, "");
+    a.edit(|d| {
+        d.set_rules(&rules_with(30), &stamp(r"CORP\a.admin", "A"))
+            .unwrap()
+    });
+    a.sync(Resolve::Auto).unwrap();
+    let b = Machine::new(&root, "b", &remote, true, "");
+    b.sync(Resolve::Auto).unwrap();
+    let c = Machine::new(&root, "c", &remote, true, "");
+    c.sync(Resolve::Auto).unwrap();
+    // A shares 60 stale days.
+    a.edit(|d| {
+        d.set_rules(&rules_with(60), &stamp(r"CORP\a.admin", "A"))
+            .unwrap()
+    });
+    a.sync(Resolve::Auto).unwrap();
+    // B pulls (60), then edits its password age offline.
+    let store = b.store();
+    let lock = store.lock().unwrap();
+    store.pull().unwrap();
+    b.edit(|d| {
+        let mut r = rules_with(30);
+        r.password_age_days = 400;
+        d.set_rules(&r, &stamp(r"CORP\b.admin", "B")).unwrap()
+    });
+    // Meanwhile C takes 60 and reverts it to 30.
+    c.sync(Resolve::Auto).unwrap();
+    c.edit(|d| {
+        d.set_rules(&rules_with(30), &stamp(r"CORP\c.admin", "C"))
+            .unwrap()
+    });
+    c.sync(Resolve::Auto).unwrap();
+    // B merges what it pulled (60 here) and pushes its password age: the
+    // push meets C's revert.
+    let path = b.config_path();
+    let o = settings_sync::sync(&place_of(&b, &store, &path), Resolve::Auto).unwrap();
+    assert_eq!(o.done.conflict, ["Rule settings"], "raced: {:?}", o.done);
+    assert_eq!(b.config().rules.stale_days, 60);
+    drop(lock);
+    // The next sync takes C's 30, and shares the password age.
+    let o = b.sync(Resolve::Auto).unwrap();
+    assert!(o.status.clashes.is_empty(), "{:?}", o.status.clashes);
+    assert_eq!(b.config().rules.stale_days, 30);
+    assert_eq!(b.config().rules.password_age_days, 400);
+    let shared = remote_file(&remote, SETTINGS_FILE);
+    assert!(
+        shared.contains("stale_days = 30") && shared.contains("password_age_days = 400"),
+        "{shared}"
+    );
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+/// A merge whose push is kept unpushed records only what came: when the
+/// kept commit is dropped (the repository moved on), this computer's entry
+/// is still its own, kept and pushed on the next sync.
+#[test]
+fn a_kept_push_never_records_this_computers_entries() {
+    if !have_git() {
+        return;
+    }
+    let root = scratch("merge-kept");
+    let remote = bare(&root);
+    let a = Machine::new(&root, "a", &remote, true, "");
+    a.edit(|d| d.set_tier_zero(&["T1".into()]).unwrap());
+    a.sync(Resolve::Auto).unwrap();
+    let b = Machine::new(&root, "b", &remote, true, "");
+    b.sync(Resolve::Auto).unwrap();
+    a.edit(|d| d.set_tier_zero(&["T1".into(), "A1".into()]).unwrap());
+    a.sync(Resolve::Auto).unwrap();
+    b.edit(|d| d.set_tier_zero(&["T1".into(), "X".into()]).unwrap());
+    // B's push is refused: kept here.
+    let hook = remote.join("hooks").join("pre-receive");
+    std::fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let o = b.sync(Resolve::Auto).unwrap();
+    assert!(o.done.kept.is_some(), "{:?}", o.done);
+    assert_eq!(o.done.merged, ["A1 added to Tier Zero"], "{:?}", o.done);
+    std::fs::remove_file(&hook).unwrap();
+    // The repository moves on: B's kept commit is dropped on its next pull.
+    a.edit(|d| {
+        d.set_tier_zero(&["T1".into(), "A1".into(), "A2".into()])
+            .unwrap()
+    });
+    a.sync(Resolve::Auto).unwrap();
+    b.sync(Resolve::Auto).unwrap();
+    assert_eq!(lower_sorted(&b.config().tier_zero), ["a1", "a2", "t1", "x"]);
+    let shared = remote_file(&remote, SETTINGS_FILE);
+    assert!(shared.contains("\"X\""), "X kept and pushed: {shared}");
     let _ = std::fs::remove_dir_all(&root);
 }

@@ -590,7 +590,7 @@ fn sync(t: &Target, resolve: Option<Resolve>, json: bool, state: Option<PathBuf>
     Ok(())
 }
 
-/// "MAINDESKTOP\benja on MAINDESKTOP, Nov 18, 2026, 5:55 PM": who made the
+/// "CORP\a.admin on ADMIN-WS01, Nov 18, 2026, 5:55 PM": who made the
 /// last shared change, where and when.
 fn last_change_words(s: &settings_sync::Status) -> String {
     let Some(c) = &s.last_change else {

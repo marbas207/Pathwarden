@@ -50,6 +50,9 @@ pub struct View {
     /// shared settings: …"): until dismissed with it, or once when there is
     /// no note.
     pub merged_line: bool,
+    /// The entries marked "shared": what the last merge brought, not
+    /// edited here since, as (section, ID).
+    pub marks: Vec<(String, String)>,
 }
 
 /// The shared settings of `ws`, when its history shares them. `mark_seen`:
@@ -87,8 +90,12 @@ pub fn view(ws: &Workspace, flag: Option<&Path>, mark_seen: bool) -> Option<View
     });
     // Said once with nothing else to say.
     if merged_line && mark_seen && status.clashes.is_empty() {
-        settings_sync::mark_merged(&loc.store, false);
+        settings_sync::mark_merged(&loc.store, false, merged.as_ref().map(|m| m.at));
     }
+    let marks = merged
+        .as_ref()
+        .map(|m| settings_sync::merged_marks(&place, m))
+        .unwrap_or_default();
     Some(View {
         status,
         diffs,
@@ -98,6 +105,7 @@ pub fn view(ws: &Workspace, flag: Option<&Path>, mark_seen: bool) -> Option<View
         dismissed,
         merged,
         merged_line,
+        marks,
     })
 }
 
@@ -254,15 +262,19 @@ pub fn sync_line(v: &View, page: &str) -> String {
         .map(|(_, href, name)| format!(r#" Choose on <a href="{href}">{name}</a>."#))
         .unwrap_or_default();
     format!(
-        r#"<div class="note warn sync-conflict dismissable" role="status">{}<div><p><strong>{}</strong> {}{elsewhere}</p></div><button type="button" class="linkish sync-dismiss" data-sync-dismiss="{}" title="Hides the dot on Settings until something else has two values">Dismiss</button></div>{merged}"#,
+        r#"<div class="note warn sync-conflict dismissable" role="status">{}<div><p><strong>{}</strong> {}{elsewhere}</p></div><button type="button" class="linkish sync-dismiss" data-sync-dismiss="{}"{at} title="Hides the dot on Settings until something else has two values">Dismiss</button></div>{merged}"#,
         icon("i-alert"),
         esc(&first),
         tip(&format!("conf-{page}"), "Two values", &rows, false),
         esc(s.differs_key.as_deref().unwrap_or_default()),
+        at = match v.merged.as_ref().filter(|_| v.merged_line) {
+            Some(m) => format!(r#" data-merged-at="{}""#, m.at),
+            None => String::new(),
+        },
     )
 }
 
-/// "Merged from the shared settings: <b>CASTELBLACK$</b> added to Tier
+/// "Merged from the shared settings: <b>APP01$</b> added to Tier
 /// Zero.", while it is to be said ([`View::merged_line`]).
 fn merged_words(v: &View) -> String {
     let Some(m) = v.merged.as_ref().filter(|_| v.merged_line) else {
@@ -290,7 +302,7 @@ fn merged_words(v: &View) -> String {
     )
 }
 
-/// "MAINDESKTOP\benja, Nov 18, 5:55 PM": who made the last shared change,
+/// "CORP\a.admin, Nov 18, 5:55 PM": who made the last shared change,
 /// and when.
 fn shared_by(v: &View) -> String {
     let Some(c) = &v.status.last_change else {
@@ -383,12 +395,12 @@ fn clash_html(v: &View, c: &Clash, named: bool) -> String {
 }
 
 /// The mark on an entry the last merge brought here ("shared ·
-/// MAINDESKTOP\benja, Nov 18"), or nothing.
+/// CORP\a.admin, Nov 18"), or nothing.
 pub fn merged_mark(v: &View, key: &str, id: &str) -> String {
     let Some(m) = &v.merged else {
         return String::new();
     };
-    if !m.entries.iter().any(|e| e.section == key && e.id == id) {
+    if !v.marks.iter().any(|(s, i)| s == key && i == id) {
         return String::new();
     }
     let day = m
@@ -780,6 +792,9 @@ pub(crate) async fn sharing(
 pub(crate) struct DismissBody {
     /// The differences shown ([`Status::differs_key`]).
     key: String,
+    /// The merge whose line was shown with them ([`MergedHere::at`]).
+    #[serde(default)]
+    merged_at: Option<i64>,
 }
 
 /// `POST /api/settings/dismiss`: the note's Dismiss. Hides the rail's dot
@@ -798,7 +813,7 @@ pub(crate) async fn dismiss(State(st): State<Shared>, Json(body): Json<DismissBo
         };
         match settings_sync::differs_key(&place) {
             Some(k) if k == body.key => {
-                settings_sync::dismiss(&loc.store, &k).map_err(|e| format!("{e:#}"))
+                settings_sync::dismiss(&loc.store, &k, body.merged_at).map_err(|e| format!("{e:#}"))
             }
             _ => Err("The settings changed since this page was loaded. Reload the page.".into()),
         }

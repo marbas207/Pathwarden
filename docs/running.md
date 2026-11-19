@@ -97,14 +97,14 @@ has two values:
 
 ```text
 $ pathwarden config sync
-Merged from the shared settings: CASTELBLACK$ added to Tier Zero.
-Shared from this computer: WINTERFELL$ added to Tier Zero.
+Merged from the shared settings: APP01$ added to Tier Zero.
+Shared from this computer: VAULT02$ added to Tier Zero.
 
 1 setting has two values:
 
   Stale Tier Zero account (rules.stale_days)
     This computer   30 days
-    Shared          60 days   NORTH\ned on SECOPS-WS02, Nov 18, 2026, 5:55 PM
+    Shared          60 days   CORP\a.admin on ADMIN-WS01, Nov 18, 2026, 5:55 PM
 
 Until you choose, runs here use 30 days. Everything else is up to date.
 ```
