@@ -4146,6 +4146,16 @@ impl Store {
         for (tmp, target) in &staged {
             fs::rename(tmp, target).with_context(|| format!("replacing {}", target.display()))?;
         }
+        // The new key is in place: the saves waiting for a push follow it
+        // at once, so nothing that fails after this leaves them sealed with
+        // a key that is gone.
+        if self.is_git() {
+            crate::action_log::reseal_pending(
+                self,
+                old_key.as_deref(),
+                key.as_ref().map(|(id, _)| &**id),
+            )?;
+        }
         if key.is_none() {
             // Plain from here on: readers stop looking for `.age` files.
             remove_if_there(&self.dir.join(crypt::MARKER))?;
@@ -4185,13 +4195,6 @@ impl Store {
                 // Only the stub was there.
                 remove_if_there(&self.dir.join("findings.json"))?;
             }
-        }
-        if self.is_git() {
-            crate::action_log::reseal_pending(
-                self,
-                old_key.as_deref(),
-                key.as_ref().map(|(id, _)| &**id),
-            )?;
         }
         Ok(files.len() - kept.len())
     }
@@ -6867,6 +6870,60 @@ mod tests {
             .join(".git")
             .join(format!("{}.lock", action_log::PENDING_FILE))
             .exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// The same while decrypting: a save made during the rewrite (sealed
+    /// with the old key) is kept, and the file ends up plain.
+    #[test]
+    fn a_save_made_during_a_long_decrypt_is_kept() {
+        use crate::action_log::{self, Activity, Change};
+        let dir = std::env::temp_dir().join(format!("pw-decrypt-pending-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let work = dir.join("work");
+        fs::create_dir_all(&work).unwrap();
+        if run_git(Some(&work), &["init", "-q"]).is_err() {
+            assert!(std::env::var_os("CI").is_none(), "git is required in CI");
+            return;
+        }
+        crate::keystore::use_test_store(&dir.join("ks"));
+        let store = git_store(&work);
+        store.write_state_file("last-run.json", b"{}").unwrap();
+        let first = crypt::SecretString::from("first passphrase here".to_string());
+        store.rewrite(Some(&first)).unwrap();
+        crypt::give_passphrase(&work, first);
+        let change = |at: &str| Change {
+            fingerprint: "PW-001-aaaa".into(),
+            activity: Activity {
+                at: at.into(),
+                action: "service-desk/open".into(),
+                ..Activity::default()
+            },
+            records: Vec::new(),
+            removed: Vec::new(),
+        };
+        action_log::add_pending(&store, &change("2026-11-18T14:00:00.000Z")).unwrap();
+        let pending = work.join(".git").join(action_log::PENDING_FILE);
+        assert!(fs::read(&pending)
+            .unwrap()
+            .starts_with(b"age-encryption.org/"));
+        let other = git_store(&work);
+        DURING_REWRITE.with(|h| {
+            *h.borrow_mut() = Some(Box::new(move || {
+                action_log::TEST_STALE_AFTER.with(|s| s.set(Some(std::time::Duration::ZERO)));
+                action_log::add_pending(&other, &change("2026-11-18T15:00:00.000Z")).unwrap();
+                action_log::TEST_STALE_AFTER.with(|s| s.set(None));
+            }))
+        });
+        store.rewrite(None).unwrap();
+        assert!(
+            DURING_REWRITE.with(|h| h.borrow().is_none()),
+            "the hook ran"
+        );
+        assert!(!crypt::is_encrypted(&work));
+        let bytes = fs::read(&pending).unwrap();
+        assert!(bytes.starts_with(b"{"), "plain");
+        assert_eq!(action_log::pending_count(&store), 2, "both saves kept");
         let _ = fs::remove_dir_all(&dir);
     }
 }
