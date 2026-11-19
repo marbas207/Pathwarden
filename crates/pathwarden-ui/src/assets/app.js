@@ -1489,6 +1489,10 @@
       if (e.defaultPrevented) return;
       var f = e.target;
       if (f && f.target && f.target !== "_self") return;
+      // A dialog's own form only closes the dialog: no page comes.
+      var sub = e.submitter;
+      if ((f && (f.getAttribute("method") || "").toLowerCase() === "dialog") ||
+          (sub && (sub.getAttribute("formmethod") || "").toLowerCase() === "dialog")) return;
       start();
     });
     // Back from the browser's page cache: nothing is loading.

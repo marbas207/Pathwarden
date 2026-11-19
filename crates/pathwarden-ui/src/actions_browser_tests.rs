@@ -33,13 +33,13 @@ use crate::workspace::Workspace;
 /// progress and the result, clicks Done; reloads once the report shows
 /// the chip.
 const TOP: &str = r##"(function () {
-  function post(m) { fetch("/__probe/result", { method: "POST", body: JSON.stringify(m) }); }
-  var lines = 0;
+  function post(m) { return fetch("/__probe/result", { method: "POST", body: JSON.stringify(m) }); }
+  var lines = 0, closed = false;
   window.addEventListener("message", function (e) {
     var m = e.data;
     if (!m || m.type !== "pw-probe") return;
     post(m);
-    if (m.step === "chip") setTimeout(function () { location.reload(); }, 800);
+    if (m.step === "chip") (function reload() { if (closed) location.reload(); else setTimeout(reload, 100); })();
   });
   function $(id) { return document.getElementById(id); }
   function tick() {
@@ -56,7 +56,16 @@ const TOP: &str = r##"(function () {
       d.setAttribute("data-probe", "2");
       var r = $("ac-result");
       post({ step: "result", title: (r.querySelector("strong") || {}).textContent, chip: (r.querySelector(".ac-chip") || {}).textContent, said: $("ac-saved").textContent, lines: lines });
-      setTimeout(function () { $("ac-go").click(); d.removeAttribute("data-probe"); lines = 0; }, 300);
+      // Closed with the dialog's x: no page comes, so the page's wait
+      // bar mustn't start (it stayed, spinning, before).
+      setTimeout(function () {
+        d.querySelector(".rt-x").click(); d.removeAttribute("data-probe"); lines = 0;
+        setTimeout(function () {
+          // Reloaded only once this is in.
+          post({ step: "closed", open: d.open, bar: !!document.querySelector(".pw-load") })
+            .then(function () { closed = true; }, function () { closed = true; });
+        }, 700);
+      }, 300);
     }
     setTimeout(tick, 100);
   }
@@ -344,4 +353,8 @@ fn an_action_runs_in_a_browser_and_stays_on_the_finding() {
         "{said:?}"
     );
     assert_eq!(f["overview"], "1 finding has records");
+    // Closed with its x, the dialog leaves no wait bar.
+    let c = step("closed");
+    assert_eq!(c["open"], false, "{said:?}");
+    assert_eq!(c["bar"], false, "{said:?}");
 }
