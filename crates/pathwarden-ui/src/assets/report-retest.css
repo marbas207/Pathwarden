@@ -81,7 +81,10 @@
 .ac-chip.stale .ic { color: var(--warn); }
 .ac-more { color: var(--muted); font-size: 0.74rem; font-weight: 650; }
 .title .ac-rowchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 3px 0 0; font-weight: 400; letter-spacing: 0; text-transform: none; }
-.title .seen .ac-rowchips { display: inline-flex; margin: 0 0 0 8px; vertical-align: 1px; }
+.title .seen .ac-rowchips { display: inline-flex; flex-wrap: nowrap; margin: 0 0 0 8px; vertical-align: 1px; }
+/* "first seen …" and its chips stay one line: it may run past the title's
+   width, under the row's other cells. */
+.rt-on .title .seen:has(.ac-rowchips) { white-space: nowrap; width: max-content; max-width: none; }
 .title .ac-rowchips .ac-chip { font-size: 0.72rem; padding: 1px 7px; }
 /* The box between the action bar and the facts: records, then Activity. */
 .ac-box { display: grid; gap: 12px; margin: -4px 0 16px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); }

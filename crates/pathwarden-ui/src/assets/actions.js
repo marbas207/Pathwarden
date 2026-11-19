@@ -247,8 +247,8 @@
     }
     function head(eyebrow, title, desc) {
       var e = $("ac-eyebrow");
+      // The Test tag is on the progress and the result, not here too.
       e.textContent = visible(eyebrow);
-      tag(e);
       $("ac-title").textContent = visible(title);
       $("ac-desc").textContent = visible(desc || "");
       $("ac-desc").hidden = !desc;
