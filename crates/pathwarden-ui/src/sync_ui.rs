@@ -124,7 +124,7 @@ pub(crate) fn tip(id: &str, about: &str, rows: &[(String, String)], open: bool) 
     )
 }
 
-/// "NORTH\eddard.stark on SECOPS-WS02".
+/// "NORTH\a.admin on SECOPS-WS02".
 pub(crate) fn who(by: &Option<String>, on: &Option<String>) -> Option<String> {
     // Names come from whoever pushed: no direction controls that could
     // make one read as another.

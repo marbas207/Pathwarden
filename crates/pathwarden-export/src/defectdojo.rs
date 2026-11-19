@@ -253,7 +253,7 @@ fn finding(doc: &Doc, f: &Finding) -> Value {
         m.insert("severity_justification".into(), md(&why).into());
     }
     // The references, then the records finding actions keep on it: "Record
-    // RITM10816190 · Open: https://...".
+    // RITM0001234 · Open: https://...".
     let mut refs = f.references.clone();
     for r in f.actions.iter().flat_map(|a| &a.records) {
         refs.push(format!(

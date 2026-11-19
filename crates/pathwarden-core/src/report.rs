@@ -1049,7 +1049,7 @@ fn accepted_tag(f: &Finding) -> String {
     )
 }
 
-/// The chips of a finding's records on its row ("RITM10816190 · Open"),
+/// The chips of a finding's records on its row ("RITM0001234 · Open"),
 /// as text ([`crate::action_log::chip`]).
 fn action_chips(f: &Finding) -> String {
     let chips: String = f
@@ -1071,8 +1071,8 @@ fn action_chips(f: &Finding) -> String {
     }
 }
 
-/// A finding's Activity list, newest first, as text: "Opened RITM10816190
-/// — NORTH\eddard.stark, SECOPS-WS02, Nov 18, 2026, 2:02 PM". Empty when
+/// A finding's Activity list, newest first, as text: "Opened RITM0001234
+/// — NORTH\a.admin, SECOPS-WS02, Nov 18, 2026, 2:02 PM". Empty when
 /// no action ran on it.
 fn action_activity(f: &Finding) -> String {
     let Some(a) = f.actions.as_ref().filter(|a| !a.activity.is_empty()) else {

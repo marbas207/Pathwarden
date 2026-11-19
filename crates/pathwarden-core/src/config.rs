@@ -1082,12 +1082,12 @@ impl Default for RulesConfig {
 /// fingerprint = "PW-004-13b0863341b2e306"
 /// reason = "Break-glass account, reviewed quarterly (CHG0012345)"
 /// expires = "2027-01-31"
-/// accepted_by = 'NORTH\eddard.stark'
+/// accepted_by = 'NORTH\a.admin'
 /// accepted_on = "SECOPS-WS02"
 /// accepted_at = "2026-10-22T14:03:11Z"
 ///
 /// [[suppress.notes]]
-/// by = 'NORTH\eddard.stark'
+/// by = 'NORTH\a.admin'
 /// on = "SECOPS-WS02"
 /// at = "2026-11-02T09:15:00Z"
 /// text = "CHG0012345 renewed for Q1."
@@ -1821,7 +1821,7 @@ impl Suppression {
 }
 
 impl Acceptance {
-    /// "accepted by NORTH\eddard.stark on SECOPS-WS02, Oct 22, 2026", or
+    /// "accepted by NORTH\a.admin on SECOPS-WS02, Oct 22, 2026", or
     /// "who accepted it and when wasn't recorded" for an entry from before
     /// attribution (hand-written or an older version).
     pub fn accepted_line(&self) -> String {

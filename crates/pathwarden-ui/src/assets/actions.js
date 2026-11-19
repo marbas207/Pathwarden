@@ -21,7 +21,7 @@
   var FINGERPRINT = /^PW-[A-Za-z0-9-]{1,61}$/;
   // Bidi controls shown, not obeyed (pathwarden_core::text::is_bidi_control).
   function visible(s) {
-    return String(s == null ? "" : s).replace(/[‪-‮⁦-⁩‎‏؜]/g, function (c) {
+    return String(s == null ? "" : s).replace(/[\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/g, function (c) {
       return "\\u{" + c.charCodeAt(0).toString(16) + "}";
     });
   }
@@ -326,8 +326,18 @@
     }
     function check() {
       fetch("/api/jobs/" + encodeURIComponent(job), { credentials: "same-origin" })
-        .then(function (r) { return r.json(); })
+        .then(function (r) {
+          if (!r.ok) {
+            // The job is gone (Pathwarden restarted, say): say so, once.
+            busy = false;
+            stopTimers();
+            failed("Pathwarden lost track of this action. Look at the finding's activity, then try again.");
+            return null;
+          }
+          return r.json();
+        })
         .then(function (j) {
+          if (!j) return;
           var p = j.action || {};
           if (Array.isArray(p.lines)) lines(p.lines);
           if (j.status === "acted" && p.result) { busy = false; stopTimers(); result(p.result); return; }

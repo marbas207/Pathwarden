@@ -691,3 +691,82 @@ async fn with_allow_destinations_a_program_is_added_and_removed() {
     assert_eq!(s, StatusCode::OK, "{v}");
     assert!(a.state.ws().config().unwrap().actions.is_empty());
 }
+
+/// The forest fixture in `dir/name`: with `fixed`, CAROL's GenericAll on
+/// CHILD_DA removed and BOB requiring pre-authentication again; each copy
+/// with its own description on BOB, so no two are the same collection.
+fn forest(dir: &Path, name: &str, fixed: bool) -> PathBuf {
+    let out = dir.join(name);
+    std::fs::create_dir_all(&out).unwrap();
+    for e in std::fs::read_dir(repo("testdata/forest"))
+        .unwrap()
+        .flatten()
+    {
+        let mut text = std::fs::read_to_string(e.path()).unwrap();
+        if e.file_name().to_string_lossy() == "contoso_users.json" {
+            let mut doc: Value = serde_json::from_str(&text).unwrap();
+            for o in doc["data"].as_array_mut().unwrap() {
+                match o["ObjectIdentifier"].as_str().unwrap() {
+                    "S-1-5-21-2000-2000-2000-1201" if fixed => o["Aces"] = json!([]),
+                    "S-1-5-21-1000-1000-1000-1104" => {
+                        if fixed {
+                            o["Properties"]["dontreqpreauth"] = false.into();
+                        }
+                        o["Properties"]["description"] = name.into();
+                    }
+                    _ => {}
+                }
+            }
+            text = doc.to_string();
+        }
+        std::fs::write(out.join(e.file_name()), text).unwrap();
+    }
+    out
+}
+
+/// A finding fixed in a later run counts as fixed on an earlier run's page
+/// even when the newest run no longer lists it at all (it was fixed in the
+/// run between): what an action is offered on, and what it is told. The
+/// CLI reads it from the same shared code.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_finding_fixed_two_runs_ago_still_counts_as_fixed() {
+    let a = app("three", false);
+    let first = a.analyze(&forest(&a.dir, "one", false)).await;
+    a.analyze(&forest(&a.dir, "two", true)).await;
+    let newest = a.analyze(&forest(&a.dir, "three", true)).await;
+    let ws = a.state.ws();
+    let fps = |run: &str| -> Vec<(String, pathwarden_core::actions::FindingStatus)> {
+        let text = pathwarden_ui::run_data::event_text(&ws.run_dir(run).unwrap()).unwrap();
+        let event: Value = serde_json::from_str(&text).unwrap();
+        pathwarden_core::actions::findings_in_event(&event)
+            .into_iter()
+            .map(|f| (f.fingerprint, f.status))
+            .collect()
+    };
+    let before = fps(&first);
+    let after = fps(&newest);
+    let open_now: Vec<&str> = after
+        .iter()
+        .filter(|(_, s)| *s != pathwarden_core::actions::FindingStatus::Fixed)
+        .map(|(f, _)| f.as_str())
+        .collect();
+    let gone: Vec<&str> = before
+        .iter()
+        .map(|(f, _)| f.as_str())
+        .filter(|f| !open_now.contains(f))
+        .collect();
+    assert!(!gone.is_empty(), "nothing was fixed");
+    // The newest run doesn't list them (they were fixed the run before).
+    assert!(
+        gone.iter().all(|f| !after.iter().any(|(x, _)| x == f)),
+        "{gone:?} / {after:?}"
+    );
+    for (fp, _) in &before {
+        let (_, f) = pathwarden_ui::actions_ui::find_finding(&ws, Some(&first), fp).unwrap();
+        let fixed = f.status == pathwarden_core::actions::FindingStatus::Fixed;
+        assert_eq!(fixed, gone.contains(&fp.as_str()), "{fp}");
+        if fixed {
+            assert_eq!(f.finding["status"], "fixed");
+        }
+    }
+}

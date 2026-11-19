@@ -30,7 +30,8 @@ fn runs_newest_first(ws: &Workspace) -> Vec<RunSummary> {
 fn findings_of(ws: &Workspace, r: &RunSummary) -> Option<Vec<FindingContext>> {
     let dir = ws.run_dir(&r.id)?;
     let mut all = event_findings(&dir)?;
-    let fixed = fixed_since(ws, r, &dir);
+    let mine: Vec<&str> = all.iter().map(|f| f.fingerprint.as_str()).collect();
+    let fixed = fixed_since(ws, r, &dir, &mine);
     for f in all.iter_mut() {
         if matches!(
             f.status,
@@ -53,13 +54,16 @@ fn event_findings(dir: &std::path::Path) -> Option<Vec<FindingContext>> {
     Some(actions::findings_in_event(&event))
 }
 
-/// The findings of run `r` (folder `dir`) found fixed since it ran: those
-/// whose latest targeted retest says fixed, and those the newest run of
-/// the environment lists as fixed (unless a later retest says otherwise).
+/// The findings of run `r` (folder `dir`), `mine`, found fixed since it
+/// ran: those whose latest targeted retest says fixed, and those the
+/// newest later run that has an event document no longer has open,
+/// accepted or held (fixed there, or fixed in a run between and gone
+/// since), unless a later retest says otherwise.
 fn fixed_since(
     ws: &Workspace,
     r: &RunSummary,
     dir: &std::path::Path,
+    mine: &[&str],
 ) -> std::collections::HashSet<String> {
     use pathwarden_core::retest::Verdict;
     let mut latest: std::collections::HashMap<String, (i64, bool)> =
@@ -70,18 +74,25 @@ fn fixed_since(
             *e = (x.at, x.verdict == Verdict::Fixed);
         }
     }
-    if let Some(newest) = runs_newest_first(ws)
+    let later = runs_newest_first(ws)
         .into_iter()
-        .find(|x| x.id != r.id && x.newer_than(r))
-    {
-        if let Some(later) = ws.run_dir(&newest.id).and_then(|d| event_findings(&d)) {
-            for f in later {
-                let fixed = f.status == actions::FindingStatus::Fixed;
-                match latest.get(&f.fingerprint) {
-                    Some((at, _)) if *at >= newest.created_at => {}
-                    _ => {
-                        latest.insert(f.fingerprint.clone(), (newest.created_at, fixed));
-                    }
+        .filter(|x| x.id != r.id && x.newer_than(r))
+        .find_map(|x| {
+            let found = ws.run_dir(&x.id).and_then(|d| event_findings(&d))?;
+            Some((x, found))
+        });
+    if let Some((newest, found)) = later {
+        let still: std::collections::HashSet<&str> = found
+            .iter()
+            .filter(|f| f.status != actions::FindingStatus::Fixed)
+            .map(|f| f.fingerprint.as_str())
+            .collect();
+        for fp in mine {
+            let fixed = !still.contains(fp);
+            match latest.get(*fp) {
+                Some((at, _)) if *at >= newest.created_at => {}
+                _ => {
+                    latest.insert(fp.to_string(), (newest.created_at, fixed));
                 }
             }
         }
@@ -512,8 +523,8 @@ pub struct FindingView {
 pub struct RecordView {
     #[serde(flatten)]
     pub record: ActionRecord,
-    /// "RITM10816190 · Open", or on a fixed finding whose record is still
-    /// open "Fixed — RITM10816190 still Open" ([`action_log::chip`]).
+    /// "RITM0001234 · Open", or on a fixed finding whose record is still
+    /// open "Fixed — RITM0001234 still Open" ([`action_log::chip`]).
     pub chip: String,
     /// The follow-ups offered on it, as `<name>/<id>`.
     pub follow_ups: Vec<String>,
@@ -524,7 +535,7 @@ pub struct RecordView {
 pub struct ActivityView {
     #[serde(flatten)]
     pub entry: Activity,
-    /// "Opened RITM10816190 — NORTH\eddard.stark, SECOPS-WS02, Nov 18,
+    /// "Opened RITM0001234 — CORP\a.admin, SECOPS-WS02, Nov 18,
     /// 2026, 2:02 PM" ([`Activity::line`]).
     pub line: String,
     /// What happened, in a few words ([`Activity::summary`]): a page

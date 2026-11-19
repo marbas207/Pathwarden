@@ -21,6 +21,7 @@
 //! runs the same shared functions ([`crate::actions_ui`]).
 
 use std::fmt::Write as _;
+use std::sync::Arc;
 
 use axum::extract::{Path, State};
 use axum::http::{header, StatusCode};
@@ -350,6 +351,13 @@ fn start(st: &Shared, ws: Workspace, ready: Ready, blocks: Vec<ActionConfig>) ->
     let jobs = st.jobs.clone();
     let job = id.clone();
     std::thread::spawn(move || {
+        // Whatever happens in here (a panic too), the job ends: else it
+        // would stay running and refuse every later action.
+        let mut guard = Ended {
+            jobs: jobs.clone(),
+            job: job.clone(),
+            done: false,
+        };
         let lines = jobs.clone();
         let line_job = job.clone();
         let mut on_line = move |l: &str| lines.action_line(&line_job, l);
@@ -375,8 +383,34 @@ fn start(st: &Shared, ws: Workspace, ready: Ready, blocks: Vec<ActionConfig>) ->
             }),
         };
         jobs.action_done(&job, result);
+        guard.done = true;
     });
     (StatusCode::ACCEPTED, Json(answer)).into_response()
+}
+
+/// Ends an action's job that didn't end by itself (its thread panicked):
+/// failed, so the next action can run.
+struct Ended {
+    jobs: Arc<crate::jobs::Jobs>,
+    job: String,
+    done: bool,
+}
+
+impl Drop for Ended {
+    fn drop(&mut self) {
+        if !self.done {
+            self.jobs.action_done(
+                &self.job,
+                json!({
+                    "ok": false,
+                    "ended": "failed",
+                    "message": "The action stopped unexpectedly. Try again.",
+                    "saved": false,
+                    "pushed": false,
+                }),
+            );
+        }
+    }
 }
 
 /// The result card's line under it: a dry run saved nothing; else saved
@@ -757,15 +791,13 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
     let mut rows: Vec<(String, String)> = a
         .settings
         .iter()
-        .filter_map(|(k, v)| {
-            let t = match v {
-                Value::String(s) => s.clone(),
-                Value::Number(n) => n.to_string(),
-                Value::Bool(b) => b.to_string(),
-                _ => return None,
-            };
-            Some((k.clone(), t))
-        })
+        .filter_map(|(k, v)| Some((k.clone(), scalar_text(v)?)))
+        .collect();
+    let kept: Vec<String> = a
+        .settings
+        .iter()
+        .filter(|(_, v)| scalar_text(v).is_none())
+        .map(|(k, _)| format!("<code>{}</code>", esc(k)))
         .collect();
     if rows.is_empty() && !locked {
         rows.push((String::new(), String::new()));
@@ -820,7 +852,7 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
 </div>
 <h3 class="form-title">Settings</h3>
 <p class="hint">Passed to the program in its request. For a secret, add a setting ending in <code>_env</code> whose value is the <em>name</em> of an environment variable.</p>
-<div class="kvs" id="af-settings">{settings_rows}</div>
+<div class="kvs" id="af-settings">{settings_rows}</div>{kept}
 <button type="button" class="btn small-btn" data-add-kv="af-settings"{dis}>{plus} Add a setting</button>
 <h3 class="form-title">When it runs</h3>
 <div class="fields2">
@@ -855,6 +887,14 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
         check = icon("i-check"),
         saved = settings::after_save(st),
         scripts = SCRIPTS,
+        kept = if kept.is_empty() {
+            String::new()
+        } else {
+            format!(
+                r#"<p class="muted small kept">Also set in the file and kept as written: {}.</p>"#,
+                kept.join(", ")
+            )
+        },
     );
     Html(pages::shell(
         &ctx,
@@ -894,6 +934,17 @@ struct SaveBody {
     categories: Vec<String>,
 }
 
+/// A setting as the form shows it: text, a number or true/false; `None`
+/// for a list or a table, which the form keeps as the file has it.
+fn scalar_text(v: &Value) -> Option<String> {
+    match v {
+        Value::String(s) => Some(s.clone()),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }
+}
+
 /// A setting's text as the file keeps it: true/false and whole numbers
 /// as such, as `pathwarden action add --setting` saves them.
 pub fn setting_of(v: &str) -> Setting {
@@ -910,9 +961,19 @@ pub fn setting_of(v: &str) -> Setting {
 impl SaveBody {
     fn edit(&self, existing: Option<&ActionConfig>) -> Result<ActionEdit, String> {
         let mut set = Vec::new();
+        let mut sent = Vec::new();
         for (k, v) in &self.settings {
             let (k, v) = (k.trim(), v.trim());
             if k.is_empty() {
+                continue;
+            }
+            sent.push(k.to_string());
+            // As the file has it already (a decimal number too): no change.
+            if existing
+                .and_then(|a| a.settings.get(k))
+                .and_then(scalar_text)
+                .is_some_and(|t| t == v)
+            {
                 continue;
             }
             if plugin_form::looks_secret(k) {
@@ -925,12 +986,14 @@ impl SaveBody {
             }
             set.push((k.to_string(), setting_of(v)));
         }
+        // Only settings the form showed (text, numbers, true/false) can be
+        // removed there; lists and tables are kept as the file has them.
         let remove = existing
             .map(|a| {
                 a.settings
-                    .keys()
-                    .filter(|k| !set.iter().any(|(n, _)| n == *k))
-                    .cloned()
+                    .iter()
+                    .filter(|(k, v)| scalar_text(v).is_some() && !sent.contains(k))
+                    .map(|(k, _)| k.clone())
                     .collect()
             })
             .unwrap_or_default();

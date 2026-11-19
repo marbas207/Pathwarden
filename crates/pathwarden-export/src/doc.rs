@@ -84,7 +84,7 @@ pub struct ActionRecord {
 }
 
 impl ActionRecord {
-    /// "RITM10816190 · Open": its number (else label, else ID) and status.
+    /// "RITM0001234 · Open": its number (else label, else ID) and status.
     pub fn line(&self) -> String {
         let name = self
             .number

@@ -427,10 +427,16 @@
     check: ["m5 12.5 4.5 4.5L19 7.5"]
   };
   Object.keys(AC_ICONS).forEach(function (k) { if (!ICONS[k]) ICONS[k] = AC_ICONS[k]; });
+  // Bidi controls shown, not obeyed (pathwarden_core::text::is_bidi_control).
+  function visible(s) {
+    return String(s == null ? "" : s).replace(/[\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/g, function (c) {
+      return "\\u{" + c.charCodeAt(0).toString(16) + "}";
+    });
+  }
   function text(tag, cls, t) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
-    if (t != null) e.textContent = String(t);
+    if (t != null) e.textContent = visible(t);
     return e;
   }
   function actLabel(addr) {
@@ -443,19 +449,19 @@
     send(m);
   }
   function https(u) { return typeof u === "string" && /^https:\/\/\S+$/i.test(u) && u.length <= 2048; }
-  // A record's chip: "RITM10816190 · Open"; on a fixed finding whose record
-  // is still open, "Fixed — RITM10816190 still Open".
+  // A record's chip: "RITM0001234 · Open"; on a fixed finding whose record
+  // is still open, "Fixed — RITM0001234 still Open".
   function chip(rv, fixed) {
     var r = rv || {};
     var name = r.number || r.label || r.id || "";
     var status = r.status || (r.open ? "Open" : "Closed");
     var stale = fixed && r.open;
     var c = text("span", "ac-chip" + (stale ? " stale" : r.open ? "" : " closed"));
-    c.title = typeof rv.chip === "string" ? rv.chip : name;
+    c.title = visible(typeof r.chip === "string" ? r.chip : name);
     c.appendChild(icon("ticket"));
     if (stale) c.appendChild(document.createTextNode("Fixed — "));
     c.appendChild(text("span", "num", name));
-    c.appendChild(document.createTextNode(stale ? " still " + status : " · " + status));
+    c.appendChild(document.createTextNode(visible(stale ? " still " + status : " · " + status)));
     return c;
   }
   function mini(cls, name, label, title, onClick) {

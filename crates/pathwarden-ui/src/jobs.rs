@@ -521,9 +521,10 @@ impl Jobs {
         if jobs.values().any(|j| j.status.is_active()) {
             return false;
         }
-        // Keep the map small: forget finished jobs from long ago.
+        // Keep the map small: forget finished jobs from long ago (never
+        // a running action's, which runs beside a collection's).
         if jobs.len() > 50 {
-            jobs.retain(|_, j| j.status.is_active());
+            jobs.retain(|_, j| j.status.is_active() || matches!(j.status, JobStatus::Acting));
         }
         jobs.insert(job.id.clone(), job);
         true

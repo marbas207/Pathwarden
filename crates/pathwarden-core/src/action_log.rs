@@ -251,8 +251,8 @@ pub struct Activity {
 
 impl Activity {
     /// What happened, in a few words: the message's first line for a run
-    /// that worked ("Opened RITM10816190"), the label and what went wrong
-    /// for one that didn't, "Removed RITM10816190" for a removal.
+    /// that worked ("Opened RITM0001234"), the label and what went wrong
+    /// for one that didn't, "Removed RITM0001234" for a removal.
     pub fn summary(&self) -> String {
         let first = |s: &str| {
             let line = s.lines().next().unwrap_or_default().trim();
@@ -276,7 +276,7 @@ impl Activity {
         }
     }
 
-    /// Who, where and when: "NORTH\eddard.stark, SECOPS-WS02, Nov 18,
+    /// Who, where and when: "NORTH\a.admin, SECOPS-WS02, Nov 18,
     /// 2026, 2:02 PM" (this computer's time), with the parts that are
     /// known.
     pub fn who_when(&self) -> String {
@@ -291,7 +291,7 @@ impl Activity {
             .join(", ")
     }
 
-    /// The line people read: "Opened RITM10816190 — NORTH\eddard.stark,
+    /// The line people read: "Opened RITM0001234 — NORTH\a.admin,
     /// SECOPS-WS02, Nov 18, 2026, 2:02 PM".
     pub fn line(&self) -> String {
         format!("{} — {}", self.summary(), self.who_when())
@@ -303,8 +303,8 @@ impl Activity {
     }
 }
 
-/// The text of a record's chip: "RITM10816190 · Open"; on a fixed finding
-/// whose record is still open, "Fixed — RITM10816190 still Open".
+/// The text of a record's chip: "RITM0001234 · Open"; on a fixed finding
+/// whose record is still open, "Fixed — RITM0001234 still Open".
 pub fn chip(r: &Record, fixed: bool) -> String {
     let name = r
         .number
@@ -565,7 +565,7 @@ pub struct Summary {
     /// The latest entries, newest first: (fingerprint, line).
     pub newest: Vec<(String, String)>,
     /// Its records, at most [`SUMMARY_RECORDS`]: fingerprint, then
-    /// "RITM10816190 · Open · desk.example.com" (the link's host).
+    /// "RITM0001234 · Open · desk.example.com" (the link's host).
     pub record_lines: Vec<(String, String)>,
     /// How many records [`Summary::record_lines`] leaves out.
     pub more_records: usize,
@@ -884,7 +884,7 @@ pub fn run_change(
 }
 
 /// The change removing record `r` from finding `fingerprint`, logged as
-/// activity ("Removed RITM10816190").
+/// activity ("Removed RITM0001234").
 pub fn remove_change(fingerprint: &str, r: &ActionRecord, who: &Actor, at: &str) -> Change {
     let name = r
         .record
