@@ -1006,6 +1006,13 @@ pub struct Record {
     /// Named values to show with it, by name.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub fields: BTreeMap<String, String>,
+    /// Fields a later release of v1 keeps on a record (in the history's
+    /// `actions.json`), kept as they are. A program's result never sets
+    /// them ([`parse_result`] reads only the fields above). On an
+    /// [`ActionRecord`], its own unknown fields land here too, and are
+    /// written back the same.
+    #[serde(flatten)]
+    pub other: BTreeMap<String, Value>,
 }
 
 /// A record kept on a finding: the result's record, which action made it
@@ -1674,10 +1681,16 @@ pub struct Ask {
 /// why in words: there is none, or two actions made one with that ID.
 pub fn find_record<'a>(records: &'a [ActionRecord], id: &str) -> Result<&'a ActionRecord, String> {
     let id = id.trim();
-    let found: Vec<&ActionRecord> = records
-        .iter()
-        .filter(|r| r.record.id.eq_ignore_ascii_case(id))
-        .collect();
+    // The ID as given first; another case only when it means one record.
+    let exact: Vec<&ActionRecord> = records.iter().filter(|r| r.record.id == id).collect();
+    let found: Vec<&ActionRecord> = if exact.is_empty() {
+        records
+            .iter()
+            .filter(|r| r.record.id.eq_ignore_ascii_case(id))
+            .collect()
+    } else {
+        exact
+    };
     match found.as_slice() {
         [one] => Ok(one),
         [] if records.is_empty() => Err(format!("This finding has no records, so none is {id}.")),
@@ -1689,14 +1702,20 @@ pub fn find_record<'a>(records: &'a [ActionRecord], id: &str) -> Result<&'a Acti
                 .collect::<Vec<_>>()
                 .join(", ")
         )),
-        _ => Err(format!(
-            "Two actions made a record {id} on this finding ({}), so it can't be told which.",
-            found
-                .iter()
-                .map(|r| r.action.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )),
+        many => {
+            let mut actions: Vec<&str> = many.iter().map(|r| r.action.as_str()).collect();
+            actions.dedup();
+            Err(match actions.as_slice() {
+                [one] => format!(
+                    "This finding has {} records {id} from {one} (their IDs differ only in case), so it can't be told which: give its ID exactly.",
+                    many.len()
+                ),
+                _ => format!(
+                    "Several actions made a record {id} on this finding ({}), so it can't be told which.",
+                    actions.join(", ")
+                ),
+            })
+        }
     }
 }
 

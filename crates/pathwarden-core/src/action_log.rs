@@ -17,7 +17,17 @@
 //! `action` and `id`, the newer `updated_at` winning ([`merge`]).
 //!
 //! A file from a newer Pathwarden (a higher `version`) is neither read nor
-//! written over ([`NEWER_WORDS`]).
+//! written over ([`NEWER_WORDS`]). Neither is one an older release left in
+//! the other form when it changed how the history is stored
+//! ([`load`]): the rest of the history goes on working.
+//!
+//! The file is read as untrusted, as anything a writer of the history can
+//! push: at most [`MAX_BYTES`], texts cut to the result's caps, links that
+//! aren't `https://` dropped.
+//!
+//! A save whose push failed is kept on this computer (a file in the
+//! working copy's `.git`), made again on whatever every later pull brings,
+//! and dropped once a push carried it ([`replay_pending`]).
 
 use std::collections::BTreeMap;
 
@@ -26,6 +36,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::actions::{ActionRecord, Outcome, Record};
+use crate::crypt;
 use crate::identity::Actor;
 use crate::store::{KeptUnpushed, Store};
 
@@ -43,6 +54,22 @@ pub const MESSAGE: &str = "pathwarden: save what a finding action did";
 /// What is said when the history's file was saved by a newer Pathwarden.
 pub const NEWER_WORDS: &str = "The history's actions.json was saved by a newer Pathwarden, so \
 what actions do can't be saved here. Update Pathwarden to save it.";
+/// The most bytes of the file read: any writer of the history can push it.
+pub const MAX_BYTES: u64 = 16 << 20;
+/// What is said when an older release turned encryption off and left the
+/// file encrypted.
+pub const LEFT_SEALED_WORDS: &str = "What finding actions did (actions.json) is still encrypted \
+in a history that isn't any more: an older Pathwarden turned encryption off without rewriting \
+it. The rest of the history works; what actions did can't be shown or saved until the history \
+is encrypted again with its old passphrase, or someone removes actions.json.age from it.";
+/// What is said when the file can't be opened with the history's key.
+pub const UNREADABLE_WORDS: &str = "What finding actions did (actions.json) can't be opened with \
+the history's key: an older Pathwarden probably changed the passphrase without rewriting it. The \
+rest of the history works; what actions did can't be shown or saved here, and is kept as it is.";
+/// An activity entry's `outcome` for a run someone stopped.
+pub const CANCELLED: &str = "cancelled";
+/// The working copy's file of saves whose push failed ([`replay_pending`]).
+const PENDING_FILE: &str = "pathwarden-actions-pending.json";
 
 /// The whole file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -75,24 +102,74 @@ pub struct FindingLog {
     /// In the order they were first made.
     #[serde(default)]
     pub records: Vec<ActionRecord>,
+    /// Records someone removed: a record made before its removal never
+    /// comes back (a follow-up that started before it, a computer that
+    /// hadn't seen it); one a later run makes anew with the same ID does.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub removed: Vec<Tombstone>,
     #[serde(flatten)]
     pub other: BTreeMap<String, Value>,
 }
 
+/// A record someone removed.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Tombstone {
+    pub action: String,
+    pub id: String,
+    /// When it was removed (as activity's `at`).
+    pub at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
+}
+
+impl Tombstone {
+    /// Whether it removes `r`: the same record, made no later than the
+    /// removal.
+    fn covers(&self, r: &ActionRecord) -> bool {
+        self.action == r.action && self.id == r.record.id && r.at <= self.at
+    }
+}
+
+/// Most removed records a finding remembers ([`FindingLog::removed`]).
+pub const MAX_REMOVED: usize = 100;
+
 /// What an entry of activity was.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum Kind {
     /// A run of an action (written as no `kind` at all).
     #[default]
     Run,
     /// Someone removed a record.
     Remove,
+    /// One a later release wrote: kept as it is, shown by its label.
+    Other(String),
 }
 
 impl Kind {
     fn is_run(&self) -> bool {
         *self == Kind::Run
+    }
+}
+
+impl Serialize for Kind {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(match self {
+            Kind::Run => "run",
+            Kind::Remove => "remove",
+            Kind::Other(k) => k,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for Kind {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Kind, D::Error> {
+        Ok(match Value::deserialize(d)? {
+            Value::Null => Kind::Run,
+            Value::String(k) if k == "run" => Kind::Run,
+            Value::String(k) if k == "remove" => Kind::Remove,
+            Value::String(k) => Kind::Other(k),
+            other => Kind::Other(other.to_string()),
+        })
     }
 }
 
@@ -126,6 +203,10 @@ pub struct Activity {
     pub dry_run: bool,
     #[serde(default, skip_serializing_if = "Kind::is_run")]
     pub kind: Kind,
+    /// How a run that didn't finish ended: `cancelled` when someone
+    /// stopped it (Ctrl-C, Cancel). Absent otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
     #[serde(flatten)]
     pub other: BTreeMap<String, Value>,
 }
@@ -139,7 +220,9 @@ impl Activity {
             let line = s.lines().next().unwrap_or_default().trim();
             crate::actions::clean_text(line.trim_end_matches('.'), 160, false).0
         };
-        match self.kind {
+        match &self.kind {
+            Kind::Other(_) if self.message.trim().is_empty() => self.label.clone(),
+            Kind::Other(_) => format!("{}: {}", self.label, first(&self.message)),
             Kind::Remove => format!(
                 "Removed {}",
                 if self.message.is_empty() {
@@ -274,6 +357,12 @@ pub enum LogError {
 
 /// Reads the file's text. A file without `version` is version 1.
 pub fn parse(bytes: &[u8]) -> Result<ActionsFile, LogError> {
+    if bytes.len() as u64 > MAX_BYTES {
+        return Err(LogError::Damaged(format!(
+            "it is larger than {} MiB, so it is not read",
+            MAX_BYTES >> 20
+        )));
+    }
     let bytes = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(bytes);
     let v: Value = serde_json::from_slice(bytes).map_err(|e| LogError::Damaged(e.to_string()))?;
     let Some(o) = v.as_object() else {
@@ -291,15 +380,114 @@ pub fn parse(bytes: &[u8]) -> Result<ActionsFile, LogError> {
     if v.get("version").is_none_or(Value::is_null) {
         v["version"] = Value::from(VERSION);
     }
-    serde_json::from_value(v).map_err(|e| LogError::Damaged(e.to_string()))
+    let mut file: ActionsFile =
+        serde_json::from_value(v).map_err(|e| LogError::Damaged(e.to_string()))?;
+    sanitize(&mut file);
+    Ok(file)
 }
 
-/// The history's file; an empty one when there is none yet.
-pub fn load(store: &Store) -> Result<ActionsFile> {
-    match store.read_state_file(FILE)? {
-        None => Ok(ActionsFile::default()),
-        Some(bytes) => Ok(parse(&bytes)?),
+/// `s` cut to `max` characters, without control or bidi characters.
+fn cut(s: &mut String, max: usize, lines: bool) {
+    *s = crate::actions::clean_text(s, max, lines).0;
+}
+
+/// The file as any reader may take it, whoever wrote it: every text cut
+/// to the caps a result has, and record links that aren't `https://`
+/// dropped, so no event, export or page ever carries one.
+pub fn sanitize(file: &mut ActionsFile) {
+    use crate::actions::{MAX_LABEL, MAX_MESSAGE, MAX_RECORD_TEXT};
+    for log in file.findings.values_mut() {
+        for a in &mut log.activity {
+            cut(&mut a.label, MAX_LABEL, false);
+            cut(&mut a.message, MAX_MESSAGE, true);
+            for t in [&mut a.action, &mut a.at] {
+                cut(t, MAX_RECORD_TEXT, false);
+            }
+            for t in
+                a.by.iter_mut()
+                    .chain(a.on.iter_mut())
+                    .chain(a.run_id.iter_mut())
+            {
+                cut(t, MAX_RECORD_TEXT, false);
+            }
+            a.record_ids.truncate(crate::actions::MAX_RECORDS + 1);
+            for id in &mut a.record_ids {
+                cut(id, MAX_RECORD_TEXT, false);
+            }
+        }
+        for r in &mut log.records {
+            sanitize_record(&mut r.record);
+            for t in r.by.iter_mut().chain(r.on.iter_mut()) {
+                cut(t, MAX_RECORD_TEXT, false);
+            }
+        }
     }
+}
+
+/// A record as a result's would be: texts cut, its link only when
+/// `https://`.
+pub fn sanitize_record(r: &mut Record) {
+    use crate::actions::{MAX_FIELD, MAX_FIELDS, MAX_NAME, MAX_RECORD_TEXT};
+    cut(&mut r.id, MAX_RECORD_TEXT, false);
+    for t in [&mut r.kind, &mut r.label, &mut r.number, &mut r.status]
+        .into_iter()
+        .flatten()
+    {
+        cut(t, MAX_RECORD_TEXT, false);
+    }
+    r.url = r
+        .url
+        .as_deref()
+        .and_then(|u| crate::actions::https_url(u).ok());
+    let fields = std::mem::take(&mut r.fields);
+    for (k, v) in fields.into_iter().take(MAX_FIELDS) {
+        let (k, _) = crate::actions::clean_text(&k, MAX_NAME, false);
+        let (v, _) = crate::actions::clean_text(&v, MAX_FIELD, false);
+        if !k.is_empty() {
+            r.fields.insert(k, v);
+        }
+    }
+}
+
+/// The history's file; an empty one when there is none yet. Refused (and
+/// so never written over) when it was saved by a newer Pathwarden, can't
+/// be read, or is in the other form than the history: an older release
+/// that turned encryption off left it encrypted ([`LEFT_SEALED_WORDS`]),
+/// or one that changed the passphrase left it under the old key
+/// ([`UNREADABLE_WORDS`]). A plain one in an encrypted history (an older
+/// release turned encryption on and left it) is read, as untrusted as the
+/// rest, and encrypted by the next save.
+pub fn load(store: &Store) -> Result<ActionsFile> {
+    let dir = &store.dir;
+    let sealed = dir.join(format!("{FILE}{}", crypt::SUFFIX));
+    let there = |p: &std::path::Path| std::fs::symlink_metadata(p).is_ok();
+    if !crypt::is_encrypted(dir) {
+        if there(&sealed) {
+            bail!(LEFT_SEALED_WORDS);
+        }
+        return match store.read_state_file(FILE)? {
+            None => Ok(ActionsFile::default()),
+            Some(bytes) => Ok(parse(&bytes)?),
+        };
+    }
+    let mut file = if there(&sealed) {
+        match store.read_state_file(FILE) {
+            Ok(Some(bytes)) => parse(&bytes)?,
+            Ok(None) => ActionsFile::default(),
+            Err(e) if e.downcast_ref::<crate::store::TooLarge>().is_some() => return Err(e),
+            Err(e) => {
+                // Not this file's fault when nothing of the history opens.
+                crate::store::check_readable(dir)?;
+                return Err(e.context(UNREADABLE_WORDS));
+            }
+        }
+    } else {
+        ActionsFile::default()
+    };
+    if let Some(bytes) = crate::store::read_leftover(dir, FILE, MAX_BYTES)? {
+        merge(&mut file, &parse(&bytes)?);
+    }
+    Ok(file)
 }
 
 // ------------------------------------------------------------- merging
@@ -321,6 +509,9 @@ fn add_activity(log: &mut FindingLog, entry: &Activity) {
 /// is replaced when `r` changed later (`updated_at`), keeping when and by
 /// whom the record was first made; else `r` is added.
 fn put_record(log: &mut FindingLog, r: &ActionRecord) {
+    if log.removed.iter().any(|t| t.covers(r)) {
+        return;
+    }
     match log
         .records
         .iter_mut()
@@ -343,15 +534,30 @@ fn put_record(log: &mut FindingLog, r: &ActionRecord) {
     }
 }
 
+/// Remembers removal `t` in `log` and takes out what it removes.
+fn add_removed(log: &mut FindingLog, t: &Tombstone) {
+    if !log.removed.contains(t) {
+        log.removed.push(t.clone());
+        log.removed.sort_by(|a, b| a.at.cmp(&b.at));
+        let over = log.removed.len().saturating_sub(MAX_REMOVED);
+        log.removed.drain(..over);
+    }
+    log.records.retain(|r| !t.covers(r));
+}
+
 /// Merges `other` into `into`, finding by finding: activity is the union
 /// of both (one entry per `at`, `by` and `action`, the latest
-/// [`MAX_ACTIVITY`] kept), and records are matched by `action` and `id`,
-/// the newer `updated_at` winning.
+/// [`MAX_ACTIVITY`] kept), records are matched by `action` and `id`, the
+/// newer `updated_at` winning, and a removal on either side wins over any
+/// record made before it.
 pub fn merge(into: &mut ActionsFile, other: &ActionsFile) {
     for (fp, theirs) in &other.findings {
         let ours = into.findings.entry(fp.clone()).or_default();
         for a in &theirs.activity {
             add_activity(ours, a);
+        }
+        for t in &theirs.removed {
+            add_removed(ours, t);
         }
         for r in &theirs.records {
             put_record(ours, r);
@@ -368,30 +574,40 @@ pub fn merge(into: &mut ActionsFile, other: &ActionsFile) {
 // ------------------------------------------------------------- changes
 
 /// One change to a finding's log: an entry of activity, the records it
-/// made or changed, and the records it removed (by `action` and `id`).
-#[derive(Debug, Clone, PartialEq)]
+/// made or changed, and the records it removed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Change {
     pub fingerprint: String,
     pub activity: Activity,
+    #[serde(default)]
     pub records: Vec<ActionRecord>,
-    pub removed: Vec<(String, String)>,
+    #[serde(default)]
+    pub removed: Vec<Tombstone>,
 }
 
 impl Change {
-    /// Makes the change in `file`: [`merge`]s it, then takes the removed
-    /// records out. Making it twice is making it once.
+    /// Makes the change in `file` as [`merge`] would: its removals first,
+    /// so a record they remove never comes back. Making it twice is making
+    /// it once.
     pub fn apply(&self, file: &mut ActionsFile) {
         let log = file.findings.entry(self.fingerprint.clone()).or_default();
         add_activity(log, &self.activity);
+        for t in &self.removed {
+            add_removed(log, t);
+        }
         for r in &self.records {
             put_record(log, r);
         }
-        log.records.retain(|r| {
-            !self
-                .removed
-                .iter()
-                .any(|(a, id)| *a == r.action && *id == r.record.id)
-        });
+    }
+
+    /// Whether `file` holds it already: its entry of activity is there, or
+    /// the finding's activity is full of later ones.
+    fn is_in(&self, file: &ActionsFile) -> bool {
+        file.findings.get(&self.fingerprint).is_some_and(|log| {
+            log.activity.iter().any(|a| a.key() == self.activity.key())
+                || (log.activity.len() >= MAX_ACTIVITY
+                    && log.activity.iter().all(|a| a.at > self.activity.at))
+        })
     }
 }
 
@@ -431,6 +647,7 @@ pub fn run_change(
     if outcome.dry_run {
         return None;
     }
+    let cancelled = outcome.ended == crate::actions::Ended::Cancelled;
     let block = address.split('/').next().unwrap_or(address);
     let of_block = |a: &str| a.split('/').next().is_some_and(|b| b == block);
     let mut records = Vec::new();
@@ -469,9 +686,14 @@ pub fn run_change(
             run_id: run_id.map(str::to_string),
             action: address.to_string(),
             label: label.to_string(),
-            ok: outcome.ok,
-            message: outcome.message.clone(),
+            ok: outcome.ok && !cancelled,
+            message: if cancelled {
+                "Cancelled".into()
+            } else {
+                outcome.message.clone()
+            },
             record_ids,
+            outcome: cancelled.then(|| CANCELLED.to_string()),
             ..Activity::default()
         },
         records,
@@ -503,7 +725,12 @@ pub fn remove_change(fingerprint: &str, r: &ActionRecord, who: &Actor, at: &str)
             ..Activity::default()
         },
         records: Vec::new(),
-        removed: vec![(r.action.clone(), r.record.id.clone())],
+        removed: vec![Tombstone {
+            action: r.action.clone(),
+            id: r.record.id.clone(),
+            at: at.to_string(),
+            by: who.user.clone(),
+        }],
     }
 }
 
@@ -531,6 +758,10 @@ pub fn save(store: &Store, change: &Change, push: bool) -> Result<Vec<String>> {
              action did isn't saved there."
         );
     }
+    // Kept here until a push carries it, whatever happens to this push.
+    if store.is_git() {
+        add_pending(store, change)?;
+    }
     let mut notes = write(store, change)?;
     if store.is_git() {
         match store.publish_with(MESSAGE, || {
@@ -546,6 +777,101 @@ pub fn save(store: &Store, change: &Change, push: bool) -> Result<Vec<String>> {
         }
     }
     Ok(crate::store::once_each(notes))
+}
+
+// ------------------------------------------------------------- pending
+
+/// The saves on this computer no push has carried yet.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct Pending {
+    #[serde(default)]
+    changes: Vec<Change>,
+}
+
+fn read_pending(store: &Store) -> Pending {
+    store
+        .read_local_file(PENDING_FILE)
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
+}
+
+fn write_pending(store: &Store, p: &Pending) -> Result<()> {
+    store.write_local_file(PENDING_FILE, &serde_json::to_vec(p)?)
+}
+
+/// Keeps `change` until a push carries it.
+fn add_pending(store: &Store, change: &Change) -> Result<()> {
+    let mut p = read_pending(store);
+    if !p.changes.contains(change) {
+        p.changes.push(change.clone());
+    }
+    write_pending(store, &p)
+}
+
+/// After a pull: the saves here no push carried yet, made again on what
+/// the history holds now (another computer may have pushed over them), so
+/// the next commit carries them. Nothing when there are none; a note when
+/// they can't be made (the log can't be read), and they are kept.
+pub fn replay_pending(store: &Store) -> Option<String> {
+    let p = read_pending(store);
+    if p.changes.is_empty() {
+        return None;
+    }
+    let result = (|| -> Result<()> {
+        let mut file = load(store)?;
+        if p.changes.iter().all(|c| c.is_in(&file)) {
+            return Ok(());
+        }
+        for c in &p.changes {
+            c.apply(&mut file);
+        }
+        crate::store::write_state_file(&store.dir, FILE, &file.to_bytes())?;
+        Ok(())
+    })();
+    result.err().map(|e| {
+        format!(
+            "What finding actions did here that wasn't pushed yet couldn't be put back on the \
+             history: {e:#}. It is kept on this computer."
+        )
+    })
+}
+
+/// After a push: the saves it carried are dropped from those kept here.
+pub fn prune_pending(store: &Store) {
+    let mut p = read_pending(store);
+    if p.changes.is_empty() {
+        return;
+    }
+    let Ok(file) = load(store) else {
+        return;
+    };
+    let before = p.changes.len();
+    p.changes.retain(|c| !c.is_in(&file));
+    if p.changes.len() != before {
+        let _ = write_pending(store, &p);
+    }
+}
+
+/// How many saves are kept on this computer for the next push.
+pub fn pending_count(store: &Store) -> usize {
+    read_pending(store).changes.len()
+}
+
+/// Saves `change` at once without the network, for a run someone stopped
+/// (Ctrl-C must stay quick): written in the working copy under the lock
+/// the caller holds (or none when `locked` is false), and in git kept
+/// for the next pull and push ([`replay_pending`]). A folder history
+/// without the lock isn't written.
+pub fn save_here(store: &Store, change: &Change, locked: bool) -> Result<()> {
+    if store.is_git() {
+        add_pending(store, change)?;
+    } else if !locked {
+        bail!("the run history is in use, so the cancelled run wasn't saved");
+    }
+    if locked {
+        write(store, change)?;
+    }
+    Ok(())
 }
 
 /// Sets what actions did on each of `findings` and `resolved` from `file`

@@ -680,6 +680,12 @@ fn start(
     )
     .map_err(|e| anyhow::anyhow!("{e}"))?;
     if out.ended == Ended::Cancelled && crate::interrupt::hit() {
+        // Saved as cancelled, in one quick try: Ctrl-C stays quick.
+        if !out.dry_run {
+            if let Err(why) = actions_ui::save_outcome_quick(ws, ready, &out) {
+                eprintln!("Not saved on the finding: {}", ui::safe(&why));
+            }
+        }
         eprintln!("Cancelled.");
         return Ok(ExitCode::from(crate::interrupt::EXIT_CANCELLED as u8));
     }

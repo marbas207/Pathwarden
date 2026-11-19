@@ -15,7 +15,11 @@ what is next. The open issues on GitHub are the detailed list.
   carried from its last good collection, marked with that date, so trends
   stay on one line. Finding actions: your own buttons on a finding (open a
   ticket, alert a team, run a check), and a record of what they did that
-  everyone sharing the history sees. Fixes reported against rc.2.
+  everyone sharing the history sees. An action is no longer offered on a
+  fixed finding unless it lists `fixed` in its `when` (follow-ups on a
+  record still are). Upgrade every computer before changing how a history
+  is stored: rc.2 doesn't rewrite what actions did. Fixes reported against
+  rc.2.
 - **1.0:** when the release candidates have run without new problems.
 
 ## After 1.0

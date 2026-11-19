@@ -2717,8 +2717,6 @@ pub(crate) fn fail_on_code<'a>(
     ExitCode::from(if failing { exit::FINDINGS } else { exit::OK })
 }
 
-/// `introduced`: `--introduced` (or `--since`) and the state folder to
-/// read it from.
 /// What finding actions did on each finding (`actions`), from the run
 /// history the settings (or `state`) name, as it is here: nothing is
 /// fetched, and a history that can't be read leaves them without.
@@ -2741,6 +2739,8 @@ fn with_actions(input: &Input, state: Option<&Path>, findings: &mut [Finding]) {
     }
 }
 
+/// `introduced`: `--introduced` (or `--since`) and the state folder to
+/// read it from.
 fn findings_cmd(
     input: &Input,
     filter: &FindingsFilter,

@@ -614,10 +614,16 @@ fn last_change(dir: &Path, file: &str) -> Option<String> {
 }
 
 /// Encrypted files of the history in `dir` (the key, the single files):
-/// for a history whose marker is missing.
+/// for a history whose marker is missing. Not `actions.json.age`: an
+/// older release that turned encryption off leaves it, and only what
+/// actions did is then unavailable ([`crate::action_log::load`]).
 fn sealed_leftovers(dir: &Path, all: bool) -> Vec<String> {
     let mut found: Vec<String> = std::iter::once(crypt::KEY_FILE.to_string())
-        .chain(single_files().map(|f| format!("{f}{}", crypt::SUFFIX)))
+        .chain(
+            single_files()
+                .filter(|f| *f != crate::action_log::FILE)
+                .map(|f| format!("{f}{}", crypt::SUFFIX)),
+        )
         .filter(|f| fs::symlink_metadata(dir.join(f)).is_ok())
         .collect();
     if all {
@@ -1132,8 +1138,36 @@ fn max_state_bytes(rel: &str) -> Option<u64> {
     match rel {
         "findings.json" => Some(1024 * MIB),
         "last-run.json" => Some(64 * MIB),
+        crate::action_log::FILE => Some(crate::action_log::MAX_BYTES),
         _ if rel.starts_with("history/") || rel.starts_with("timings/") => Some(16 * MIB),
         _ => None,
+    }
+}
+
+/// A plain `rel` in an encrypted history in `dir`, which an older release
+/// left when it turned encryption on ([`crate::action_log::load`] reads
+/// it, as untrusted as the rest): at most `max` bytes, never through a
+/// link. `None` when there is none, or the history is plain.
+pub(crate) fn read_leftover(dir: &Path, rel: &str, max: u64) -> Result<Option<Vec<u8>>> {
+    if !crypt::is_encrypted(dir) {
+        return Ok(None);
+    }
+    let path = dir.join(rel);
+    if is_link(&path) {
+        bail!(
+            "{} is a symbolic link; Pathwarden does not read state through links",
+            path.display()
+        );
+    }
+    match read_capped(&path, max) {
+        Ok(b) => Ok(Some(b)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) if e.kind() == std::io::ErrorKind::FileTooLarge => Err(TooLarge {
+            path: path.display().to_string(),
+            max,
+        }
+        .into()),
+        Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
     }
 }
 
@@ -1819,7 +1853,11 @@ pub fn planted_files(dir: &Path) -> Vec<String> {
     if !crypt::is_encrypted(dir) {
         return Vec::new();
     }
+    // A plain actions.json an older release left when it turned encryption
+    // on is read as untrusted and encrypted by the next save, never removed
+    // ([`crate::action_log::load`]).
     let mut out: Vec<String> = single_files()
+        .filter(|f| *f != crate::action_log::FILE)
         .filter(|f| {
             let path = dir.join(f);
             path.is_file()
@@ -2816,6 +2854,9 @@ impl Store {
             }
         }
         notes.extend(take_key_note(&self.dir));
+        // What finding actions did here that no push carried yet: made
+        // again on what the remote holds, for the next commit to carry.
+        notes.extend(crate::action_log::replay_pending(self));
         Ok((!notes.is_empty()).then(|| notes.join(" ")))
     }
 
@@ -3971,10 +4012,19 @@ impl Store {
             staged.push((tmp.clone(), target));
             write_atomic(&tmp, bytes)
         };
+        // What finding actions did, when it can't be read (an older release
+        // changed the storage and left it): kept as it is, not rewritten.
+        let mut kept: Vec<String> = Vec::new();
         let result = (|| -> Result<()> {
             for rel in &files {
-                let plain = read_as(&self.dir, rel, was)?
-                    .with_context(|| format!("{rel} disappeared while it was being rewritten"))?;
+                let plain = match read_as(&self.dir, rel, was) {
+                    Err(_) if rel == crate::action_log::FILE => {
+                        kept.push(rel.clone());
+                        continue;
+                    }
+                    read => read?,
+                }
+                .with_context(|| format!("{rel} disappeared while it was being rewritten"))?;
                 match &key {
                     // A new key: this computer's record of sequences
                     // starts again with it ([`binding::record_for`]).
@@ -4023,13 +4073,16 @@ impl Store {
             write_atomic(&self.dir.join("findings.json"), &crypt::stub())?;
             record_location_pin(&self.dir)?;
             if !was {
-                for rel in files.iter().filter(|r| r.as_str() != "findings.json") {
+                for rel in files
+                    .iter()
+                    .filter(|r| r.as_str() != "findings.json" && !kept.contains(r))
+                {
                     remove_if_there(&self.dir.join(rel))?;
                 }
             }
         } else {
             remove_if_there(&self.dir.join(crypt::KEY_FILE))?;
-            for rel in &files {
+            for rel in files.iter().filter(|r| !kept.contains(r)) {
                 remove_if_there(&on_disk(&self.dir, rel, true))?;
             }
             if !files.iter().any(|r| r == "findings.json") {
@@ -4037,7 +4090,7 @@ impl Store {
                 remove_if_there(&self.dir.join("findings.json"))?;
             }
         }
-        Ok(files.len())
+        Ok(files.len() - kept.len())
     }
 
     /// Turns encryption on: every file of the history encrypted with a new
@@ -4161,6 +4214,12 @@ impl Store {
         let _lock = self.lock_waiting(crate::settings_sync::lock_wait())?;
         let mut notes: Vec<String> = self.pull()?.into_iter().collect();
         let files = change(self)?;
+        // What finding actions did, left as it was when it couldn't be read.
+        if let Err(e) = crate::action_log::load(self) {
+            notes.push(format!(
+                "What finding actions did (actions.json) was left as it is: {e:#}"
+            ));
+        }
         let mut out = Converted {
             files,
             pushed: false,
@@ -4226,6 +4285,7 @@ impl Store {
             else {
                 self.clear_kept();
                 remember_remote_tree(&self.dir);
+                crate::action_log::prune_pending(self);
                 return Ok(Published {
                     pushed: true,
                     retries,
@@ -4247,6 +4307,7 @@ impl Store {
                     // The remote has it already (pushed another way).
                     self.clear_kept();
                     remember_remote_tree(&self.dir);
+                    crate::action_log::prune_pending(self);
                     return Ok(Published {
                         pushed: true,
                         retries,

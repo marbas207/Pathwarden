@@ -393,3 +393,185 @@ fn findings_and_fixed_ones_carry_what_actions_did() {
     let v = serde_json::to_value(&resolved[0]).unwrap();
     assert_eq!(v["actions"]["records"][0]["id"], "sys-1");
 }
+
+/// Fields a later release of v1 adds to a record or an activity entry,
+/// and a `kind` this version doesn't know, are kept as they are: the
+/// file stays readable, and is written back the same.
+#[test]
+fn a_later_v1s_fields_and_kinds_are_kept() {
+    let later = br#"{"version":1,"findings":{"PW-001-x":{
+        "activity":[{"at":"2026-11-18T14:02:11.000Z","action":"a/b","label":"Escalate","ok":true,
+                     "message":"Escalated.","kind":"escalate","priority":2}],
+        "records":[{"action":"a/b","id":"t-1","open":true,"sla":"4h","by":"ned",
+                    "at":"2026-11-18T14:02:11.000Z","updated_at":"2026-11-18T14:02:11.000Z"}]}}}"#;
+    let f = parse(later).unwrap();
+    let log = &f.findings["PW-001-x"];
+    assert_eq!(log.activity[0].kind, Kind::Other("escalate".into()));
+    assert_eq!(log.activity[0].summary(), "Escalate: Escalated");
+    assert_eq!(log.records[0].record.other["sla"], "4h");
+    assert_eq!(log.records[0].by.as_deref(), Some("ned"));
+    let again: Value = serde_json::from_slice(&f.to_bytes()).unwrap();
+    let a = &again["findings"]["PW-001-x"];
+    assert_eq!(a["activity"][0]["kind"], "escalate");
+    assert_eq!(a["activity"][0]["priority"], 2);
+    assert_eq!(a["records"][0]["sla"], "4h");
+    assert_eq!(a["records"][0]["action"], "a/b");
+    assert!(a["records"][0].get("other").is_none(), "{a}");
+    // Merging keeps them too.
+    let mut base = ActionsFile::default();
+    merge(&mut base, &f);
+    assert_eq!(base, f);
+}
+
+/// The file is untrusted: links that aren't https are dropped, texts cut
+/// to the result's caps, and a file past the cap isn't read.
+#[test]
+fn the_file_is_read_as_untrusted() {
+    let long = "x".repeat(crate::actions::MAX_MESSAGE + 50);
+    let text = format!(
+        r#"{{"version":1,"findings":{{"PW-001-x":{{
+        "activity":[{{"at":"2026-11-18T14:02:11.000Z","action":"a/b","ok":true,"message":"{long}"}}],
+        "records":[{{"action":"a/b","id":"t-1","url":"javascript:alert(1)","number":"N\u202e1"}},
+                   {{"action":"a/b","id":"t-2","url":"https://desk.example.com/2"}},
+                   {{"action":"a/b","id":"t-3","url":"http://desk.example.com/3"}}]}}}}}}"#
+    );
+    let f = parse(text.as_bytes()).unwrap();
+    let log = &f.findings["PW-001-x"];
+    assert_eq!(
+        log.activity[0].message.chars().count(),
+        crate::actions::MAX_MESSAGE
+    );
+    assert_eq!(log.records[0].record.url, None);
+    assert_eq!(log.records[0].record.number.as_deref(), Some("N1"));
+    assert_eq!(
+        log.records[1].record.url.as_deref(),
+        Some("https://desk.example.com/2")
+    );
+    assert_eq!(log.records[2].record.url, None);
+    // What findings carry has no such link either.
+    let a = f.for_finding("PW-001-x").unwrap();
+    assert!(a.records.iter().all(|r| r
+        .record
+        .url
+        .as_deref()
+        .is_none_or(|u| u.starts_with("https://"))));
+    let big = vec![b' '; MAX_BYTES as usize + 1];
+    match parse(&big) {
+        Err(LogError::Damaged(why)) => assert!(why.contains("larger than 16 MiB"), "{why}"),
+        other => panic!("{other:?}"),
+    }
+}
+
+/// A removal wins over any update of the record that started before it,
+/// whichever side is merged into which; a record a later run makes anew
+/// with the same ID is kept.
+#[test]
+fn a_removed_record_never_comes_back() {
+    let ned = who(r"NORTH\eddard.stark", "SECOPS-WS02");
+    let arya = who(r"NORTH\arya.stark", "SECOPS-WS07");
+    let mut base = ActionsFile::default();
+    opened(&base, "2026-11-18T14:00:00.000Z", &ned).apply(&mut base);
+    let r = base.findings[FP].records[0].clone();
+    // One computer removes it; another, from the view before that, checks
+    // its status a little later.
+    let removal = remove_change(FP, &r, &ned, "2026-11-18T15:00:00.000Z");
+    let status = run_change(
+        base.findings.get(FP),
+        FP,
+        "service-desk/status",
+        "Check status",
+        Some(&r),
+        &outcome(
+            true,
+            "Closed.",
+            vec![ticket("sys-1", "Closed", false)],
+            false,
+        ),
+        None,
+        &arya,
+        "2026-11-18T15:05:00.000Z",
+    )
+    .unwrap();
+    let (mut a, mut b) = (base.clone(), base.clone());
+    removal.apply(&mut a);
+    status.apply(&mut b);
+    for (into, from) in [(a.clone(), &b), (b.clone(), &a)] {
+        let mut m = into;
+        merge(&mut m, from);
+        let log = &m.findings[FP];
+        assert!(log.records.is_empty(), "{:?}", log.records);
+        assert_eq!(log.removed.len(), 1);
+        assert_eq!(log.activity.len(), 3);
+    }
+    // The stale update made on top of the removal (a late save) too.
+    let mut late = a.clone();
+    status.apply(&mut late);
+    assert!(late.findings[FP].records.is_empty());
+    // A new run after the removal makes the record anew.
+    let anew = opened(&late, "2026-11-19T09:00:00.000Z", &arya);
+    anew.apply(&mut late);
+    let log = &late.findings[FP];
+    assert_eq!(log.records.len(), 1);
+    assert_eq!(log.records[0].at, "2026-11-19T09:00:00.000Z");
+    // And it survives a merge with the side that removed the old one.
+    let mut m = a.clone();
+    merge(&mut m, &late);
+    assert_eq!(m.findings[FP].records.len(), 1);
+    // The removal is kept in the file, and reads back.
+    let v: Value = serde_json::from_slice(&a.to_bytes()).unwrap();
+    assert_eq!(v["findings"][FP]["removed"][0]["id"], "sys-1");
+    assert_eq!(
+        v["findings"][FP]["removed"][0]["at"],
+        "2026-11-18T15:00:00.000Z"
+    );
+    assert_eq!(parse(&a.to_bytes()).unwrap(), a);
+}
+
+/// A run someone stopped is saved as cancelled: not ok, "Cancelled", and
+/// `outcome: cancelled`; a cancelled dry run isn't saved.
+#[test]
+fn a_cancelled_run_is_saved_as_cancelled() {
+    let mut o = outcome(
+        false,
+        "Cancelled: it was stopped before it finished.",
+        Vec::new(),
+        false,
+    );
+    o.ended = Ended::Cancelled;
+    let c = run_change(
+        None,
+        FP,
+        "a/b",
+        "B",
+        None,
+        &o,
+        None,
+        &who("a", "b"),
+        "2026-11-18T14:00:00.000Z",
+    )
+    .unwrap();
+    assert!(!c.activity.ok);
+    assert_eq!(c.activity.message, "Cancelled");
+    assert_eq!(c.activity.outcome.as_deref(), Some(CANCELLED));
+    assert_eq!(c.activity.summary(), "B failed: Cancelled");
+    let v = serde_json::to_value(&c.activity).unwrap();
+    assert_eq!(v["outcome"], "cancelled");
+    let done = run_change(
+        None,
+        FP,
+        "a/b",
+        "B",
+        None,
+        &outcome(true, "Done.", Vec::new(), false),
+        None,
+        &who("a", "b"),
+        "x",
+    )
+    .unwrap();
+    assert!(serde_json::to_value(&done.activity)
+        .unwrap()
+        .get("outcome")
+        .is_none());
+    o.dry_run = true;
+    assert!(run_change(None, FP, "a/b", "B", None, &o, None, &who("a", "b"), "x").is_none());
+}

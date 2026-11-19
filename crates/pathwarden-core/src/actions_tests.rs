@@ -1720,3 +1720,28 @@ fn a_follow_up_is_prepared_on_a_record() {
         .unwrap_err()
         .contains("doesn't apply to this record"));
 }
+
+/// A record ID as given is matched first; another case only when it means
+/// one record; two of one action are told apart in words.
+#[test]
+fn records_are_found_by_their_id() {
+    let mut a = rec("desk/open", true);
+    a.record.id = "ab".into();
+    let mut b = rec("desk/open", true);
+    b.record.id = "AB".into();
+    let both = [a.clone(), b.clone()];
+    assert_eq!(find_record(&both, "AB").unwrap().record.id, "AB");
+    assert_eq!(find_record(&both, "ab").unwrap().record.id, "ab");
+    assert_eq!(
+        find_record(&both, "Ab").unwrap_err(),
+        "This finding has 2 records Ab from desk/open (their IDs differ only in case), so it can't be told which: give its ID exactly."
+    );
+    let mut c = rec("alert/send", true);
+    c.record.id = "ab".into();
+    let two = [a.clone(), c];
+    assert_eq!(
+        find_record(&two, "ab").unwrap_err(),
+        "Several actions made a record ab on this finding (desk/open, alert/send), so it can't be told which."
+    );
+    assert_eq!(find_record(&[a], "AB").unwrap().record.id, "ab");
+}

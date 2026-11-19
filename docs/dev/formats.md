@@ -125,7 +125,7 @@ notes say so under **Upgrade notes**.
 | `settings/pathwarden.toml` | `format = N`, absent means 1. | Refused whole: nothing of it is applied, and nothing is pushed over it, not even with `config sync --keep-local`. Every page and command says "The repository's settings were saved by a newer Pathwarden. Update Pathwarden to sync them." |
 | `settings/environment.json` | `"format"`: 1 (from 0.2; absent means 1). | Not read, and never written over: a change to the shared settings is refused with "The repository's settings/environment.json was saved by a newer Pathwarden. Update Pathwarden to change the shared settings." |
 | `settings/last-change.json` | `"format"`: 1 (from 0.2; absent means 1). Every other field is optional and only shown. | Not shown: the settings commit says what changed instead. |
-| `actions.json` | `"version"`: 1 (from 1.0.0-rc.3; absent means 1). What finding actions did: see [What actions did](#what-actions-did-actionsjson). | Not read, and never written over: running an action works, and saving what it did says "The history's actions.json was saved by a newer Pathwarden, so what actions do can't be saved here. Update Pathwarden to save it." Findings carry no `actions`. |
+| `actions.json` | `"version"`: 1 (from 1.0.0-rc.3; absent means 1). What finding actions did: see [What actions did](#what-actions-did-actionsjson). | Not read, and never written over: running an action works, and saving what it did says "The history's actions.json was saved by a newer Pathwarden, so what actions do can't be saved here. Update Pathwarden to save it." Findings carry no `actions`. One in the other form than the history (an older release changed how the history is stored, see [What older releases do](#what-older-releases-do-with-newer-files)): not read and never written over, with a sentence that says so; the rest of the history works. |
 | `.pathwarden-encryption` | `"format"`: 2, every file bound to its place (0.2). 1 is a history encrypted by 0.1.7 to 0.1.9. | "This history was encrypted by a newer Pathwarden (encryption format N). Update Pathwarden to read it." |
 | `<file>.age` binding line | Binding version 1. | Refused: "needs a newer Pathwarden". |
 | `.pathwarden-state` | A marker. Its text is for people. | Nothing to read. |
@@ -463,14 +463,30 @@ because `findings.json` is rebuilt every run.
 | Field | Meaning |
 |---|---|
 | `findings` | By fingerprint, as the event has it. |
-| `activity` | Oldest first; the latest 100 of a finding are kept. Each: `at` (RFC 3339, UTC, with milliseconds), `by` and `on` (the user and computer, each optional), `run_id` (the run the finding was in, optional), `action` (`<name>/<id>`), `label` (the action's then), `ok`, `message` (the result's, or what went wrong), `record_ids` (the records it made, changed or removed), `dry_run` (always false) and `kind` (absent for a run; `remove` when someone removed a record, with `action` the record's). |
+| `activity` | Oldest first; the latest 100 of a finding are kept. Each: `at` (RFC 3339, UTC, with milliseconds), `by` and `on` (the user and computer, each optional), `run_id` (the run the finding was in, optional), `action` (`<name>/<id>`), `label` (the action's then), `ok`, `message` (the result's, or what went wrong), `record_ids` (the records it made, changed or removed), `dry_run` (always false), `kind` (absent for a run; `remove` when someone removed a record, with `action` the record's) and `outcome` (optional: `cancelled` for a run someone stopped with Ctrl-C or Cancel, then with `ok` false and the message "Cancelled"; it is saved in one quick try without the network, and goes to the repository with the next pull and push). |
 | `records` | What the actions returned (a [result's record](#finding-actions-pathwardenaction-v1)), plus `action` (the action that made it), `by`, `on` and `at` (who first made it, where and when) and `updated_at`. A follow-up that returns the same `id` updates the record of its block, keeping when and by whom it was first made. A record stays until someone removes it (`pathwarden action records remove`), which is logged as activity. |
+| `removed` | Optional: the records someone removed, each `action`, `id`, `at` (when) and `by`. A record of that `action` and `id` made no later than `at` never comes back (a follow-up that started before the removal, a computer that hadn't seen it); one a later run makes anew does. The latest 100 of a finding are kept. |
 
 When another computer pushed first, the change is made again on what it
 left, finding by finding: activity is the union of both (one entry per
 `at`, `by` and `action`), and records are matched by `action` and `id`,
-the newer `updated_at` winning. Fields this version doesn't know, in the
-file, a finding or an entry, are kept as they are.
+the newer `updated_at` winning; a removal on either side wins over any
+record made before it. Fields this version doesn't know, in the file, a
+finding, an entry or a record, are kept as they are, and so is a `kind`
+it doesn't know (shown by the entry's `label`).
+
+A save whose push failed is kept on that computer (in the working copy's
+`.git`, never committed), made again on what every later pull brings, and
+dropped once a push carried it: it goes with the next save or run that
+pushes.
+
+`pathwarden export --run` (and the app's export of a run) exports the
+records as they were when that run was recorded: a snapshot, from the
+run's event.
+
+Anyone who can push to the history can write this file, so it is read as
+untrusted: at most 16 MiB, every text cut to a result's caps, and a
+record's `url` dropped unless it is `https://`.
 
 ## What older releases do with newer files
 
@@ -482,7 +498,7 @@ What each does with what 0.2 writes:
 | 0.1.5, 0.1.6 | Refuse `findings.json` above version 1, and an encrypted history (the stub). Read history points, `last-run.json` and run files without checking their version. Never see full runs, settings in the repository, or a loaded run (`summary.v2.json`). Refuse a top-level or `[state]` key they don't know in `pathwarden.toml`, so `format = 2` too. |
 | 0.1.7 | As 0.1.6, and reads an encrypted history of marker format 1 only: it refuses format 2. Refuses `[state]` keys it doesn't know (for example `full_runs_kept`, `refresh`). |
 | 0.2.0 | Ignores `last-run.json`'s `hosts` and drops it when it writes the file, so the next run of 0.3 treats that run as an upgrade (see `last-run.json`). Holds a finding whose `requires` has session or local group units (`s:`, `l:`) it doesn't know, with the wrong reason ("its source did not report covering the affected host this run"), until a run sees the finding again. Ignores the paths' `edge_hosts`. A `last-run.json` written by a development build between 0.2.0 and 0.3 with stored credential units (`h:`) in `sources` makes 0.2.0 hold every attack path for one run, as a missing source. |
-| 1.0.0-rc.2 and earlier | Keep `actions.json` as the repository has it: they commit only the files they know, and their pull cleans only files no commit holds. They don't read it, so their runs' findings carry no `actions`. |
+| 1.0.0-rc.2 and earlier | Keep `actions.json` as the repository has it when they record runs, pull and share settings: they commit only the files they know, and their pull cleans only files no commit holds. They don't read it, so their runs' findings carry no `actions`. They don't rewrite it when they change how the history is stored: turning encryption off leaves `actions.json.age` (which 1.0.0-rc.3 then can't open, so what actions did is unavailable), changing the passphrase leaves it under the old key (the same), and turning encryption on leaves it plain (1.0.0-rc.3 reads it and encrypts it with its next save). In each case 1.0.0-rc.3 keeps working with the rest of the history and never writes over the file. **Upgrade every computer to 1.0.0-rc.3 before changing how a history is stored** (`pathwarden history storage set`, or the History storage page). |
 | 0.1.9 | Leaves full runs of format 2 alone and says to update. Refuses an encrypted history of marker format 2. Reads `settings/pathwarden.toml` without checking `format`, keeping the keys it doesn't know aside. Doesn't see runs loaded by 0.2. |
 
 **Going back to 0.1.9 on a computer that loaded full runs with 0.2.** 0.1.9

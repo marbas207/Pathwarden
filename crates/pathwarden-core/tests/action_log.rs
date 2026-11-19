@@ -391,3 +391,288 @@ fn a_run_carries_what_actions_did() {
     assert!(html.contains(r#"data-records="1""#));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ------------------------------------------------ older releases' storage
+
+const PASS: &str = "correct horse battery staple";
+const OTHER: &str = "a different passphrase";
+
+fn pass(s: &str) -> pathwarden_core::crypt::SecretString {
+    pathwarden_core::crypt::SecretString::from(s.to_string())
+}
+
+/// A folder history with one action saved, keys kept in a test store.
+fn folder_with_a_record(name: &str) -> (PathBuf, Store) {
+    let ks = std::env::temp_dir().join(format!("pathwarden-actionlog-ks-{}", std::process::id()));
+    pathwarden_core::keystore::use_test_store(&ks);
+    let dir = scratch(name);
+    let s = Store::new(&StateConfig::default(), Some(&dir)).unwrap();
+    action_log::save(
+        &s,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    s.write_state_file("last-run.json", b"{}").unwrap();
+    (dir, s)
+}
+
+fn encrypt(s: &Store) {
+    s.encrypt(&pass(PASS), true).unwrap();
+    pathwarden_core::crypt::give_passphrase(&s.dir, pass(PASS));
+}
+
+/// An older release turned encryption off: it rewrote only its own files,
+/// so actions.json stays encrypted with the key gone. Only what actions
+/// did is unavailable, said plainly, and never written over.
+#[test]
+fn encryption_turned_off_by_an_older_release() {
+    let (dir, s) = folder_with_a_record("rc2-decrypt");
+    encrypt(&s);
+    let sealed = dir.join("actions.json.age");
+    let kept = std::fs::read(&sealed).unwrap();
+    s.decrypt(true).unwrap();
+    // As the older release leaves it.
+    std::fs::write(&sealed, &kept).unwrap();
+    std::fs::remove_file(dir.join("actions.json")).unwrap();
+    // The rest of the history works.
+    assert_eq!(s.read_state_file("last-run.json").unwrap().unwrap(), b"{}");
+    s.write_state_file("last-run.json", b"{\"a\":1}").unwrap();
+    let e = action_log::load(&s).unwrap_err();
+    assert_eq!(format!("{e:#}"), action_log::LEFT_SEALED_WORDS);
+    let e = action_log::save(
+        &s,
+        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap_err();
+    assert!(format!("{e:#}").contains("older Pathwarden turned encryption off"));
+    assert_eq!(std::fs::read(&sealed).unwrap(), kept);
+    assert!(!dir.join("actions.json").exists());
+    // Encrypting again (here) keeps it as it was, with a note.
+    let done = s.encrypt(&pass(PASS), true).unwrap();
+    assert!(
+        done.notes.iter().any(|n| n.contains("was left as it is")),
+        "{:?}",
+        done.notes
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// An older release changed the passphrase: actions.json stays under the
+/// old key. It can't be read, the rest works, nothing writes over it, and
+/// this version's own rewrite keeps it with a note.
+#[test]
+fn a_passphrase_changed_by_an_older_release() {
+    let (dir, s) = folder_with_a_record("rc2-rekey");
+    encrypt(&s);
+    let sealed = dir.join("actions.json.age");
+    let kept = std::fs::read(&sealed).unwrap();
+    s.change_passphrase(&pass(OTHER), true).unwrap();
+    pathwarden_core::crypt::give_passphrase(&s.dir, pass(OTHER));
+    std::fs::write(&sealed, &kept).unwrap();
+    assert_eq!(s.read_state_file("last-run.json").unwrap().unwrap(), b"{}");
+    let e = action_log::load(&s).unwrap_err();
+    assert!(
+        format!("{e:#}").contains(action_log::UNREADABLE_WORDS),
+        "{e:#}"
+    );
+    assert!(action_log::save(
+        &s,
+        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned"),
+        true,
+    )
+    .is_err());
+    assert_eq!(std::fs::read(&sealed).unwrap(), kept);
+    // A rewrite here works, and leaves it.
+    let done = s.change_passphrase(&pass(PASS), true).unwrap();
+    pathwarden_core::crypt::give_passphrase(&s.dir, pass(PASS));
+    assert!(
+        done.notes.iter().any(|n| n.contains("was left as it is")),
+        "{:?}",
+        done.notes
+    );
+    assert_eq!(std::fs::read(&sealed).unwrap(), kept);
+    assert_eq!(s.read_state_file("last-run.json").unwrap().unwrap(), b"{}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// An older release turned encryption on: actions.json stays plain. It
+/// isn't removed as a planted file: it is read, as untrusted as the rest,
+/// and the next save encrypts it.
+#[test]
+fn encryption_turned_on_by_an_older_release() {
+    let (dir, s) = folder_with_a_record("rc2-encrypt");
+    let plain = dir.join("actions.json");
+    // A link that isn't https, as anyone could push.
+    let text = std::fs::read_to_string(&plain).unwrap().replace(
+        "\"open\": true",
+        "\"open\": true,\n          \"url\": \"javascript:alert(1)\"",
+    );
+    assert!(text.contains("javascript:"));
+    encrypt(&s);
+    std::fs::write(&plain, &text).unwrap();
+    std::fs::remove_file(dir.join("actions.json.age")).unwrap();
+    assert!(store::planted_files(&dir).is_empty());
+    let log = action_log::load(&s).unwrap();
+    let r = &log.records("PW-001-aaaa")[0];
+    assert_eq!(r.record.id, "t-1");
+    assert_eq!(r.record.url, None);
+    action_log::save(
+        &s,
+        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert!(!plain.exists());
+    assert!(dir.join("actions.json.age").exists());
+    let ids: Vec<String> = action_log::load(&s)
+        .unwrap()
+        .records("PW-001-aaaa")
+        .into_iter()
+        .map(|r| r.record.id)
+        .collect();
+    assert_eq!(ids, ["t-1", "t-2"]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A hook script git runs (executable where that matters).
+fn hook(path: &Path, script: &str) {
+    std::fs::write(path, script).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+}
+
+/// A save whose push failed is kept here: another computer pushes first,
+/// the pull takes the remote's state, and the save is made again on it,
+/// then pushed with the next save, and no longer kept.
+#[test]
+fn a_save_whose_push_failed_survives_another_push() {
+    if !have_git() {
+        return;
+    }
+    let dir = scratch("pending");
+    let remote = bare(&dir);
+    let (a, _) = git_store(&remote, &dir.join("a"));
+    let (b, _) = git_store(&remote, &dir.join("b"));
+    a.pull().unwrap();
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert_eq!(action_log::pending_count(&a), 0, "pushed, so not kept");
+    b.pull().unwrap();
+    // A's next push is refused.
+    let refuse = remote.join("hooks").join("pre-receive");
+    hook(&refuse, "#!/bin/sh\nexit 1\n");
+    let notes = action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert!(
+        notes.iter().any(|n| n.contains("couldn't be pushed")),
+        "{notes:?}"
+    );
+    assert_eq!(action_log::pending_count(&a), 1);
+    std::fs::remove_file(&refuse).unwrap();
+    // B pushes first.
+    action_log::save(
+        &b,
+        &opened("PW-011-bbbb", "t-3", "2026-11-18T15:30:00.000Z", "arya"),
+        true,
+    )
+    .unwrap();
+    // A pulls: the remote's state, with A's save made again on it.
+    a.pull().unwrap();
+    let here = action_log::load(&a).unwrap();
+    assert_eq!(here.records("PW-001-aaaa").len(), 2, "A's record survives");
+    assert_eq!(here.records("PW-011-bbbb").len(), 1, "B's is there");
+    assert_eq!(action_log::pending_count(&a), 1);
+    // A's next save pushes it.
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-4", "2026-11-18T16:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    let log = remote_log(&remote);
+    let ids: Vec<String> = log
+        .records("PW-001-aaaa")
+        .into_iter()
+        .map(|r| r.record.id)
+        .collect();
+    assert_eq!(ids, ["t-1", "t-2", "t-4"]);
+    assert_eq!(log.activity("PW-001-aaaa").len(), 3);
+    assert_eq!(log.records("PW-011-bbbb").len(), 1);
+    assert_eq!(action_log::pending_count(&a), 0, "no longer kept");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A cancelled run's quick save: written here without the network, kept
+/// for the next pull and push, which carries it.
+#[test]
+fn a_quick_save_goes_with_the_next_push() {
+    if !have_git() {
+        return;
+    }
+    let dir = scratch("quick");
+    let remote = bare(&dir);
+    let (a, _) = git_store(&remote, &dir.join("a"));
+    a.pull().unwrap();
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    {
+        let _lock = a.lock().unwrap();
+        action_log::save_here(
+            &a,
+            &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned"),
+            true,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        action_log::load(&a).unwrap().records("PW-001-aaaa").len(),
+        2
+    );
+    assert_eq!(remote_log(&remote).records("PW-001-aaaa").len(), 1);
+    assert_eq!(action_log::pending_count(&a), 1);
+    // Without the lock: only kept, and still carried.
+    action_log::save_here(
+        &a,
+        &opened("PW-001-aaaa", "t-3", "2026-11-18T15:30:00.000Z", "ned"),
+        false,
+    )
+    .unwrap();
+    assert_eq!(action_log::pending_count(&a), 2);
+    a.pull().unwrap();
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-4", "2026-11-18T16:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert_eq!(remote_log(&remote).records("PW-001-aaaa").len(), 4);
+    assert_eq!(action_log::pending_count(&a), 0);
+    // A folder history without the lock: not saved, and it says so.
+    let folder = scratch("quick-folder");
+    let f = Store::new(&StateConfig::default(), Some(&folder)).unwrap();
+    assert!(action_log::save_here(
+        &f,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        false,
+    )
+    .is_err());
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&folder);
+}

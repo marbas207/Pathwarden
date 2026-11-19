@@ -638,6 +638,14 @@ fn interrupting_a_run_cancels_it() {
     std::io::Read::read_to_string(&mut child.stderr.take().unwrap(), &mut err).unwrap();
     assert_eq!(status.code(), Some(130), "{err}");
     assert!(err.contains("Cancelled."), "{err}");
+    // Saved on the finding, as cancelled.
+    let act = json(&run(
+        &dir,
+        &["action", "--workspace", &ws, "activity", &high, "--json"],
+    ));
+    assert_eq!(act[0]["outcome"], "cancelled", "{act}");
+    assert_eq!(act[0]["ok"], false);
+    assert_eq!(act[0]["message"], "Cancelled");
     std::thread::sleep(std::time::Duration::from_secs(10));
     assert!(!mark.exists(), "the action's process outlived the cancel");
     let _ = std::fs::remove_dir_all(&dir);

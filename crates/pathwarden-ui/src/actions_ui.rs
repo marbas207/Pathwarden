@@ -116,7 +116,7 @@ pub fn save_change(ws: &Workspace, change: &Change) -> Result<Vec<String>, Strin
     let loc = crate::history_ui::locate_with(ws, None, &config)?;
     if !loc.records() {
         return Err(
-            "This computer only reads the run history ([state] push = false), so this isn't              saved there."
+            "This computer only reads the run history ([state] push = false), so this isn't saved there."
                 .into(),
         );
     }
@@ -167,6 +167,47 @@ pub fn save_outcome(
     };
     let notes = save_change(ws, &change)?;
     Ok(SavedOutcome { saved: true, notes })
+}
+
+/// [`save_outcome`] for a run someone stopped (Ctrl-C, Cancel): one quick
+/// try without the network ([`action_log::save_here`]): under the lock if
+/// it is free at once, and in git kept on this computer for the next pull
+/// and push. A dry run saves nothing.
+pub fn save_outcome_quick(
+    ws: &Workspace,
+    ready: &Ready,
+    outcome: &Outcome,
+) -> Result<SavedOutcome, String> {
+    let config = ws.config().map_err(|e| format!("{e:#}"))?;
+    let loc = crate::history_ui::locate_with(ws, None, &config)?;
+    if !loc.records() {
+        return Err(
+            "This computer only reads the run history ([state] push = false), so this isn't saved there."
+                .into(),
+        );
+    }
+    let current = log(ws).unwrap_or_default();
+    let fp = &ready.finding.fingerprint;
+    let o = &ready.prepared.offered;
+    let Some(change) = action_log::run_change(
+        current.findings.get(fp),
+        fp,
+        &o.address,
+        &o.def.label,
+        ready.prepared.record.as_ref(),
+        outcome,
+        crate::history_ui::recorded_id(&ready.run).or(Some(ready.run.id.as_str())),
+        &Actor::current(),
+        &action_log::now_at(),
+    ) else {
+        return Ok(SavedOutcome::default());
+    };
+    let lock = loc.store.lock().ok();
+    action_log::save_here(&loc.store, &change, lock.is_some()).map_err(|e| format!("{e:#}"))?;
+    Ok(SavedOutcome {
+        saved: true,
+        notes: Vec::new(),
+    })
 }
 
 /// Removes record `record_id` from finding `fingerprint` (any case), and
