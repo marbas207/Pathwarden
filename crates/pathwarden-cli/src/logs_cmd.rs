@@ -10,7 +10,8 @@ use pathwarden_core::logs::{self, By, Entry};
 
 use crate::ui;
 
-/// Jobs the list shows without --all.
+/// Jobs the list shows without --all (with the session logs and crash
+/// reports among them).
 const LISTED: usize = 6;
 /// Lines of the latest job's log --last prints.
 const LAST_LINES: usize = 20;
@@ -32,9 +33,14 @@ pub(crate) struct LogsArgs {
     /// --crash that file (a text editor).
     #[arg(long)]
     open: bool,
-    /// List every log, not only the latest 6.
+    /// List every log, not only those of the latest 6 jobs.
     #[arg(long, conflicts_with_all = ["last", "crash", "open"])]
     all: bool,
+    /// Dismiss the latest crash report (the one --crash shows), as Dismiss
+    /// on the app's Settings › Logs: on this computer, the dot by Settings
+    /// goes.
+    #[arg(long, conflicts_with_all = ["last", "open", "all"])]
+    dismiss: bool,
 }
 
 pub(crate) fn run(a: LogsArgs) -> Result<ExitCode> {
@@ -43,6 +49,15 @@ pub(crate) fn run(a: LogsArgs) -> Result<ExitCode> {
          is not set)",
     )?;
     let shown = dir.display().to_string();
+    if a.dismiss {
+        let Some(c) = logs::last_crash(&dir) else {
+            println!("No crash reports. Logs: {shown}");
+            return Ok(ExitCode::SUCCESS);
+        };
+        logs::dismiss(&dir, Some(&c.name)).with_context(|| format!("dismissing {}", c.name))?;
+        println!("Dismissed {}.", c.name);
+        return Ok(ExitCode::SUCCESS);
+    }
     if a.crash {
         let Some(c) = logs::last_crash(&dir) else {
             println!("No crash reports. Logs: {shown}");
@@ -111,10 +126,21 @@ pub(crate) fn run(a: LogsArgs) -> Result<ExitCode> {
         logs::KEPT_WORDS
     );
     println!();
+    // The latest LISTED jobs, with the session logs and crash reports
+    // among them.
     let rows: Vec<&Entry> = if a.all {
         all.iter().collect()
     } else {
-        all.iter().take(LISTED).collect()
+        let mut jobs = 0;
+        all.iter()
+            .take_while(|e| {
+                let more = jobs < LISTED;
+                if !e.crash && e.kind != Some(logs::Kind::Session) {
+                    jobs += 1;
+                }
+                more
+            })
+            .collect()
     };
     let job_w = rows
         .iter()

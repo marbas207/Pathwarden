@@ -1116,6 +1116,14 @@ impl NameScan {
         }
     }
 
+    /// Every name `other` looks for, added to these.
+    pub fn extend(&mut self, other: &NameScan) {
+        self.words.extend(other.words.iter().cloned());
+        self.phrases.extend(other.phrases.iter().cloned());
+        self.sids.extend(other.sids.iter().cloned());
+        self.matcher = OnceLock::new();
+    }
+
     /// Every object of a saved object index.
     pub fn add_index(&mut self, index: &crate::object_index::ObjectIndex) {
         for d in &index.domains {
@@ -1148,8 +1156,14 @@ impl NameScan {
             // domain labels were left out as generic).
             let parts = std::iter::once(t).chain(t.split('.'));
             for p in parts {
-                if !p.is_empty() && !own_word(p) && !written.contains(p) && self.words.contains(p) {
-                    return Some(p.chars().count());
+                // A computer's account name: `WS01$`.
+                let q = p.trim_end_matches('$');
+                if !q.is_empty()
+                    && !own_word(q)
+                    && !written.contains(q)
+                    && (self.words.contains(p) || self.words.contains(q))
+                {
+                    return Some(q.chars().count());
                 }
             }
         }
@@ -1227,15 +1241,7 @@ fn replace_line(
     ph: &mut Placeholders,
     own: &HashSet<String>,
 ) -> String {
-    // Upper case of the same length, so spans line up; else the line in
-    // upper case (rare: letters whose upper case is longer).
-    let up = line.to_uppercase();
-    let line = if up.len() == line.len() {
-        line.to_string()
-    } else {
-        up.clone()
-    };
-    let line = replace_phrases(&line, &up, scan, ph);
+    let line = replace_phrases(line, scan, ph);
     let line = replace_dn_values(&line, ph);
     let line = replace_profile(&line, ph);
     let mut out = String::with_capacity(line.len());
@@ -1284,8 +1290,12 @@ fn replace_token(
         1 => "domain",
         _ => "host",
     };
-    if known(&up) {
-        return wrap(ph.of(dotted(core), core));
+    // A computer's account name (`WS01$`): the computer's placeholder, `$`
+    // kept.
+    let bare = core.trim_end_matches('$');
+    if known(&up) || (bare.len() < core.len() && !bare.is_empty() && known(&bare.to_uppercase())) {
+        let dollar = &core[bare.len()..];
+        return wrap(format!("{}{dollar}", ph.of(dotted(bare), bare)));
     }
     if let Some(sid) = domain_sid(&up) {
         let rest = &core[sid.len()..];
@@ -1339,11 +1349,21 @@ fn domain_sid(up: &str) -> Option<String> {
     .then(|| format!("S-1-5-21-{}", parts.join("-")))
 }
 
-/// `line` with every phrase and SID `scan` knows replaced; `up` is the
-/// line in upper case, of the same length.
-fn replace_phrases(line: &str, up: &str, scan: &NameScan, ph: &mut Placeholders) -> String {
-    if (scan.phrases.is_empty() && scan.sids.is_empty()) || up.len() != line.len() {
+/// `line` with every phrase and SID `scan` knows replaced. The search is
+/// in upper case, mapped back character by character, so a letter whose
+/// upper case is longer changes nothing else in the line.
+fn replace_phrases(line: &str, scan: &NameScan, ph: &mut Placeholders) -> String {
+    if scan.phrases.is_empty() && scan.sids.is_empty() {
         return line.to_string();
+    }
+    // Where each upper-case byte offset starts and ends in `line`.
+    let mut up = String::with_capacity(line.len());
+    let mut starts: HashMap<usize, usize> = HashMap::new();
+    let mut ends: HashMap<usize, usize> = HashMap::new();
+    for (i, c) in line.char_indices() {
+        starts.insert(up.len(), i);
+        up.extend(c.to_uppercase());
+        ends.insert(up.len(), i + c.len_utf8());
     }
     // The same automaton as [`NameScan::find_except`]'s.
     let _ = scan.find("");
@@ -1352,19 +1372,22 @@ fn replace_phrases(line: &str, up: &str, scan: &NameScan, ph: &mut Placeholders)
     };
     let mut out = String::with_capacity(line.len());
     let mut at = 0;
-    for m in ac.find_iter(up) {
-        if m.start() < at || !line.is_char_boundary(m.start()) || !line.is_char_boundary(m.end()) {
+    for m in ac.find_iter(&up) {
+        let (Some(&a), Some(&b)) = (starts.get(&m.start()), ends.get(&m.end())) else {
+            continue;
+        };
+        if a < at {
             continue;
         }
-        out.push_str(&line[at..m.start()]);
-        let found = &line[m.start()..m.end()];
+        out.push_str(&line[at..a]);
+        let found = &line[a..b];
         let kind = if found.to_uppercase().starts_with("S-1-5-21-") {
             "sid"
         } else {
             "name"
         };
         out.push_str(&ph.of(kind, found));
-        at = m.end();
+        at = b;
     }
     out.push_str(&line[at..]);
     out
@@ -1401,17 +1424,20 @@ fn replace_dn_values(line: &str, ph: &mut Placeholders) -> String {
     out
 }
 
-/// The account folder of a path (`C:\Users\<name>\`, `/home/<name>/`).
+/// The account folder of a path (`C:\Users\<name>\`, `/home/<name>/`,
+/// and `C:\\Users\\<name>` as JSON and Rust's `{:?}` write it).
 fn replace_profile(line: &str, ph: &mut Placeholders) -> String {
     let mut out = line.to_string();
-    for sep in ['\\', '/'] {
-        for dir in ["Users", "users", "home"] {
+    for sep in ["\\\\", "\\", "/"] {
+        for dir in ["Users", "users", "USERS", "home"] {
             let needle = format!("{sep}{dir}{sep}");
             let mut from = 0;
             while let Some(i) = out[from..].find(&needle).map(|i| from + i) {
                 let v = i + needle.len();
                 let end = out[v..]
-                    .find(|c: char| c == sep || c.is_whitespace() || c == '"' || c == '\'')
+                    .find(|c: char| {
+                        c == '\\' || c == '/' || c.is_whitespace() || c == '"' || c == '\''
+                    })
                     .map_or(out.len(), |e| v + e);
                 let name = out[v..end].to_string();
                 if name.is_empty() || is_placeholder(&name) || name.eq_ignore_ascii_case("public") {
@@ -1514,8 +1540,7 @@ pub const CONTENTS: &[&str] = &[
 ];
 
 /// What the list's (i) says.
-pub const CONTENTS_TIP: &str =
-    "Logs of the last 7 days, at most 20 MB, and crash reports. Look through the zip before you send it.";
+pub const CONTENTS_TIP: &str = "This run's logs, and the app's session logs and crash reports of the last 7 days, at most 20 MB. Look through the zip before you send it.";
 
 /// The plan's numbers from an event document's `plan`: per step its cost,
 /// edge kinds and reach; never its objects or action text. The kinds are
@@ -1659,8 +1684,9 @@ impl Bundle {
         }
         if !self.logs.is_empty() {
             readme.push_str(&format!(
-                "{:<23}Pathwarden's logs of the last {} days (at most {}) and its\r\n\
-                 \x20                      crash reports, every name replaced\r\n",
+                "{:<23}the logs of this run's jobs, and the app's session logs and\r\n\
+                 \x20                      crash reports of the last {} days (at most {} in\r\n\
+                 \x20                      all), every name replaced\r\n",
                 "logs/",
                 crate::logs::BUNDLE_DAYS,
                 bytes(crate::logs::BUNDLE_BYTES)
@@ -2318,5 +2344,22 @@ mod tests {
         // The search covers the logs: a name left in one refuses the bundle.
         let leaky = vec![("logs/x.log".to_string(), b"seen on ALICE today".to_vec())];
         assert_eq!(check(&leaky, &scan).unwrap_err().file, "logs/x.log");
+    }
+
+    /// A computer's account name (`WS01$`), and a path as JSON writes it,
+    /// are replaced too; the check finds `WS01$` when it is left.
+    #[test]
+    fn account_names_and_escaped_paths_are_replaced() {
+        let mut scan = NameScan::default();
+        scan.add_name("WS01.CONTOSO.LOCAL");
+        let mut ph = Placeholders::default();
+        let out = replace_names(
+            r#"machine WS01$ read; {"path":"C:\\Users\\jdoe\\x.json"} C:\Users\ann\y"#,
+            &scan,
+            &mut ph,
+        );
+        assert!(!out.contains("WS01") && out.contains("name-1$"), "{out}");
+        assert!(!out.contains("jdoe") && !out.contains("ann"), "{out}");
+        assert_eq!(scan.find("seen WS01$ today"), Some(4));
     }
 }

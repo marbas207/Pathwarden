@@ -356,6 +356,9 @@ fn start(st: &Shared, ws: Workspace, ready: Ready, blocks: Vec<ActionConfig>) ->
         pathwarden_core::logs::Kind::Action,
         &format!("{label} on {}", ready.finding.fingerprint),
     );
+    if let (Some(l), Some(d)) = (&log, st.jobs.logs_dir()) {
+        pathwarden_core::logs::note_run(&d, &ready.run.id, l.name());
+    }
     if let Some(l) = &log {
         l.line(&format!(
             "{} ({}), run {}{}",

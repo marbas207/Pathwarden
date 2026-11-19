@@ -248,9 +248,10 @@ amber dot shows by **Settings**, and **Settings › Logs** says when it
 stopped and during what, with **Open crash report** and **Dismiss**.
 
 ```powershell
-pathwarden logs              # the latest jobs (--all for every one)
+pathwarden logs              # the latest 6 jobs (--all for every log)
 pathwarden logs --last       # the latest job's last lines
 pathwarden logs --crash      # the latest crash report
+pathwarden logs --dismiss    # dismiss it, as Dismiss in the app
 pathwarden logs --last --open
 ```
 
@@ -259,8 +260,10 @@ the default app. In the app, **Open logs folder** is on **Settings › Logs**,
 and a failed collection or action has **Open log**.
 
 **Download diagnostics** on a run's performance page, and `pathwarden
-diagnose --bundle`, add the logs of the last 7 days (at most 20 MB) and the
-crash reports, with every name replaced like the rest of the zip.
+diagnose --bundle`, add the logs of that run's own jobs (its collection,
+analysis, retests and the actions on its findings), and the app's session
+logs and crash reports of the last 7 days: at most 20 MB, every name
+replaced like the rest of the zip.
 
 A hard crash (the process killed, out of memory, a crash in a system
 library) may leave no crash report. On Windows, look in **Event Viewer ›

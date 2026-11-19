@@ -178,7 +178,7 @@ async fn a_crash_shows_on_settings_until_dismissed() {
     assert!(page.contains(&format!(
         r#"data-crash-open="{name}">Open crash report</button>"#
     )));
-    assert!(page.contains("data-crash-dismiss>Dismiss</button>"));
+    assert!(page.contains(&format!(r#"data-crash-dismiss="{name}">Dismiss</button>"#)));
     assert!(
         page.contains(r#"class="nav-dot jump-dot""#),
         "the jump link's dot"
@@ -201,8 +201,17 @@ async fn a_crash_shows_on_settings_until_dismissed() {
     assert_eq!(s, StatusCode::NO_CONTENT);
     assert_eq!(a.opened.lock().unwrap().last(), Some(&a.logs().join(&name)));
 
-    // Dismiss: the line and the dot go, on this computer.
-    let (s, _) = a.post("/api/logs/dismiss", json!({})).await;
+    // Dismiss: the line and the dot go, on this computer. A crash written
+    // after the page was shown still shows.
+    let later = crash(None).write_in(&a.logs()).unwrap();
+    let (s, _) = a.post("/api/logs/dismiss", json!({ "file": name })).await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    let (_, page) = a.get("/settings").await;
+    assert!(
+        page.contains(&format!(r#"data-crash-open="{later}""#)),
+        "{page}"
+    );
+    let (s, _) = a.post("/api/logs/dismiss", json!({ "file": later })).await;
     assert_eq!(s, StatusCode::NO_CONTENT);
     let (_, page) = a.get("/settings").await;
     assert!(

@@ -136,7 +136,8 @@ fn logs_lists_shows_and_opens() {
         ]
     );
 
-    // More than six: the latest six, then how many more.
+    // Six jobs (with a session log and a crash report among them): all
+    // shown, as the list counts jobs only.
     for _ in 0..4 {
         JobLog::open_in(
             &logs,
@@ -148,12 +149,37 @@ fn logs_lists_shows_and_opens() {
         .end(Outcome::Ok, "");
     }
     let out = ok(&pw(&logs, &["logs"], &[]));
+    assert!(!out.contains("more."), "{out}");
+    assert!(
+        out.contains(run.name()) && out.contains(session.name()),
+        "{out}"
+    );
+    // A seventh: the latest six jobs, then how many more.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    JobLog::open_in(
+        &logs,
+        Kind::Retest,
+        By::CommandLine,
+        "PW-001-0123456789abcdef",
+    )
+    .unwrap()
+    .end(Outcome::Ok, "");
+    let out = ok(&pw(&logs, &["logs"], &[]));
     assert!(
         out.contains("  ... 2 more. All of them: pathwarden logs --all"),
         "{out}"
     );
+    assert!(
+        !out.contains(run.name()),
+        "the oldest job is left out: {out}"
+    );
     let all = ok(&pw(&logs, &["logs", "--all"], &[]));
     assert!(!all.contains("more.") && all.contains(run.name()), "{all}");
+
+    // --dismiss: the crash report --crash showed, as Dismiss in the app.
+    let out = ok(&pw(&logs, &["logs", "--dismiss"], &[]));
+    assert_eq!(out.trim(), format!("Dismissed {crash}."));
+    assert!(pathwarden_core::logs::pending_crash(&logs).is_none());
 }
 
 #[test]

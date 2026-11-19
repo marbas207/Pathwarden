@@ -74,10 +74,60 @@ fn ordinary_lines_pass() {
 
 #[test]
 fn a_password_line_is_hidden_whole() {
-    assert_eq!(log_line("Password for svc is hunter22"), HIDDEN);
+    assert_eq!(log_line("Password for svc is hunter22"), HIDDEN_LINE);
+    // A collector's line, already hidden or rewritten, stays as it said.
+    assert_eq!(log_line(HIDDEN), HIDDEN);
     assert_eq!(
         log_line("Your user can read LAPS password on WS01: x"),
         "LAPS: the collecting account can read the local administrator password of WS01 \
          (the password is not shown)"
+    );
+}
+
+/// Webhook URLs lose their secret path, any URL its query values.
+#[test]
+fn urls_keep_no_secret() {
+    for (url, want) in [
+        (
+            "https://hooks.slack.com/services/T000/B000/XXXXsecret",
+            "https://hooks.slack.com/services/***",
+        ),
+        (
+            "https://contoso.webhook.office.com/webhookb2/abc@def/IncomingWebhook/123/456",
+            "https://contoso.webhook.office.com/webhookb2/***",
+        ),
+        (
+            "https://discord.com/api/webhooks/123/tok-en",
+            "https://discord.com/api/webhooks/***",
+        ),
+        (
+            "https://desk.example.test/api/x?id=7&key=abc123&flag",
+            "https://desk.example.test/api/x?id=***&key=***&flag",
+        ),
+        (
+            "https://desk.example.test/ticket/42",
+            "https://desk.example.test/ticket/42",
+        ),
+    ] {
+        assert_eq!(
+            log_line(&format!("posted to {url} (200)")),
+            format!("posted to {want} (200)")
+        );
+    }
+}
+
+/// A form's password is masked while its job runs, then no longer held.
+#[test]
+fn a_typed_secret_is_masked_for_its_job() {
+    {
+        let _m = mask_while("Typed-Form-Secret-77");
+        assert_eq!(
+            log_line("bind as x with Typed-Form-Secret-77"),
+            "bind as x with ***"
+        );
+    }
+    assert_eq!(
+        log_line("bind as x with Typed-Form-Secret-77"),
+        "bind as x with Typed-Form-Secret-77"
     );
 }

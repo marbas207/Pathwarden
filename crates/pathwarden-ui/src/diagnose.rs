@@ -564,9 +564,12 @@ pub fn bundle(
                 "warnings": c.warnings.len(),
             })
         }),
-        logs: logs_of(logs),
+        logs: logs_of(logs, Some(&run.id)),
     };
-    let scan = names_of(ws, &perf, &dir)?;
+    let mut scan = names_of(ws, &perf, &dir)?;
+    if !b.logs.is_empty() {
+        recent_names(ws, &mut scan);
+    }
     b.zip(&scan).map_err(BundleError::Refused)
 }
 
@@ -586,18 +589,44 @@ pub fn bundle_point(
         run: run_numbers(&perf.run),
         timings: perf.timings.clone(),
         previous: perf.previous.as_ref().map(|(_, t)| t.clone()),
-        logs: logs_of(logs),
+        logs: logs_of(logs, None),
         ..Bundle::default()
     };
     let mut scan = NameScan::default();
     known_names(ws, perf, &mut scan);
+    if !b.logs.is_empty() {
+        recent_names(ws, &mut scan);
+    }
     b.zip(&scan).map_err(BundleError::Refused)
 }
 
-/// The logs a bundle takes from the logs folder `logs`.
-fn logs_of(logs: Option<&Path>) -> Vec<(String, String)> {
-    logs.map(|d| pathwarden_core::logs::for_bundle(d, pathwarden_core::analyze::now()))
+/// The logs the bundle of run `run` takes from the logs folder `logs`:
+/// its own jobs', and the app's session logs and crash reports of the
+/// last days ([`pathwarden_core::logs::for_bundle`]).
+fn logs_of(logs: Option<&Path>, run: Option<&str>) -> Vec<(String, String)> {
+    logs.map(|d| pathwarden_core::logs::for_bundle(d, pathwarden_core::analyze::now(), run))
         .unwrap_or_default()
+}
+
+/// The names of every environment's runs of the last
+/// [`pathwarden_core::logs::BUNDLE_DAYS`] days, added to `scan`: a session
+/// log or crash report can name any of them.
+fn recent_names(ws: &Workspace, scan: &mut NameScan) {
+    let since = pathwarden_core::analyze::now() - pathwarden_core::logs::BUNDLE_DAYS * 86_400;
+    for r in ws.all_runs().iter().filter(|r| r.created_at >= since) {
+        for d in r.domains.iter().chain(r.trusted_domains.iter().flatten()) {
+            scan.add_domain(d);
+        }
+        let Some(dir) = ws.for_run(r).run_dir(&r.id) else {
+            continue;
+        };
+        if let Some(index) = crate::run_data::read_gz(&dir.join(crate::run_data::OBJECTS_FILE))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<ObjectIndex>(&b).ok())
+        {
+            scan.add_index(&index);
+        }
+    }
 }
 
 /// The history run `run_id` of the environment `ws` (its history in use,

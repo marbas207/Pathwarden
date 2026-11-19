@@ -1127,13 +1127,40 @@ fn run(command: Command) -> Result<ExitCode> {
     let _in = log.enter();
     let args: Vec<String> = std::env::args().skip(1).collect();
     log.line(&format!("pathwarden {}", args.join(" ")));
+    let collecting = log.kind() == pathwarden_core::logs::Kind::Collect;
     let result = run_command(command);
     match &result {
-        Ok(code) if *code == ExitCode::SUCCESS => log.end(Outcome::Ok, ""),
-        Ok(_) => log.end(Outcome::Ok, "exit status not 0"),
+        Ok(code) => {
+            let (outcome, why) = outcome_of(*code, collecting);
+            log.end(outcome, why);
+        }
         Err(e) => log.end(Outcome::Failed, &error_text(e)),
     }
     result
+}
+
+/// How a job that returned `code` ended, for its log: findings at or
+/// above `--fail-on`, or still open or not told after a retest, are
+/// results (ok); an error is a failure, Ctrl-C a stop, and a collection
+/// with domains not collected a failure.
+fn outcome_of(code: ExitCode, collecting: bool) -> (pathwarden_core::logs::Outcome, &'static str) {
+    use pathwarden_core::logs::Outcome;
+    let is = |n: u8| code == ExitCode::from(n);
+    if code == ExitCode::SUCCESS {
+        (Outcome::Ok, "")
+    } else if is(exit::ERROR) {
+        (Outcome::Failed, "exit status 2")
+    } else if is(interrupt::EXIT_CANCELLED as u8) {
+        (Outcome::Stopped, "")
+    } else if collecting && is(exit::SOME_NOT_COLLECTED) {
+        (Outcome::Failed, "some domains not collected")
+    } else if is(exit::FINDINGS) {
+        (Outcome::Ok, "exit status 1: findings")
+    } else if is(exit::CANT_TELL) {
+        (Outcome::Ok, "exit status 3: can't tell")
+    } else {
+        (Outcome::Failed, "exit status not 0")
+    }
 }
 
 /// The log `command` gets, if it is a job: its kind and subject.

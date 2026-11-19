@@ -117,7 +117,12 @@
     var dismiss = card.querySelector("[data-crash-dismiss]");
     if (dismiss) dismiss.addEventListener("click", function () {
       dismiss.disabled = true;
-      fetch("/api/logs/dismiss", { method: "POST", credentials: "same-origin" }).then(function (r) {
+      fetch("/api/logs/dismiss", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: dismiss.getAttribute("data-crash-dismiss") || null })
+      }).then(function (r) {
         if (!r.ok) throw new Error("Couldn't dismiss it.");
         var line = card.querySelector("[data-crash]");
         if (line) line.remove();

@@ -27,6 +27,10 @@ use std::sync::Mutex;
 pub const HIDDEN: &str =
     "(a collector message that mentions a password was hidden; Pathwarden never shows password values)";
 
+/// What replaces one of Pathwarden's own log lines that mentions a
+/// password ([`log_line`]).
+pub const HIDDEN_LINE: &str = "(a line that mentions a password was hidden)";
+
 /// What replaces a secret value in a log line.
 pub const MASK: &str = "***";
 
@@ -97,11 +101,47 @@ pub fn register_secret(value: &str) {
     }
 }
 
-/// `line` as a log may keep it: [`collector_line`], then every secret the
-/// module's documentation lists masked with [`MASK`].
+/// Masks `value` in every [`log_line`] while the guard lives: a password
+/// or passphrase typed into a form, for the job it is typed for.
+pub fn mask_while(value: &str) -> Masked {
+    let v = value.trim().to_string();
+    let added = {
+        let all = SECRETS.lock().unwrap_or_else(|e| e.into_inner());
+        !all.iter().any(|s| s.as_str() == v)
+    };
+    register_secret(&v);
+    Masked(added.then(|| zeroize::Zeroizing::new(v)))
+}
+
+/// [`mask_while`]'s guard: the value stops being masked when it drops
+/// (unless it was masked before).
+pub struct Masked(Option<zeroize::Zeroizing<String>>);
+
+impl Drop for Masked {
+    fn drop(&mut self) {
+        if let Some(v) = self.0.take() {
+            let mut all = SECRETS.lock().unwrap_or_else(|e| e.into_inner());
+            all.retain(|s| s.as_str() != v.as_str());
+        }
+    }
+}
+
+/// `line` as a log may keep it: a line that mentions a password hidden
+/// (a collector's as [`collector_line`] says it, any other as
+/// [`HIDDEN_LINE`]), then every secret the module's documentation lists
+/// masked with [`MASK`].
 pub fn log_line(line: &str) -> String {
-    let line = collector_line(line);
-    let mut out = crate::config::redact_urls(&line);
+    let collector_said =
+        line == HIDDEN || line.starts_with("LAPS: the collecting account can read");
+    let line: Cow<'_, str> = if collector_said || !sensitive(line) {
+        Cow::Borrowed(line)
+    } else {
+        match collector_line(line) {
+            Cow::Borrowed(_) => Cow::Borrowed(HIDDEN_LINE),
+            owned => owned,
+        }
+    };
+    let mut out = urls(&crate::config::redact_urls(&line));
     {
         let all = SECRETS.lock().unwrap_or_else(|e| e.into_inner());
         for s in all.iter() {
@@ -112,6 +152,85 @@ pub fn log_line(line: &str) -> String {
     }
     let out = keyed_values(&out);
     words(&out)
+}
+
+/// Webhook URLs whose path is the secret: (host or host ending, path
+/// start).
+const WEBHOOKS: &[(&str, &str)] = &[
+    ("hooks.slack.com", "/services/"),
+    ("hooks.slack.com", "/workflows/"),
+    (".webhook.office.com", "/webhookb2/"),
+    ("discord.com", "/api/webhooks/"),
+    ("discordapp.com", "/api/webhooks/"),
+];
+
+/// Every http(s) URL in `line` with its query values masked, and a known
+/// webhook's path after its fixed start.
+fn urls(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    loop {
+        let lower = rest.to_ascii_lowercase();
+        let at = match (lower.find("https://"), lower.find("http://")) {
+            (Some(a), Some(b)) => a.min(b),
+            (a, b) => match a.or(b) {
+                Some(x) => x,
+                None => break,
+            },
+        };
+        out.push_str(&rest[..at]);
+        let tail = &rest[at..];
+        let end = tail
+            .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '<' | '>' | ')' | ']'))
+            .unwrap_or(tail.len());
+        out.push_str(&mask_url(&tail[..end]));
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// One URL: query values masked, a webhook's secret path masked.
+fn mask_url(url: &str) -> String {
+    let (base, query) = match url.split_once('?') {
+        Some((b, q)) => (b, Some(q)),
+        None => (url, None),
+    };
+    let scheme_end = base.find("://").map_or(0, |i| i + 3);
+    let host_end = base[scheme_end..]
+        .find('/')
+        .map_or(base.len(), |i| scheme_end + i);
+    let host = base[scheme_end..host_end]
+        .rsplit('@')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let path = &base[host_end..];
+    let mut b = base.to_string();
+    for (h, start) in WEBHOOKS {
+        let matches = if let Some(suffix) = h.strip_prefix('.') {
+            host.ends_with(&format!(".{suffix}")) || host == suffix
+        } else {
+            host == *h
+        };
+        if matches && path.to_ascii_lowercase().starts_with(start) && path.len() > start.len() {
+            b = format!("{}{start}{MASK}", &base[..host_end]);
+            break;
+        }
+    }
+    match query {
+        None => b,
+        Some(q) => {
+            let masked: Vec<String> = q
+                .split('&')
+                .map(|kv| match kv.split_once('=') {
+                    Some((k, v)) if !v.is_empty() => format!("{k}={MASK}"),
+                    _ => kv.to_string(),
+                })
+                .collect();
+            format!("{b}?{}", masked.join("&"))
+        }
+    }
 }
 
 /// Keys whose whole rest of the line is a secret (HTTP headers).

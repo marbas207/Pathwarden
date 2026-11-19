@@ -162,14 +162,17 @@ impl By {
 
 // ------------------------------------------------------------------ folder
 
-/// The logs folder (not created): `None` when this account's environment
-/// doesn't say where its data is, and in debug builds without
-/// [`TEST_DIR_ENV`].
+/// The logs folder (not created): [`TEST_DIR_ENV`] when set; else `None`
+/// in a debug build, or when run by cargo (`cargo test`, `cargo run`: it
+/// sets `CARGO_MANIFEST_DIR` for what it runs, so a release-mode test and
+/// the programs it starts write no logs either), or when this account's
+/// environment doesn't say where its data is.
 pub fn dir() -> Option<PathBuf> {
-    if cfg!(debug_assertions) {
-        return std::env::var_os(TEST_DIR_ENV)
-            .filter(|v| !v.is_empty())
-            .map(PathBuf::from);
+    if let Some(d) = std::env::var_os(TEST_DIR_ENV).filter(|v| !v.is_empty()) {
+        return Some(PathBuf::from(d));
+    }
+    if cfg!(debug_assertions) || std::env::var_os("CARGO_MANIFEST_DIR").is_some() {
+        return None;
     }
     dir_from(|n| std::env::var_os(n), cfg!(windows))
 }
@@ -358,7 +361,7 @@ impl JobLog {
     /// per process.
     pub fn open_in(dir: &Path, kind: Kind, by: By, subject: &str) -> io::Result<Arc<JobLog>> {
         ensure(dir)?;
-        prune_once(dir);
+        prune_now(dir);
         let base = match kind {
             Kind::Session => format!("session-{}", stamp(now())),
             k => format!("job-{}-{}", stamp(now()), k.slug()),
@@ -463,8 +466,6 @@ impl JobLog {
     }
 
     fn write(&self, text: &str, last: bool, try_only: bool) {
-        let prefix = format!("[{}, {}]", self.kind.slug(), self.by.word());
-        let at = clock_ms(now_ms());
         let got = if try_only {
             match self.out.try_lock() {
                 Ok(w) => Some(w),
@@ -477,7 +478,14 @@ impl JobLog {
         let Some(mut w) = got else {
             return;
         };
-        if w.ended && !last {
+        self.write_in(&mut w, text, last);
+    }
+
+    /// Writes under the lock the caller holds.
+    fn write_in(&self, w: &mut Writer, text: &str, last: bool) {
+        let prefix = format!("[{}, {}]", self.kind.slug(), self.by.word());
+        let at = clock_ms(now_ms());
+        if w.ended {
             return;
         }
         for l in text.lines().map(one_line).filter(|l| !l.is_empty()) {
@@ -502,19 +510,18 @@ impl JobLog {
 
     /// Writes the result, once: `ok`, `failed` with why, or `stopped`.
     pub fn end(&self, result: Outcome, detail: &str) {
-        {
-            let w = self.out.lock().unwrap_or_else(|e| e.into_inner());
-            if w.ended {
-                return;
-            }
-        }
         let detail = one_line(detail);
         let text = match (result, detail.is_empty()) {
             (r, true) => format!("result: {}", r.word()),
             (r, false) => format!("result: {}: {detail}", r.word()),
         };
-        self.write(&text, true, false);
-        self.out.lock().unwrap_or_else(|e| e.into_inner()).ended = true;
+        // The check and the write under one lock: one result, ever.
+        let mut w = self.out.lock().unwrap_or_else(|e| e.into_inner());
+        if w.ended {
+            return;
+        }
+        self.write_in(&mut w, &text, true);
+        w.ended = true;
     }
 
     /// Makes this the job of the current thread until the guard drops:
@@ -654,15 +661,29 @@ fn prune_to(dir: &Path, now: i64, days: i64, max: u64) -> usize {
     removed
 }
 
-fn prune_once(dir: &Path) {
-    static DONE: OnceLock<Mutex<Vec<PathBuf>>> = OnceLock::new();
-    let mut done = DONE
-        .get_or_init(Default::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
-    if !done.iter().any(|d| d == dir) {
-        done.push(dir.to_path_buf());
-        prune(dir, now());
+/// How often a folder is pruned at most, as logs open ([`prune_now`]).
+const PRUNE_EVERY: i64 = 3600;
+
+/// Prunes `dir` when a log opens there, at most once an hour per folder
+/// in this process: an app left running for weeks keeps to the limits.
+fn prune_now(dir: &Path) {
+    static LAST: OnceLock<Mutex<HashMap<PathBuf, i64>>> = OnceLock::new();
+    let t = now();
+    let due = {
+        let mut last = LAST
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        match last.get(dir) {
+            Some(at) if t - at < PRUNE_EVERY => false,
+            _ => {
+                last.insert(dir.to_path_buf(), t);
+                true
+            }
+        }
+    };
+    if due {
+        prune(dir, t);
     }
 }
 
@@ -967,14 +988,31 @@ pub fn pending_crash(dir: &Path) -> Option<CrashReport> {
     (!is_log_name(dismissed) || order(&c.name) > order(dismissed)).then_some(c)
 }
 
-/// Dismisses the crash reports there are now, on this computer.
-pub fn dismiss(dir: &Path) -> io::Result<()> {
-    let Some(c) = last_crash(dir) else {
-        return Ok(());
+/// Dismisses crash report `name` (the one shown) and every earlier one, on
+/// this computer; a later one still shows. `None`: the newest there is.
+/// Never moves back to an earlier one.
+pub fn dismiss(dir: &Path, name: Option<&str>) -> io::Result<()> {
+    let name = match name {
+        Some(n) if n.starts_with("crash-") && file_in(dir, n).is_some() => n.to_string(),
+        Some(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no such crash report",
+            ))
+        }
+        None => match last_crash(dir) {
+            Some(c) => c.name,
+            None => return Ok(()),
+        },
     };
+    let before = fs::read_to_string(dir.join(DISMISSED_FILE)).unwrap_or_default();
+    let before = before.trim();
+    if is_log_name(before) && order(before) >= order(&name) {
+        return Ok(());
+    }
     ensure(dir)?;
     let tmp = dir.join(format!(".{DISMISSED_FILE}.{}", std::process::id()));
-    fs::write(&tmp, &c.name)?;
+    fs::write(&tmp, &name)?;
     fs::rename(&tmp, dir.join(DISMISSED_FILE))
 }
 
@@ -1185,9 +1223,61 @@ pub fn action_logs(dir: &Path) -> HashMap<(String, String), String> {
         .collect()
 }
 
+/// Which logs are of a run's jobs ([`note_run`]).
+const RUNS_FILE: &str = "run-logs.txt";
+
+/// Records that log `file` is of a job of run `run` (its folder ID): its
+/// collection, analysis, a retest, an action on one of its findings. The
+/// diagnostics bundle of that run takes it ([`for_bundle`]).
+pub fn note_run(dir: &Path, run: &str, file: &str) {
+    let ok = !run.is_empty()
+        && run.len() <= 64
+        && run
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+    if !(ok && is_log_name(file)) {
+        return;
+    }
+    if let Ok(mut f) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join(RUNS_FILE))
+    {
+        let _ = writeln!(f, "{run}\t{file}");
+    }
+}
+
+/// [`note_run`] for the log of the job this thread works for, if any.
+pub fn note_run_current(run: &str) {
+    if let Some(l) = current() {
+        if let Some(dir) = l.path.parent() {
+            note_run(dir, run, &l.name);
+        }
+    }
+}
+
+/// The logs of run `run`'s jobs that are still there.
+pub fn run_logs(dir: &Path, run: &str) -> Vec<String> {
+    let text = fs::read_to_string(dir.join(RUNS_FILE)).unwrap_or_default();
+    let mut out: Vec<String> = text
+        .lines()
+        .filter_map(|l| l.split_once('\t'))
+        .filter(|(r, f)| *r == run && is_log_name(f) && dir.join(f).is_file())
+        .map(|(_, f)| f.to_string())
+        .collect();
+    out.dedup();
+    out
+}
+
 /// Drops the entries whose log is gone.
 fn prune_actions(dir: &Path) {
-    let path = dir.join(ACTIONS_FILE);
+    prune_index(dir, RUNS_FILE);
+    prune_index(dir, ACTIONS_FILE);
+}
+
+/// Drops the lines of index `file` whose log (its last field) is gone.
+fn prune_index(dir: &Path, file: &str) {
+    let path = dir.join(file);
     let Ok(text) = fs::read_to_string(&path) else {
         return;
     };
@@ -1208,21 +1298,23 @@ fn prune_actions(dir: &Path) {
 
 // ---------------------------------------------------------- diagnostics
 
-/// What the diagnostics bundle takes from `dir`: every crash report, then
-/// the logs of the last [`BUNDLE_DAYS`] days, newest first, up to
+/// What the diagnostics bundle of run `run` takes from `dir`: the logs of
+/// that run's jobs ([`run_logs`]), then the crash reports and app session
+/// logs of the last [`BUNDLE_DAYS`] days, newest first, up to
 /// [`BUNDLE_BYTES`] in all (a log that doesn't fit whole gives its last
-/// part). Names as they are: the bundle replaces them.
-pub fn for_bundle(dir: &Path, now: i64) -> Vec<(String, String)> {
+/// part). No other job's log. Names as they are: the bundle replaces them.
+pub fn for_bundle(dir: &Path, now: i64, run: Option<&str>) -> Vec<(String, String)> {
     let mut files = files_in(dir);
     newest_first(&mut files);
     let since = now - BUNDLE_DAYS * 86_400;
     let mut left = BUNDLE_BYTES;
     let mut out = Vec::new();
-    let crashes = files.iter().filter(|f| f.name.starts_with("crash-"));
-    let logs = files
-        .iter()
-        .filter(|f| !f.name.starts_with("crash-") && f.modified >= since);
-    for f in crashes.chain(logs) {
+    let own = run.map(|r| run_logs(dir, r)).unwrap_or_default();
+    let jobs = files.iter().filter(|f| own.contains(&f.name));
+    let recent = files.iter().filter(|f| {
+        (f.name.starts_with("crash-") || f.name.starts_with("session-")) && f.modified >= since
+    });
+    for f in jobs.chain(recent) {
         if left == 0 {
             break;
         }

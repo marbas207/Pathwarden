@@ -156,7 +156,7 @@ fn a_crash_shows_until_dismissed() {
     let t = tmp("dismiss");
     fs::create_dir_all(&t.0).unwrap();
     assert!(pending_crash(&t.0).is_none());
-    dismiss(&t.0).unwrap();
+    dismiss(&t.0, None).unwrap();
     let c = Crash {
         message: "x".into(),
         location: String::new(),
@@ -171,7 +171,7 @@ fn a_crash_shows_until_dismissed() {
         .unwrap()
         .line()
         .starts_with("Stopped unexpectedly, "));
-    dismiss(&t.0).unwrap();
+    dismiss(&t.0, None).unwrap();
     assert!(pending_crash(&t.0).is_none());
     let second = c.write_in(&t.0).unwrap();
     assert_eq!(
@@ -179,6 +179,15 @@ fn a_crash_shows_until_dismissed() {
         second,
         "a later crash shows again"
     );
+    // Dismissing the one shown (by name) leaves a later one showing, and
+    // never moves back.
+    let third = c.write_in(&t.0).unwrap();
+    dismiss(&t.0, Some(&second)).unwrap();
+    assert_eq!(pending_crash(&t.0).unwrap().name, third);
+    dismiss(&t.0, Some(&third)).unwrap();
+    dismiss(&t.0, Some(&first)).unwrap();
+    assert!(pending_crash(&t.0).is_none());
+    assert!(dismiss(&t.0, Some("../x.txt")).is_err());
 }
 
 #[test]
@@ -233,23 +242,59 @@ fn only_its_own_files_open() {
 }
 
 #[test]
-fn the_bundle_takes_crashes_and_a_week_of_logs() {
+fn the_bundle_takes_its_runs_logs_and_a_week_of_sessions_and_crashes() {
     let t = tmp("bundle");
     fs::create_dir_all(&t.0).unwrap();
-    let recent = t.0.join("job-20261118-100000-run.log");
-    let old = t.0.join("job-20261101-100000-run.log");
-    let crash = t.0.join("crash-20261001-100000.txt");
-    fs::write(&recent, "recent").unwrap();
-    fs::write(&old, "old").unwrap();
-    fs::write(&crash, "crash").unwrap();
-    set_age(&old, 8);
-    set_age(&crash, 20);
-    let got = for_bundle(&t.0, now());
-    let names: Vec<&str> = got.iter().map(|(n, _)| n.as_str()).collect();
+    let mine = t.0.join("job-20261101-100000-collect.log");
+    let other = t.0.join("job-20261118-100000-run.log");
+    let session = t.0.join("session-20261118-090000.log");
+    let old_session = t.0.join("session-20261001-090000.log");
+    let crash = t.0.join("crash-20261118-100000.txt");
+    let old_crash = t.0.join("crash-20261001-100000.txt");
+    for f in [&mine, &other, &session, &old_session, &crash, &old_crash] {
+        fs::write(f, "x").unwrap();
+    }
+    set_age(&mine, 20);
+    set_age(&old_session, 8);
+    set_age(&old_crash, 20);
+    note_run(
+        &t.0,
+        "20261101-150000-abc123",
+        "job-20261101-100000-collect.log",
+    );
+    note_run(
+        &t.0,
+        "20261118-150000-def456",
+        "job-20261118-100000-run.log",
+    );
+    let got = for_bundle(&t.0, now(), Some("20261101-150000-abc123"));
+    let mut names: Vec<&str> = got.iter().map(|(n, _)| n.as_str()).collect();
+    names.sort();
     assert_eq!(
         names,
-        ["crash-20261001-100000.txt", "job-20261118-100000-run.log"]
+        [
+            "crash-20261118-100000.txt",
+            "job-20261101-100000-collect.log",
+            "session-20261118-090000.log"
+        ],
+        "another run's job is never in it"
     );
+    let none = for_bundle(&t.0, now(), None);
+    assert_eq!(none.len(), 2);
+}
+
+/// Pruning runs as logs open, at most once an hour per folder.
+#[test]
+fn pruning_is_throttled() {
+    let t = tmp("throttle");
+    let a = JobLog::open_in(&t.0, Kind::Run, By::App, "").unwrap();
+    a.end(Outcome::Ok, "");
+    let old = t.0.join("job-20200101-000000-run.log");
+    fs::write(&old, "x").unwrap();
+    set_age(&old, 40);
+    JobLog::open_in(&t.0, Kind::Run, By::App, "").unwrap();
+    assert!(old.exists(), "pruned within the hour already");
+    assert_eq!(prune(&t.0, now()), 1);
 }
 
 #[test]

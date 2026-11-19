@@ -551,6 +551,11 @@ async fn the_bundle_takes_the_logs_without_names() {
         Outcome::Failed,
         "the LDAP connection to dc01.kestrelüber.local was reset",
     );
+    // This run's job; another job's log stays out.
+    pathwarden_core::logs::note_run(&logs, &run, log.name());
+    let other = JobLog::open_in(&logs, Kind::Run, By::App, "elsewhere").unwrap();
+    other.line("another environment's run of FABRIKAM.TEST");
+    other.end(Outcome::Ok, "");
     let crash = Crash {
         message: "index out of bounds on SRV-ÆTHER01".into(),
         location: "src/x.rs:1:2".into(),
@@ -599,5 +604,11 @@ async fn the_bundle_takes_the_logs_without_names() {
     assert!(!text.contains("someone"), "{text}");
     assert!(get(&format!("logs/{crash}")).contains("Message: index out of bounds on "));
     assert!(get("README.txt").contains("logs/"));
+    assert!(
+        !files
+            .iter()
+            .any(|(f, _)| f == &format!("logs/{}", other.name())),
+        "another job's log is never in it"
+    );
     assert_no_names(&files);
 }

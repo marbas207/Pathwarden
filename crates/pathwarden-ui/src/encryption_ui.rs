@@ -450,6 +450,11 @@ async fn encryption_api(
     State(st): State<Shared>,
     SecretJson(body): SecretJson<EncryptionBody>,
 ) -> Response {
+    // The passphrase typed never reaches a log while this runs.
+    let _masked = body
+        .passphrase
+        .as_ref()
+        .map(|p| pathwarden_core::redact::mask_while(p.expose()));
     let mut body = body;
     if body.on {
         if let Some(form) = body.state.take() {
@@ -559,6 +564,8 @@ struct OpenBody {
 /// `POST /api/history/passphrase/open`: the card on Runs. `passphrase set`
 /// when remembered; otherwise for this session only.
 async fn open_api(State(st): State<Shared>, SecretJson(body): SecretJson<OpenBody>) -> Response {
+    // The passphrase typed never reaches a log while this runs.
+    let _masked = pathwarden_core::redact::mask_while(body.passphrase.expose());
     let r = with_location(&st, move |loc| {
         let bad = |e: anyhow::Error| (StatusCode::BAD_REQUEST, words(&e));
         let pass = secret(&body.passphrase);

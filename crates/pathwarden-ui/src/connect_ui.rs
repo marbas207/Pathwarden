@@ -701,6 +701,8 @@ struct OpenBody {
 
 /// `POST /api/connect/open`: step 2's Open the history.
 async fn open_api(State(st): State<Shared>, SecretJson(body): SecretJson<OpenBody>) -> Response {
+    // The passphrase typed never reaches a log while this runs.
+    let _masked = pathwarden_core::redact::mask_while(body.passphrase.expose());
     if let Some(r) = locked(&st) {
         return r;
     }

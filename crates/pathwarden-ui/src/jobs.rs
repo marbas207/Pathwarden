@@ -297,6 +297,10 @@ impl Jobs {
     /// job for Open log. `None` without a logs folder.
     pub fn open_log(&self, id: &str, kind: Kind, subject: &str) -> Option<Arc<JobLog>> {
         if let Some(l) = self.log(id) {
+            // An analysis going on after a choice: the same log.
+            if let Some(j) = self.lock().get_mut(id) {
+                j.log = Some(l.name().to_string());
+            }
             return Some(l);
         }
         let log = JobLog::open_in(&self.logs_dir()?, kind, By::App, subject).ok()?;
@@ -328,7 +332,7 @@ impl Jobs {
 
     /// Ends job `id`'s log with how it ended; a failure is said in the
     /// session's log too.
-    fn end_log(&self, id: &str, outcome: Outcome, detail: &str) {
+    pub(crate) fn end_log(&self, id: &str, outcome: Outcome, detail: &str) {
         let log = self
             .logs
             .lock()
@@ -529,10 +533,10 @@ impl Jobs {
                 Outcome::Ok,
                 &format!("the same collection as {what}: nothing saved"),
             ),
-            JobStatus::Ask { reason, .. } => self.end_log(
+            // The analysis waits for the choice, and goes on in the same log.
+            JobStatus::Ask { reason, .. } => self.log_line(
                 id,
-                Outcome::Stopped,
-                &format!("the environment needs a choice: {reason}"),
+                &format!("waiting: the environment needs a choice: {reason}"),
             ),
         }
         if let Some(j) = self.lock().get_mut(id) {
@@ -864,6 +868,12 @@ fn analyze_checked(
     Ok(None)
 }
 
+/// Notes the job's log (this thread's) as of run `id`, for that run's
+/// diagnostics bundle.
+fn note_run(id: &str) {
+    pathwarden_core::logs::note_run_current(id);
+}
+
 /// How [`save_analysis`] saves a run.
 pub struct SaveRun<'a> {
     /// The run's folder ID ([`crate::workspace::new_run_id`]).
@@ -975,6 +985,7 @@ pub fn save_analysis<P: RecordProgress>(
     env_still_there(ws)?;
     ws.save_run_with(&summary, &html, &extra)
         .map_err(|e| format!("Couldn't save the report: {e:#}"))?;
+    note_run(&summary.id);
     // The collector files' hashes, for the run's evidence packs. Kept on
     // this computer only, not in the full run.
     if let Some(dir) = ws.run_dir(&summary.id) {

@@ -1173,7 +1173,15 @@ async fn retest(
     });
     if let Some(l) = &log {
         l.line(&format!("finding {} of run {id}", form.fingerprint));
+        if let Some(d) = l.path().parent() {
+            pathwarden_core::logs::note_run(d, &id, l.name());
+        }
     }
+    // The password typed for it never reaches the log.
+    let masked = form
+        .password
+        .as_ref()
+        .map(|p| pathwarden_core::redact::mask_while(p.expose()));
     let in_log = log.clone();
     let done = tokio::task::spawn_blocking(move || {
         let _in = in_log.as_ref().map(|l| l.enter());
@@ -1183,6 +1191,7 @@ async fn retest(
     })
     .await;
     use pathwarden_core::logs::Outcome;
+    let _masked = masked;
     match done {
         Ok(Ok(rec)) => {
             if let Some(l) = &log {

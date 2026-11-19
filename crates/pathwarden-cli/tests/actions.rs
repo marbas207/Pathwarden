@@ -769,3 +769,47 @@ fn the_app_and_the_command_line_give_the_same_results() {
     assert!(text.contains("Would open a ticket (dry run)."), "{text}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A failed `action run` ends its log as failed, with `--json` (which
+/// exits 2 without an error) and without.
+#[test]
+fn a_failed_action_run_logs_a_failure() {
+    let (dir, ws, _, high) = workspace_named("-log");
+    let logs = dir.join("logs");
+    let logs_env = logs.display().to_string();
+    let env = [("PATHWARDEN_TEST_LOGS", logs_env.as_str())];
+    let command = command_of(&fake_action());
+    let mut add = vec!["action", "--workspace", &ws, "add", "--name", "desk", "--"];
+    add.extend(command.iter().map(String::as_str));
+    ok(&run_with(&dir, &add, &[]));
+    for extra in [None, Some("--json")] {
+        let mut args = vec![
+            "action",
+            "--workspace",
+            &ws,
+            "run",
+            &high,
+            "--input",
+            "note=fail",
+            "-y",
+        ];
+        args.extend(extra);
+        let out = run_with(&dir, &args, &env);
+        assert!(!out.status.success());
+    }
+    let mut seen = 0;
+    for e in std::fs::read_dir(&logs).unwrap() {
+        let text = std::fs::read_to_string(e.unwrap().path()).unwrap();
+        if !text.starts_with("# Action ") {
+            continue;
+        }
+        seen += 1;
+        let last = text.lines().last().unwrap();
+        assert!(
+            last.contains("[action, command line] result: failed: "),
+            "{text}"
+        );
+    }
+    assert_eq!(seen, 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -56,6 +56,13 @@ pub fn routes() -> Router<Shared> {
         .route("/api/logs/dismiss", post(dismiss_api))
 }
 
+#[derive(Deserialize, Default)]
+struct DismissBody {
+    /// The crash report the page showed.
+    #[serde(default)]
+    file: Option<String>,
+}
+
 #[derive(Deserialize)]
 struct OpenBody {
     /// A log's or crash report's file name; none for the folder.
@@ -98,12 +105,14 @@ async fn open_api(State(st): State<Shared>, Json(body): Json<OpenBody>) -> Respo
     }
 }
 
-/// `POST /api/logs/dismiss`: the crash shown goes, on this computer.
-async fn dismiss_api(State(st): State<Shared>) -> Response {
+/// `POST /api/logs/dismiss`: the crash report the page showed (and any
+/// earlier) goes, on this computer; one written since still shows.
+async fn dismiss_api(State(st): State<Shared>, body: Option<Json<DismissBody>>) -> Response {
     let Some(dir) = st.jobs.logs_dir() else {
         return StatusCode::NO_CONTENT.into_response();
     };
-    match logs::dismiss(&dir) {
+    let body = body.map(|b| b.0).unwrap_or_default();
+    match logs::dismiss(&dir, body.file.as_deref()) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => json_error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -127,7 +136,7 @@ pub fn card(st: &AppState) -> String {
     };
     let line = match pending(st) {
         Some(c) => format!(
-            r#"<p class="crash-line" data-crash>{i}<span>{text}</span><button type="button" class="linkish" data-crash-open="{name}">Open crash report</button><button type="button" class="linkish" data-crash-dismiss>Dismiss</button></p>"#,
+            r#"<p class="crash-line" data-crash>{i}<span>{text}</span><button type="button" class="linkish" data-crash-open="{name}">Open crash report</button><button type="button" class="linkish" data-crash-dismiss="{name}">Dismiss</button></p>"#,
             i = icon("i-alert"),
             text = esc(&c.line()),
             name = esc(&c.name),

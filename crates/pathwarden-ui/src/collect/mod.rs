@@ -1481,6 +1481,11 @@ async fn start(
         Ok(t) => t,
         Err(e) => return e.response(),
     };
+    // The password typed for it never reaches the log, while it runs.
+    let masked = form
+        .password
+        .as_ref()
+        .map(|p| pathwarden_core::redact::mask_while(p.expose()));
     let mut req = match build_request(form, out) {
         Ok(r) => r,
         Err(e) => return e.response(),
@@ -1582,6 +1587,7 @@ async fn start(
         }
     }
     let job = CollectJob {
+        _masked: masked,
         jobs: st.jobs.clone(),
         ws: st.ws(),
         id: id.clone(),
@@ -1660,6 +1666,8 @@ async fn cancel(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> Respo
 
 /// A collection followed by its analysis, on its own thread.
 struct CollectJob {
+    /// The typed password, masked in logs until the job ends.
+    _masked: Option<pathwarden_core::redact::Masked>,
     jobs: Arc<Jobs>,
     ws: Workspace,
     id: String,

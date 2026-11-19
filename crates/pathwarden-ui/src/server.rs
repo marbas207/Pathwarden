@@ -1121,6 +1121,11 @@ async fn analyze_anyway(State(st): State<Shared>, Path(id): Path<String>) -> Res
 /// "Open that run" after a duplicate warning: the kept upload is deleted.
 async fn discard_duplicate(State(st): State<Shared>, Path(id): Path<String>) -> Response {
     if let Some(spec) = st.jobs.take_pending(&id) {
+        st.jobs.end_log(
+            &id,
+            pathwarden_core::logs::Outcome::Stopped,
+            "discarded: nothing saved",
+        );
         let keep = st.keep_uploads;
         tokio::task::spawn_blocking(move || spec.remove_uploads(keep))
             .await
