@@ -441,7 +441,6 @@ fieldset.choice.has-clash .clash-row { margin: 0 0 10px; }
 .crash-line > .ic { width: 16px; height: 16px; color: var(--warn); flex: none; }
 .crash-line > span { color: var(--ink); }
 .crash-line .linkish { font-size: 0.86rem; }
-.jump a .jump-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: 2px; }
 .err-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .err-line .linkish { font-size: 0.9rem; white-space: nowrap; }
 .diag-has-wrap { margin-top: 12px; }
