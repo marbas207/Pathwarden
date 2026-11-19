@@ -4072,15 +4072,13 @@ impl Store {
                     .with_context(|| format!("moving {} aside", plain.display()))?;
             }
         }
-        // The saves waiting for a push, opened now while the old key is
-        // here, written again in the new form once the rewrite is done,
-        // under their own lock.
-        let _pending_lock = if self.is_git() {
-            Some(crate::action_log::lock_pending(self)?)
+        // The key the saves waiting for a push are sealed with now, kept
+        // in memory to write them again in the new form at the end.
+        let old_key = if was && self.is_git() {
+            crypt::key_for(&self.dir).ok()
         } else {
             None
         };
-        let pending = crate::action_log::pending_plain(self);
         let files = self.state_files()?;
         let key = to.map(crypt::new_key).transpose()?;
         let mut staged: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -4125,12 +4123,26 @@ impl Store {
             }
             Ok(())
         })();
-        if let Err(e) = result {
-            for (tmp, _) in &staged {
-                let _ = fs::remove_file(tmp);
+        #[cfg(test)]
+        tests::during_rewrite();
+        // The saves waiting for a push: their lock is taken only now, for
+        // the short end of the rewrite (one held through a long rewrite
+        // would look left from a crash and be taken over), and they are
+        // written again in the new form at the end, as they are then.
+        let pending_lock = match result {
+            Ok(()) if self.is_git() => crate::action_log::lock_pending(self).map(Some),
+            Ok(()) => Ok(None),
+            Err(e) => Err(e),
+        };
+        let _pending_lock = match pending_lock {
+            Ok(l) => l,
+            Err(e) => {
+                for (tmp, _) in &staged {
+                    let _ = fs::remove_file(tmp);
+                }
+                return Err(e);
             }
-            return Err(e);
-        }
+        };
         for (tmp, target) in &staged {
             fs::rename(tmp, target).with_context(|| format!("replacing {}", target.display()))?;
         }
@@ -4174,12 +4186,12 @@ impl Store {
                 remove_if_there(&self.dir.join("findings.json"))?;
             }
         }
-        if let Some(plain) = pending {
-            let bytes = match &key {
-                Some((id, _)) => crypt::seal(id, &plain)?,
-                None => plain,
-            };
-            self.write_local_file(crate::action_log::PENDING_FILE, &bytes)?;
+        if self.is_git() {
+            crate::action_log::reseal_pending(
+                self,
+                old_key.as_deref(),
+                key.as_ref().map(|(id, _)| &**id),
+            )?;
         }
         Ok(files.len() - kept.len())
     }
@@ -6785,6 +6797,76 @@ mod tests {
         let note = note.unwrap();
         assert!(note.contains("no earlier findings"), "{note}");
         assert!(!note.contains("earlier commits"), "a folder: {note}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    thread_local! {
+        /// Run by [`Store::rewrite`] once it has staged every file, before
+        /// it takes the pending lock: what a test of this thread set.
+        static DURING_REWRITE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn during_rewrite() {
+        if let Some(f) = DURING_REWRITE.with(|h| h.borrow_mut().take()) {
+            f();
+        }
+    }
+
+    /// A rewrite that runs past the pending lock's stale age (here: an age
+    /// of nothing, as if 30 seconds went by) keeps a save another process
+    /// made meanwhile: it is sealed again with the new key, not lost.
+    #[test]
+    fn a_save_made_during_a_long_rewrite_is_kept() {
+        use crate::action_log::{self, Activity, Change};
+        let dir = std::env::temp_dir().join(format!("pw-rewrite-pending-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        let work = dir.join("work");
+        fs::create_dir_all(&work).unwrap();
+        if run_git(Some(&work), &["init", "-q"]).is_err() {
+            assert!(std::env::var_os("CI").is_none(), "git is required in CI");
+            return;
+        }
+        crate::keystore::use_test_store(&dir.join("ks"));
+        let store = git_store(&work);
+        store.write_state_file("last-run.json", b"{}").unwrap();
+        let first = crypt::SecretString::from("first passphrase here".to_string());
+        let second = crypt::SecretString::from("second passphrase here".to_string());
+        store.rewrite(Some(&first)).unwrap();
+        crypt::give_passphrase(&work, first);
+        let change = |at: &str| Change {
+            fingerprint: "PW-001-aaaa".into(),
+            activity: Activity {
+                at: at.into(),
+                action: "service-desk/open".into(),
+                ..Activity::default()
+            },
+            records: Vec::new(),
+            removed: Vec::new(),
+        };
+        action_log::add_pending(&store, &change("2026-11-18T14:00:00.000Z")).unwrap();
+        assert_eq!(action_log::pending_count(&store), 1);
+        let other = git_store(&work);
+        DURING_REWRITE.with(|h| {
+            *h.borrow_mut() = Some(Box::new(move || {
+                action_log::TEST_STALE_AFTER.with(|s| s.set(Some(std::time::Duration::ZERO)));
+                action_log::add_pending(&other, &change("2026-11-18T15:00:00.000Z")).unwrap();
+                action_log::TEST_STALE_AFTER.with(|s| s.set(None));
+            }))
+        });
+        store.rewrite(Some(&second)).unwrap();
+        assert!(
+            DURING_REWRITE.with(|h| h.borrow().is_none()),
+            "the hook ran"
+        );
+        crypt::give_passphrase(&work, second);
+        let bytes = fs::read(work.join(".git").join(action_log::PENDING_FILE)).unwrap();
+        assert!(bytes.starts_with(b"age-encryption.org/"));
+        assert_eq!(action_log::pending_count(&store), 2, "both saves kept");
+        assert!(!work
+            .join(".git")
+            .join(format!("{}.lock", action_log::PENDING_FILE))
+            .exists());
         let _ = fs::remove_dir_all(&dir);
     }
 }

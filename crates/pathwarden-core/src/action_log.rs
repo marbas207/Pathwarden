@@ -1023,17 +1023,36 @@ struct Pending {
 /// The start of an age file: a sealed pending file.
 const AGE_HEADER: &[u8] = b"age-encryption.org/";
 
-/// The saves kept here, as JSON, opened with the history's key when
-/// sealed: for a rewrite of the history to write them again in its new
-/// form ([`crate::store`]). `None` when there are none, or they can't be
-/// opened.
-pub(crate) fn pending_plain(store: &Store) -> Option<Vec<u8>> {
-    let bytes = store.read_local_file(PENDING_FILE)?;
-    if !bytes.starts_with(AGE_HEADER) {
-        return Some(bytes);
-    }
-    let key = crypt::key_for(&store.dir).ok()?;
-    crypt::open(&key, &bytes, PENDING_FILE).ok()
+/// At the end of a rewrite of the history ([`crate::store`]), with the
+/// pending lock held: the saves kept here written again in its new form,
+/// sealed with `new` or plain. Read as they are now, so a save another
+/// process made during the rewrite is kept: opened with `old` (the key
+/// the rewrite started with, kept in memory) or `new`. Left as they are
+/// when neither opens them (a locked reader moves them aside later).
+pub(crate) fn reseal_pending(
+    store: &Store,
+    old: Option<&age::x25519::Identity>,
+    new: Option<&age::x25519::Identity>,
+) -> Result<()> {
+    let Some(bytes) = store.read_local_file(PENDING_FILE) else {
+        return Ok(());
+    };
+    let plain = if bytes.starts_with(AGE_HEADER) {
+        [old, new]
+            .into_iter()
+            .flatten()
+            .find_map(|k| crypt::open(k, &bytes, PENDING_FILE).ok())
+    } else {
+        Some(bytes)
+    };
+    let Some(plain) = plain else {
+        return Ok(());
+    };
+    let bytes = match new {
+        Some(k) => crypt::seal(k, &plain)?,
+        None => plain,
+    };
+    store.write_local_file(PENDING_FILE, &bytes)
 }
 
 /// `<dir>/<base>`, or with `-2`, `-3`… when that name is taken: a file
@@ -1079,16 +1098,13 @@ fn take_notes(store: &Store) -> Vec<String> {
         .collect()
 }
 
-/// The saves kept here. A file that can't be opened or read (sealed in a
-/// history that isn't encrypted any more, sealed with another key,
-/// damaged) is moved aside, never treated as empty in place, and the list
-/// starts again; the note naming it is kept for the next save or pull
-/// ([`take_notes`]). An error only when the history is encrypted and its
-/// own key isn't at hand (then nothing of the history can be written
-/// either).
-fn try_read_pending(store: &Store) -> Result<Pending> {
+/// The saves kept here, only read: `None` when the file can't be opened
+/// or read (sealed in a history that isn't encrypted any more, sealed
+/// with another key, damaged). An error only when the history is
+/// encrypted and its own key isn't at hand.
+fn open_pending(store: &Store) -> Result<Option<Pending>> {
     let Some(bytes) = store.read_local_file(PENDING_FILE) else {
-        return Ok(Pending::default());
+        return Ok(Some(Pending::default()));
     };
     let plain = if bytes.starts_with(AGE_HEADER) {
         if crypt::is_encrypted(&store.dir) {
@@ -1102,7 +1118,20 @@ fn try_read_pending(store: &Store) -> Result<Pending> {
     } else {
         Some(bytes)
     };
-    if let Some(p) = plain.and_then(|b| serde_json::from_slice::<Pending>(&b).ok()) {
+    Ok(plain.and_then(|b| serde_json::from_slice::<Pending>(&b).ok()))
+}
+
+/// The saves kept here, read holding the pending lock
+/// ([`with_pending_lock`]): only then is a file that can't be opened or
+/// read ([`open_pending`]) moved aside, never treated as empty in place,
+/// and the list starts again; the note naming it is kept for the next
+/// save or pull ([`take_notes`]). (Without the lock, a file another
+/// process is changing, or a rewrite is sealing again, could be taken
+/// for a damaged one.) An error only when the history is encrypted and
+/// its own key isn't at hand (then nothing of the history can be written
+/// either).
+fn try_read_pending(store: &Store) -> Result<Pending> {
+    if let Some(p) = open_pending(store)? {
         return Ok(p);
     }
     let git = store.dir.join(".git");
@@ -1121,8 +1150,10 @@ fn try_read_pending(store: &Store) -> Result<Pending> {
     Ok(Pending::default())
 }
 
+/// The saves kept here, read without the lock: only read, never moved
+/// aside; none when they can't be read now.
 fn read_pending(store: &Store) -> Pending {
-    try_read_pending(store).unwrap_or_default()
+    open_pending(store).ok().flatten().unwrap_or_default()
 }
 
 /// Drops `change` from the saves kept here.
@@ -1163,6 +1194,24 @@ fn with_pending_lock<T>(store: &Store, f: impl FnOnce() -> Result<T>) -> Result<
     f()
 }
 
+/// How old a pending lock is when it is taken as left from a crash.
+pub(crate) const STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(30);
+
+#[cfg(test)]
+thread_local! {
+    /// [`STALE_AFTER`] in this thread's tests, when one sets it.
+    pub(crate) static TEST_STALE_AFTER: std::cell::Cell<Option<std::time::Duration>> =
+        const { std::cell::Cell::new(None) };
+}
+
+fn stale_after() -> std::time::Duration {
+    #[cfg(test)]
+    if let Some(d) = TEST_STALE_AFTER.with(std::cell::Cell::get) {
+        return d;
+    }
+    STALE_AFTER
+}
+
 /// The pending file's own lock, held while it lives.
 pub(crate) struct PendingLock(std::path::PathBuf);
 
@@ -1188,7 +1237,7 @@ pub(crate) fn lock_pending(store: &Store) -> Result<PendingLock> {
                     .and_then(|m| m.modified())
                     .ok()
                     .and_then(|t| t.elapsed().ok())
-                    .is_some_and(|age| age > std::time::Duration::from_secs(30));
+                    .is_some_and(|age| age > stale_after());
                 if stale {
                     // Taken over by one process only: moved aside first,
                     // and removed only if the one moved is still stale.
@@ -1198,7 +1247,7 @@ pub(crate) fn lock_pending(store: &Store) -> Result<PendingLock> {
                             .and_then(|m| m.modified())
                             .ok()
                             .and_then(|t| t.elapsed().ok())
-                            .is_some_and(|age| age > std::time::Duration::from_secs(30));
+                            .is_some_and(|age| age > stale_after());
                         if still {
                             let _ = std::fs::remove_file(&aside);
                         } else if !path.exists() {
@@ -1225,7 +1274,7 @@ pub(crate) fn lock_pending(store: &Store) -> Result<PendingLock> {
 
 /// Keeps `change` until a push carries it. A note when the saves kept
 /// before couldn't be opened and were moved aside.
-fn add_pending(store: &Store, change: &Change) -> Result<Vec<String>> {
+pub(crate) fn add_pending(store: &Store, change: &Change) -> Result<Vec<String>> {
     if !store.is_git() {
         return Ok(Vec::new());
     }

@@ -970,8 +970,8 @@ fn unreadable_waiting_saves_are_moved_aside() {
         b"not json at all"
     );
     assert_eq!(remote_log(&remote).records("PW-001-aaaa").len(), 1);
-    // Again, found by a count (which says nothing): moved aside under a
-    // name of its own, and the next save says so.
+    // Again: a count only reads it (and says nothing); the next save
+    // moves it aside under a name of its own, and says so.
     std::fs::write(&file, b"still not json").unwrap();
     assert_eq!(action_log::pending_count(&a), 0);
     let notes = action_log::save(
@@ -994,6 +994,40 @@ fn unreadable_waiting_saves_are_moved_aside() {
         })
         .count();
     assert_eq!(aside, 2, "never over the first");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A count taken while another process writes the file (here: caught
+/// half written, or sealed with a key the history no longer has) leaves it
+/// in place: only a reader holding the lock moves a file aside.
+#[test]
+fn a_count_during_a_write_leaves_the_file_in_place() {
+    if !have_git() {
+        return;
+    }
+    let dir = scratch("pending-count");
+    let remote = bare(&dir);
+    let work = dir.join("a");
+    let (a, _) = git_store(&remote, &work);
+    a.pull().unwrap();
+    let file = work.join(".git").join("pathwarden-actions-pending.json");
+    let half = b"{\"changes\":[{\"fingerprint\":\"PW-001-aaaa\",\"activ".to_vec();
+    for bytes in [
+        half,
+        b"age-encryption.org/v1
+-> X25519 cut"
+            .to_vec(),
+    ] {
+        std::fs::write(&file, &bytes).unwrap();
+        assert_eq!(action_log::pending_count(&a), 0);
+        assert_eq!(std::fs::read(&file).unwrap(), bytes, "left in place");
+        let aside = std::fs::read_dir(work.join(".git"))
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().contains(".unreadable-"))
+            .count();
+        assert_eq!(aside, 0, "nothing moved aside");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 
