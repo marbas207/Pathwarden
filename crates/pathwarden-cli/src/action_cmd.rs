@@ -720,8 +720,10 @@ fn start(
     let mut said = Vec::new();
     match &saved {
         Some(Ok(s)) => {
-            if s.saved {
+            if s.saved && s.pushed {
                 said.push(SAVED_WORDS.to_string());
+            } else if s.saved {
+                said.push(pathwarden_core::action_log::SAVED_HERE_WORDS.to_string());
             }
             said.extend(s.notes.iter().cloned());
         }
@@ -735,6 +737,7 @@ fn start(
         v["fingerprint"] = json!(f.fingerprint);
         v["run"] = json!(ready.run.id);
         v["saved"] = json!(matches!(&saved, Some(Ok(s)) if s.saved));
+        v["pushed"] = json!(matches!(&saved, Some(Ok(s)) if s.saved && s.pushed));
         for line in &said {
             eprintln!("{}", ui::safe(line));
         }

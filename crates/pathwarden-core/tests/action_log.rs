@@ -970,6 +970,30 @@ fn unreadable_waiting_saves_are_moved_aside() {
         b"not json at all"
     );
     assert_eq!(remote_log(&remote).records("PW-001-aaaa").len(), 1);
+    // Again, found by a count (which says nothing): moved aside under a
+    // name of its own, and the next save says so.
+    std::fs::write(&file, b"still not json").unwrap();
+    assert_eq!(action_log::pending_count(&a), 0);
+    let notes = action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    assert!(
+        notes.iter().any(|n| n.contains("were moved aside to")),
+        "{notes:?}"
+    );
+    let aside = std::fs::read_dir(work.join(".git"))
+        .unwrap()
+        .flatten()
+        .filter(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with("pathwarden-actions-pending.json.unreadable-")
+        })
+        .count();
+    assert_eq!(aside, 2, "never over the first");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -988,10 +1012,14 @@ fn decrypting_leaves_a_planted_plain_file_out() {
         "{:?}",
         done.notes
     );
-    assert_eq!(
-        std::fs::read_to_string(dir.join(action_log::LEFTOVER_FILE)).unwrap(),
-        forged
-    );
+    let moved = s.leftovers();
+    assert_eq!(moved.len(), 1, "{moved:?}");
+    assert!(moved[0]
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .starts_with(action_log::LEFTOVER_PREFIX));
+    assert_eq!(std::fs::read_to_string(&moved[0]).unwrap(), forged);
     assert!(action_log::load(&s).unwrap().findings.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -1022,4 +1050,158 @@ fn the_import_summary_lists_the_records() {
         )
     );
     assert_eq!(s.newest.len(), 3);
+}
+
+/// In git, decrypting moves a plain actions.json it leaves out into the
+/// working copy's `.git`, where no commit picks it up.
+#[test]
+fn a_leftover_from_a_decrypt_stays_out_of_git() {
+    if !have_git() {
+        return;
+    }
+    let ks = std::env::temp_dir().join(format!("pathwarden-actionlog-ks-{}", std::process::id()));
+    pathwarden_core::keystore::use_test_store(&ks);
+    let dir = scratch("leftover-git");
+    let remote = bare(&dir);
+    let work = dir.join("a");
+    let (a, _) = git_store(&remote, &work);
+    a.pull().unwrap();
+    a.write_state_file("last-run.json", b"{}").unwrap();
+    a.encrypt(&pass(PASS), true).unwrap();
+    pathwarden_core::crypt::give_passphrase(&a.dir, pass(PASS));
+    std::fs::write(work.join("actions.json"), "{\"version\":1}\n").unwrap();
+    let done = a.decrypt(true).unwrap();
+    assert!(
+        done.notes.iter().any(|n| n.contains("moved aside to")),
+        "{:?}",
+        done.notes
+    );
+    let moved = a.leftovers();
+    assert_eq!(moved.len(), 1);
+    assert!(moved[0].starts_with(work.join(".git")), "{moved:?}");
+    assert!(!work.join("actions.json").exists());
+    assert!(git_command()
+        .arg("-C")
+        .arg(&remote)
+        .args(["cat-file", "-e", "main:actions.json"])
+        .status()
+        .is_ok_and(|s| !s.success()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// B keeps a save sealed while it waits; A decrypts the history and
+/// pushes; B pulls: the sealed file can't be opened any more, so it is
+/// moved aside, the pull says so, and B's saves go on.
+#[test]
+fn a_decrypt_elsewhere_sets_sealed_waiting_saves_aside() {
+    if !have_git() {
+        return;
+    }
+    let ks = std::env::temp_dir().join(format!("pathwarden-actionlog-ks-{}", std::process::id()));
+    pathwarden_core::keystore::use_test_store(&ks);
+    let dir = scratch("pending-decrypted");
+    let remote = bare(&dir);
+    let (a, _) = git_store(&remote, &dir.join("a"));
+    let (b, _) = git_store(&remote, &dir.join("b"));
+    a.pull().unwrap();
+    a.write_state_file("last-run.json", b"{}").unwrap();
+    a.encrypt(&pass(PASS), true).unwrap();
+    pathwarden_core::crypt::give_passphrase(&a.dir, pass(PASS));
+    b.pull().unwrap();
+    pathwarden_core::crypt::give_passphrase(&b.dir, pass(PASS));
+    let refuse = remote.join("hooks").join("pre-receive");
+    hook(&refuse, "#!/bin/sh\nexit 1\n");
+    action_log::save(
+        &b,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "arya"),
+        true,
+    )
+    .unwrap();
+    std::fs::remove_file(&refuse).unwrap();
+    assert!(pending_bytes(&dir.join("b"))
+        .unwrap()
+        .starts_with(b"age-encryption.org/"));
+    a.pull().unwrap();
+    a.decrypt(true).unwrap();
+    // B follows the decrypt (as `history storage set --no-encrypt` here).
+    let done = b.decrypt(true).unwrap();
+    let said = done.notes.join(" ");
+    assert!(said.contains("were moved aside to"), "{said}");
+    assert_eq!(action_log::pending_count(&b), 0);
+    let saved = action_log::save_reporting(
+        &b,
+        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "arya"),
+        true,
+    )
+    .unwrap();
+    assert!(saved.pushed, "{:?}", saved.notes);
+    assert_eq!(remote_log(&remote).records("PW-001-aaaa").len(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A save the remote's log refuses on the retry (a newer file pushed
+/// meanwhile) is the error, and isn't kept; one whose push fails for a
+/// reason that can go away is kept, not pushed.
+#[test]
+fn a_refused_retry_drops_the_save_and_a_failed_push_keeps_it() {
+    if !have_git() {
+        return;
+    }
+    let dir = scratch("retry");
+    let remote = bare(&dir);
+    let (a, _) = git_store(&remote, &dir.join("a"));
+    let (b, _) = git_store(&remote, &dir.join("b"));
+    a.pull().unwrap();
+    action_log::save(
+        &a,
+        &opened("PW-001-aaaa", "t-1", "2026-11-18T14:00:00.000Z", "ned"),
+        true,
+    )
+    .unwrap();
+    b.pull().unwrap();
+    // A failed push: kept here, not pushed.
+    let refuse = remote.join("hooks").join("pre-receive");
+    hook(&refuse, "#!/bin/sh\nexit 1\n");
+    let saved = action_log::save_reporting(
+        &b,
+        &opened("PW-001-aaaa", "t-2", "2026-11-18T15:00:00.000Z", "arya"),
+        true,
+    )
+    .unwrap();
+    assert!(!saved.pushed);
+    assert_eq!(action_log::pending_count(&b), 1);
+    std::fs::remove_file(&refuse).unwrap();
+    // Meanwhile another computer pushes a newer log.
+    let other = dir.join("other");
+    git(
+        &dir,
+        &[
+            "clone",
+            "-q",
+            "-b",
+            "main",
+            &remote.to_string_lossy(),
+            &other.to_string_lossy(),
+        ],
+    );
+    std::fs::write(
+        other.join("actions.json"),
+        "{\"version\":2,\"findings\":{}}\n",
+    )
+    .unwrap();
+    git(&other, &["commit", "-q", "-am", "newer"]);
+    git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    // B's next save is refused on the retry, and nothing is kept for it.
+    let change = opened("PW-001-aaaa", "t-3", "2026-11-18T16:00:00.000Z", "arya");
+    let e = action_log::save_reporting(&b, &change, true).unwrap_err();
+    assert!(
+        format!("{e:#}").contains("saved by a newer Pathwarden"),
+        "{e:#}"
+    );
+    let left = action_log::pending_count(&b);
+    assert_eq!(
+        left, 1,
+        "only the earlier save is kept, not the refused one"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

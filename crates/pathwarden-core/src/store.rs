@@ -3529,6 +3529,48 @@ impl Store {
         fs::read(self.dir.join(".git").join(name)).ok()
     }
 
+    /// Where decrypting moves a plain actions.json it leaves out: in the
+    /// working copy's `.git` (never committed), or beside a folder history.
+    fn leftover_target(&self) -> PathBuf {
+        let stamp = crate::action_log::name_stamp();
+        if self.is_git() {
+            crate::action_log::unique_path(
+                &self.dir.join(".git"),
+                &format!("pathwarden-{}{stamp}", crate::action_log::LEFTOVER_PREFIX),
+            )
+        } else {
+            crate::action_log::unique_path(
+                &self.dir,
+                &format!("{}{stamp}", crate::action_log::LEFTOVER_PREFIX),
+            )
+        }
+    }
+
+    /// The plain actions.json files decrypting moved aside
+    /// ([`Store::leftover_target`]).
+    pub fn leftovers(&self) -> Vec<PathBuf> {
+        let (dir, start) = if self.is_git() {
+            (
+                self.dir.join(".git"),
+                format!("pathwarden-{}", crate::action_log::LEFTOVER_PREFIX),
+            )
+        } else {
+            (
+                self.dir.clone(),
+                crate::action_log::LEFTOVER_PREFIX.to_string(),
+            )
+        };
+        let mut out: Vec<PathBuf> = fs::read_dir(&dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with(&start))
+            .map(|e| e.path())
+            .collect();
+        out.sort();
+        out
+    }
+
     /// Removes [`Store::read_local_file`]'s file; whether it was there.
     /// Nothing for a folder.
     pub fn remove_local_file(&self, name: &str) -> Result<bool> {
@@ -4025,13 +4067,19 @@ impl Store {
         if was && to.is_none() {
             let plain = self.dir.join(crate::action_log::FILE);
             if fs::symlink_metadata(&plain).is_ok_and(|m| m.is_file()) {
-                let aside = self.dir.join(crate::action_log::LEFTOVER_FILE);
+                let aside = self.leftover_target();
                 fs::rename(&plain, &aside)
                     .with_context(|| format!("moving {} aside", plain.display()))?;
             }
         }
         // The saves waiting for a push, opened now while the old key is
-        // here, written again in the new form once the rewrite is done.
+        // here, written again in the new form once the rewrite is done,
+        // under their own lock.
+        let _pending_lock = if self.is_git() {
+            Some(crate::action_log::lock_pending(self)?)
+        } else {
+            None
+        };
         let pending = crate::action_log::pending_plain(self);
         let files = self.state_files()?;
         let key = to.map(crypt::new_key).transpose()?;
@@ -4256,14 +4304,17 @@ impl Store {
         }
         let _lock = self.lock_waiting(crate::settings_sync::lock_wait())?;
         let mut notes: Vec<String> = self.pull()?.into_iter().collect();
-        let leftover = self.dir.join(crate::action_log::LEFTOVER_FILE);
-        let aside_before = leftover.exists();
+        let aside_before = self.leftovers();
         let files = change(self)?;
-        if !aside_before && leftover.exists() {
+        for moved in self
+            .leftovers()
+            .iter()
+            .filter(|p| !aside_before.contains(p))
+        {
             notes.push(format!(
                 "A plain actions.json beside the encrypted history was never read, so it was \
                  left out of the decrypted history and moved aside to {}.",
-                leftover.display()
+                moved.display()
             ));
         }
         // What finding actions did, left as it was when it couldn't be read.

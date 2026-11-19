@@ -84,9 +84,18 @@ pub const MAX_OTHER_BYTES: usize = 8 * 1024;
 pub const CANCELLED: &str = "cancelled";
 /// The working copy's file of saves whose push failed ([`replay_pending`]).
 pub(crate) const PENDING_FILE: &str = "pathwarden-actions-pending.json";
-/// Where decrypting moves a plain actions.json that sat, never read,
-/// beside the encrypted history.
-pub const LEFTOVER_FILE: &str = "actions.json.leftover";
+/// The start of the name decrypting moves a plain actions.json to (one
+/// that sat, never read, beside the encrypted history): in the working
+/// copy's `.git` (`pathwarden-actions.json.leftover-<date>`), where no
+/// commit can pick it up; in a folder history, beside it
+/// (`actions.json.leftover-<date>`).
+pub const LEFTOVER_PREFIX: &str = "actions.json.leftover-";
+/// What a save says on the command line when it is kept here but not
+/// pushed.
+pub const SAVED_HERE_WORDS: &str =
+    "Saved on this computer; not pushed yet: it will be retried with the next sync.";
+/// Notes about saves moved aside, kept until a save or pull says them.
+const NOTES_FILE: &str = "pathwarden-actions-pending.notes";
 /// What a save says when it is kept here but not pushed.
 pub const NOT_PUSHED_WORDS: &str = "Not pushed yet: it will be retried with the next sync.";
 
@@ -926,6 +935,34 @@ fn write(store: &Store, change: &Change) -> Result<Vec<String>> {
 /// a push that failed with the change committed here ([`KeptUnpushed`])
 /// is one of them, not an error.
 pub fn save(store: &Store, change: &Change, push: bool) -> Result<Vec<String>> {
+    Ok(save_reporting(store, change, push)?.notes)
+}
+
+/// What [`save_reporting`] did.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Saved {
+    /// Notes for the user.
+    pub notes: Vec<String>,
+    /// In the run history for everyone (pushed, or a folder history);
+    /// false when it is kept on this computer for the next sync.
+    pub pushed: bool,
+}
+
+/// Whether `e` is the log refusing a save (a newer, damaged or unreadable
+/// file, one an older release left encrypted): nothing a later sync fixes.
+fn is_refusal(e: &anyhow::Error) -> bool {
+    e.chain().any(|c| {
+        c.downcast_ref::<LogError>().is_some()
+            || [LEFT_SEALED_WORDS, UNREADABLE_WORDS].contains(&c.to_string().as_str())
+    })
+}
+
+/// [`save`], saying whether the change reached the run history: a push
+/// that failed for a reason that can go away (the remote out of reach,
+/// another computer pushing first too often) keeps it here for the next
+/// sync ([`NOT_PUSHED_WORDS`], `pushed: false`); one the remote's log
+/// refuses (newer, damaged, unreadable) drops it and is the error.
+pub fn save_reporting(store: &Store, change: &Change, push: bool) -> Result<Saved> {
     if store.is_git() && !push {
         bail!(
             "This computer only reads the run history ([state] push = false), so what the \
@@ -937,22 +974,41 @@ pub fn save(store: &Store, change: &Change, push: bool) -> Result<Vec<String>> {
     // push. (A refused write never gets here.)
     notes.extend(add_pending(store, change)?);
     if store.is_git() {
-        match store.publish_with(MESSAGE, || {
+        let pushed = match store.publish_with(MESSAGE, || {
             write(store, change)?;
             Ok(Some(MESSAGE.to_string()))
         }) {
-            Ok(p) => notes.extend(p.notes),
+            Ok(p) => {
+                notes.extend(p.notes);
+                true
+            }
             Err(e) => match e.downcast::<KeptUnpushed>() {
                 Ok(kept) => {
                     notes.extend(kept.notes.clone());
                     notes.push(kept.sentence("It is saved"));
+                    false
+                }
+                Err(e) if is_refusal(&e) => {
+                    // The remote's log won't take it, now or later.
+                    let _ = remove_pending(store, change);
+                    return Err(e);
                 }
                 // Kept here (the saves waiting for a push), so not lost.
-                Err(e) => notes.push(format!("{NOT_PUSHED_WORDS} ({e:#})")),
+                Err(e) => {
+                    notes.push(format!("{NOT_PUSHED_WORDS} ({e:#})"));
+                    false
+                }
             },
-        }
+        };
+        return Ok(Saved {
+            notes: crate::store::once_each(notes),
+            pushed,
+        });
     }
-    Ok(crate::store::once_each(notes))
+    Ok(Saved {
+        notes: crate::store::once_each(notes),
+        pushed: true,
+    })
 }
 
 // ------------------------------------------------------------- pending
@@ -980,41 +1036,105 @@ pub(crate) fn pending_plain(store: &Store) -> Option<Vec<u8>> {
     crypt::open(&key, &bytes, PENDING_FILE).ok()
 }
 
-/// The saves kept here, and a note when the file couldn't be opened or
-/// read: it is then moved aside (never treated as empty in place), and
-/// the list starts again. An error only when the history's own key isn't
-/// at hand (then nothing of the history can be written either).
-fn try_read_pending(store: &Store) -> Result<(Pending, Option<String>)> {
+/// `<dir>/<base>`, or with `-2`, `-3`… when that name is taken: a file
+/// moved aside never replaces another.
+pub(crate) fn unique_path(dir: &std::path::Path, base: &str) -> std::path::PathBuf {
+    let first = dir.join(base);
+    if std::fs::symlink_metadata(&first).is_err() {
+        return first;
+    }
+    (2..)
+        .map(|n| dir.join(format!("{base}-{n}")))
+        .find(|p| std::fs::symlink_metadata(p).is_err())
+        .expect("some free name")
+}
+
+/// A short stamp of now for a name: `20261118T140211`.
+pub(crate) fn name_stamp() -> String {
+    let stamp = now_at().replace([':', '-'], "");
+    stamp[..15].to_string()
+}
+
+/// Keeps `note` until a save or a pull says it ([`take_notes`]).
+fn keep_note(store: &Store, note: &str) {
+    let mut text = store
+        .read_local_file(NOTES_FILE)
+        .map(|b| String::from_utf8_lossy(&b).into_owned())
+        .unwrap_or_default();
+    text.push_str(note);
+    text.push('\n');
+    let _ = store.write_local_file(NOTES_FILE, text.as_bytes());
+}
+
+/// The notes kept for the user ([`keep_note`]), each once.
+fn take_notes(store: &Store) -> Vec<String> {
+    let Some(bytes) = store.read_local_file(NOTES_FILE) else {
+        return Vec::new();
+    };
+    let _ = store.remove_local_file(NOTES_FILE);
+    String::from_utf8_lossy(&bytes)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// The saves kept here. A file that can't be opened or read (sealed in a
+/// history that isn't encrypted any more, sealed with another key,
+/// damaged) is moved aside, never treated as empty in place, and the list
+/// starts again; the note naming it is kept for the next save or pull
+/// ([`take_notes`]). An error only when the history is encrypted and its
+/// own key isn't at hand (then nothing of the history can be written
+/// either).
+fn try_read_pending(store: &Store) -> Result<Pending> {
     let Some(bytes) = store.read_local_file(PENDING_FILE) else {
-        return Ok((Pending::default(), None));
+        return Ok(Pending::default());
     };
     let plain = if bytes.starts_with(AGE_HEADER) {
-        let key = crypt::key_for(&store.dir)?;
-        crypt::open(&key, &bytes, PENDING_FILE).ok()
+        if crypt::is_encrypted(&store.dir) {
+            let key = crypt::key_for(&store.dir)?;
+            crypt::open(&key, &bytes, PENDING_FILE).ok()
+        } else {
+            // Sealed, and the history was decrypted elsewhere: its key
+            // is gone.
+            None
+        }
     } else {
         Some(bytes)
     };
     if let Some(p) = plain.and_then(|b| serde_json::from_slice::<Pending>(&b).ok()) {
-        return Ok((p, None));
+        return Ok(p);
     }
-    let stamp = now_at().replace([':', '-'], "");
-    let aside = format!("{PENDING_FILE}.unreadable-{}", &stamp[..15]);
-    let from = store.dir.join(".git").join(PENDING_FILE);
-    let to = store.dir.join(".git").join(&aside);
+    let git = store.dir.join(".git");
+    let from = git.join(PENDING_FILE);
+    let to = unique_path(&git, &format!("{PENDING_FILE}.unreadable-{}", name_stamp()));
     std::fs::rename(&from, &to).with_context(|| format!("moving {} aside", from.display()))?;
-    Ok((
-        Pending::default(),
-        Some(format!(
-            "The saves of finding actions waiting here for a push couldn't be opened (an \
-             older Pathwarden changed the history's storage, or the file was damaged), so \
-             they were moved aside to {}; new saves are kept again from now on.",
+    keep_note(
+        store,
+        &format!(
+            "The saves of finding actions waiting here for a push couldn't be opened (the \
+             history's storage changed, or the file was damaged), so they were moved aside to \
+             {}; new saves are kept again from now on.",
             to.display()
-        )),
-    ))
+        ),
+    );
+    Ok(Pending::default())
 }
 
 fn read_pending(store: &Store) -> Pending {
-    try_read_pending(store).map(|(p, _)| p).unwrap_or_default()
+    try_read_pending(store).unwrap_or_default()
+}
+
+/// Drops `change` from the saves kept here.
+fn remove_pending(store: &Store, change: &Change) -> Result<()> {
+    if !store.is_git() {
+        return Ok(());
+    }
+    with_pending_lock(store, || {
+        let mut p = try_read_pending(store)?;
+        p.changes.retain(|c| c != change);
+        write_pending(store, &p)
+    })
 }
 
 /// Writes the saves kept here: encrypted with the history's key when the
@@ -1039,6 +1159,21 @@ fn write_pending(store: &Store, p: &Pending) -> Result<()> {
 /// other not: a cancelled run's quick save). Waits up to 2 s; a lock older
 /// than 30 s is left from a crash and taken over.
 fn with_pending_lock<T>(store: &Store, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    let _lock = lock_pending(store)?;
+    f()
+}
+
+/// The pending file's own lock, held while it lives.
+pub(crate) struct PendingLock(std::path::PathBuf);
+
+impl Drop for PendingLock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Takes the pending file's own lock ([`with_pending_lock`]).
+pub(crate) fn lock_pending(store: &Store) -> Result<PendingLock> {
     let path = store.dir.join(".git").join(format!("{PENDING_FILE}.lock"));
     let start = std::time::Instant::now();
     loop {
@@ -1085,25 +1220,23 @@ fn with_pending_lock<T>(store: &Store, f: impl FnOnce() -> Result<T>) -> Result<
             }
         }
     }
-    let out = f();
-    let _ = std::fs::remove_file(&path);
-    out
+    Ok(PendingLock(path))
 }
 
 /// Keeps `change` until a push carries it. A note when the saves kept
 /// before couldn't be opened and were moved aside.
-fn add_pending(store: &Store, change: &Change) -> Result<Option<String>> {
+fn add_pending(store: &Store, change: &Change) -> Result<Vec<String>> {
     if !store.is_git() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     with_pending_lock(store, || {
-        let (mut p, note) = try_read_pending(store)?;
+        let mut p = try_read_pending(store)?;
         if !p.changes.contains(change) {
             p.changes.push(change.clone());
         }
-        write_pending(store, &p)?;
-        Ok(note)
-    })
+        write_pending(store, &p)
+    })?;
+    Ok(take_notes(store))
 }
 
 /// After a pull: the saves here no push carried yet, made again on what
@@ -1111,15 +1244,23 @@ fn add_pending(store: &Store, change: &Change) -> Result<Option<String>> {
 /// the next commit carries them. Nothing when there are none; a note when
 /// they can't be made (the log can't be read), and they are kept.
 pub fn replay_pending(store: &Store) -> Option<String> {
-    let (p, aside) = match with_pending_lock(store, || try_read_pending(store)) {
-        Ok(read) => read,
-        Err(_) => return None,
-    };
-    if aside.is_some() {
-        return aside;
-    }
-    if p.changes.is_empty() {
+    if !store.is_git() {
         return None;
+    }
+    let read = with_pending_lock(store, || try_read_pending(store));
+    let mut notes = take_notes(store);
+    let p = match read {
+        Ok(p) => p,
+        Err(e) => {
+            notes.push(format!(
+                "The saves of finding actions waiting here for a push couldn't be read: {e:#}. \
+                 They are kept on this computer."
+            ));
+            return Some(notes.join(" "));
+        }
+    };
+    if p.changes.is_empty() {
+        return (!notes.is_empty()).then(|| notes.join(" "));
     }
     let result = (|| -> Result<()> {
         let mut file = load(store)?;
@@ -1132,12 +1273,13 @@ pub fn replay_pending(store: &Store) -> Option<String> {
         crate::store::write_state_file(&store.dir, FILE, &file.to_bytes())?;
         Ok(())
     })();
-    result.err().map(|e| {
-        format!(
+    if let Err(e) = result {
+        notes.push(format!(
             "What finding actions did here that wasn't pushed yet couldn't be put back on the \
              history: {e:#}. It is kept on this computer."
-        )
-    })
+        ));
+    }
+    (!notes.is_empty()).then(|| notes.join(" "))
 }
 
 /// After a push: the saves it carried are dropped from those kept here.
@@ -1151,7 +1293,7 @@ pub fn prune_pending(store: &Store) {
         return;
     };
     let _ = with_pending_lock(store, || {
-        let (mut p, _) = try_read_pending(store)?;
+        let mut p = try_read_pending(store)?;
         let before = p.changes.len();
         p.changes.retain(|c| !c.is_in(&file));
         if p.changes.len() != before {
@@ -1183,7 +1325,7 @@ pub fn save_here(store: &Store, change: &Change, locked: bool) -> Result<Vec<Str
     } else {
         bail!("the run history is in use, so the cancelled run wasn't saved");
     }
-    Ok(add_pending(store, change)?.into_iter().collect())
+    add_pending(store, change)
 }
 
 /// Sets what actions did on each of `findings` and `resolved` from `file`

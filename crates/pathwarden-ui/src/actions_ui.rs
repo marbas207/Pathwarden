@@ -112,6 +112,12 @@ pub fn activity_for(ws: &Workspace, fingerprint: &str) -> Vec<Activity> {
 /// pushed when it is in git. Notes for the user; the error says why it
 /// wasn't saved.
 pub fn save_change(ws: &Workspace, change: &Change) -> Result<Vec<String>, String> {
+    save_change_reporting(ws, change).map(|s| s.notes)
+}
+
+/// [`save_change`], saying whether it reached the run history
+/// ([`action_log::Saved::pushed`]).
+pub fn save_change_reporting(ws: &Workspace, change: &Change) -> Result<action_log::Saved, String> {
     let config = ws.config().map_err(|e| format!("{e:#}"))?;
     let loc = crate::history_ui::locate_with(ws, None, &config)?;
     if !loc.records() {
@@ -128,8 +134,12 @@ pub fn save_change(ws: &Workspace, change: &Change) -> Result<Vec<String>, Strin
         .store
         .pull()
         .map_err(|e| format!("Couldn't get the latest history: {e:#}"))?;
-    let notes = action_log::save(&loc.store, change, loc.push).map_err(|e| format!("{e:#}"))?;
-    Ok(pulled.into_iter().chain(notes).collect())
+    let saved =
+        action_log::save_reporting(&loc.store, change, loc.push).map_err(|e| format!("{e:#}"))?;
+    Ok(action_log::Saved {
+        notes: pulled.into_iter().chain(saved.notes).collect(),
+        pushed: saved.pushed,
+    })
 }
 
 /// What saving a run's outcome did ([`save_outcome`]).
@@ -139,6 +149,9 @@ pub struct SavedOutcome {
     pub saved: bool,
     /// Notes for the user (a push that failed with it committed here).
     pub notes: Vec<String>,
+    /// In the run history for everyone; false when kept on this computer
+    /// for the next sync.
+    pub pushed: bool,
 }
 
 /// Saves what a run of `ready`'s action did on its finding, at once: an
@@ -165,8 +178,12 @@ pub fn save_outcome(
     ) else {
         return Ok(SavedOutcome::default());
     };
-    let notes = save_change(ws, &change)?;
-    Ok(SavedOutcome { saved: true, notes })
+    let s = save_change_reporting(ws, &change)?;
+    Ok(SavedOutcome {
+        saved: true,
+        notes: s.notes,
+        pushed: s.pushed,
+    })
 }
 
 /// [`save_outcome`] for a run someone stopped (Ctrl-C, Cancel): one quick
@@ -205,7 +222,11 @@ pub fn save_outcome_quick(
     let lock = loc.store.lock().ok();
     let notes =
         action_log::save_here(&loc.store, &change, lock.is_some()).map_err(|e| format!("{e:#}"))?;
-    Ok(SavedOutcome { saved: true, notes })
+    Ok(SavedOutcome {
+        saved: true,
+        notes,
+        pushed: !loc.store.is_git(),
+    })
 }
 
 /// Removes record `record_id` from finding `fingerprint` (any case), and
