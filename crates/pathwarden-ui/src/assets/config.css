@@ -384,8 +384,8 @@ pre.code { margin: 8px 0 0; max-height: 340px; overflow: auto; font: 0.8rem/1.5 
 .sync-conflict p { margin: 0; }
 .note.sync-conflict.dismissable { align-items: center; padding-top: 12px; padding-bottom: 12px; }
 .note.sync-conflict.dismissable > .ic { margin-top: 0; }
-.note.sync-conflict .sync-dismiss { align-self: center; margin-top: 0; font-size: 0.84rem; color: var(--muted); }
-.note.sync-conflict .sync-dismiss:hover { color: var(--ink); }
+.note.sync-conflict .sync-dismiss { align-self: center; margin-top: 0; font-size: 0.84rem; color: var(--muted); text-decoration: none; }
+.note.sync-conflict .sync-dismiss:hover { color: var(--ink); text-decoration: underline; }
 /* What the last merge brought, under the note; the note once dismissed. */
 .sync-merged, .sync-quiet { display: flex; align-items: center; gap: 8px; margin: -6px 0 16px 2px; font-size: 0.84rem; color: var(--muted); }
 .sync-merged .ic, .sync-quiet .ic { width: 15px; height: 15px; flex: none; }
