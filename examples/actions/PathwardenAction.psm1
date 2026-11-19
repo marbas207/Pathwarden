@@ -259,12 +259,15 @@ function Get-PathwardenSecret {
         if ($Optional) { return $null }
         throw "Set $($Name)_env in this action's settings to the name of the environment variable that holds the $Name."
     }
-    $value = [Environment]::GetEnvironmentVariable([string]$var)
+    # A stray newline or space would end up in a header: trim it.
+    $value = [string][Environment]::GetEnvironmentVariable([string]$var)
+    $value = $value.Trim()
     if (-not $value) {
         if ($Optional) { return $null }
         throw "The environment variable $var (named by $($Name)_env) isn't set for this account."
     }
-    if (-not $script:Secrets.Contains($value)) { $script:Secrets.Add($value) }
+    # Shorter values aren't taken out of messages: they would replace ordinary text.
+    if ($value.Length -ge 4 -and -not $script:Secrets.Contains($value)) { $script:Secrets.Add($value) }
     $value
 }
 

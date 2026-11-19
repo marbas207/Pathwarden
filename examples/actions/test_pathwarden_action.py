@@ -226,6 +226,19 @@ class SecretTests(unittest.TestCase):
 
         self.assertEqual(Run(request(settings=settings), {"open": failed_}, env=env).answer["message"], "No: [hidden]")
 
+    def test_a_pasted_secret_is_trimmed_and_a_long_message_is_scrubbed_before_its_cut(self):
+        req = pw.Request(request(settings={"token_env": "DESK_TOKEN"}), env={"DESK_TOKEN": " tok-1a2b3c4d\n"})
+        self.assertEqual(req.secret("token"), "tok-1a2b3c4d")
+        settings = {"token_env": "DESK_TOKEN"}
+        env = {"DESK_TOKEN": "tok-1a2b3c4d"}
+
+        def long_(req):
+            token = req.secret("token")
+            return pw.failed("x" * (pw.MAX_MESSAGE - 4) + token)
+
+        r = Run(request(settings=settings), {"open": long_}, env=env)
+        self.assertNotIn("tok-", r.answer["message"])
+
     def test_messages_show_only_the_scheme_host_and_port(self):
         self.assertEqual(pw._shown("https://hooks.example.com/services/T0/B0/SECRET?k=v#f"), "https://hooks.example.com")
         self.assertEqual(pw._shown("https://user:pw@desk.example.com:8443/a"), "https://desk.example.com:8443")

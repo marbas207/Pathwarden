@@ -166,6 +166,8 @@ def _utf8_streams() -> None:
 # prints is saved on the finding and shared with the history.
 _secrets: set = set()
 HIDDEN = "[hidden]"
+# Shorter values aren't taken out: they would replace ordinary text.
+MIN_SECRET = 4
 
 
 def _scrub(text: str) -> str:
@@ -270,12 +272,15 @@ class Request:
                     f"Set {name}_env in this action's settings to the name of the environment variable that holds the {name}."
                 )
             return None
-        value = self.env.get(str(var))
+        # A stray newline or space (common when a token is pasted) would
+        # end up in a header, and an error quoting it would get past _scrub.
+        value = (self.env.get(str(var)) or "").strip()
         if not value:
             if required:
                 raise Failed(f"The environment variable {var} (named by {name}_env) isn't set for this account.")
             return None
-        _secrets.add(value)
+        if len(value) >= MIN_SECRET:
+            _secrets.add(value)
         return value
 
     def http(
@@ -454,7 +459,7 @@ def clean_result(result: Any) -> Tuple[dict, List[str]]:
     if not isinstance(result, Mapping):
         raise TypeError(f"an action must return pw.ok(...), pw.failed(...), a message or None, not {type(result).__name__}")
     out: Dict[str, Any] = {"schema": RESULT_SCHEMA, "ok": bool(result.get("ok", False))}
-    message, cut = _clean(result.get("message") or "", MAX_MESSAGE, lines=True)
+    message, cut = _clean(_scrub(result.get("message") or ""), MAX_MESSAGE, lines=True)
     if cut:
         notes.append(f"message is longer than {MAX_MESSAGE} characters; it was cut")
     out["message"] = message
