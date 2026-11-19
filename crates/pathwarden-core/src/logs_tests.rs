@@ -391,3 +391,39 @@ fn panic_child() {
     log.line("reading ACLs: 61%");
     panic!("boom with token=Zq-secret-1234");
 }
+
+/// A crash report of another run's job goes in without that job's lines.
+#[test]
+fn another_jobs_crash_comes_without_its_lines() {
+    let t = tmp("crashhead");
+    let mine = JobLog::open_in(&t.0, Kind::Collect, By::App, "MINE").unwrap();
+    let other = JobLog::open_in(&t.0, Kind::Collect, By::App, "OTHER").unwrap();
+    other.line("secret-ish line of the other run");
+    note_run(&t.0, "run-mine", mine.name());
+    let job = |l: &Arc<JobLog>| JobRef {
+        kind: l.kind(),
+        by: l.by(),
+        subject: String::new(),
+        name: l.name().into(),
+        path: l.path().into(),
+    };
+    let crash = |j: Option<JobRef>| Crash {
+        message: "boom".into(),
+        location: "x.rs:1:1".into(),
+        thread: "t".into(),
+        backtrace: "   0: frame".into(),
+        system: "Test OS".into(),
+        job: j,
+    };
+    let theirs = crash(Some(job(&other))).write_in(&t.0).unwrap();
+    let ours = crash(Some(job(&mine))).write_in(&t.0).unwrap();
+    let got = for_bundle(&t.0, now(), Some("run-mine"));
+    let text = |n: &str| got.iter().find(|(f, _)| f == n).unwrap().1.clone();
+    let head = text(&theirs);
+    assert!(
+        head.contains("Message: boom") && !head.contains("frame"),
+        "{head}"
+    );
+    assert!(!head.contains("secret-ish"), "{head}");
+    assert!(text(&ours).contains("Backtrace:"));
+}

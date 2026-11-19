@@ -544,6 +544,8 @@ pub fn targeted_with(
         }
     };
     let dir = ws.run_dir(&run.id).context("the run's folder is missing")?;
+    // This retest's log goes in the run's diagnostics, as from the app.
+    pathwarden_core::logs::note_run_current(&run.id);
     // As the dialog: a run from the history never picks where this computer
     // signs in, so its domain is given.
     let domain = match (&args.domain, run.shared.is_some()) {

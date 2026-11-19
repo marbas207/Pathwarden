@@ -162,17 +162,18 @@ impl By {
 
 // ------------------------------------------------------------------ folder
 
-/// The logs folder (not created): [`TEST_DIR_ENV`] when set; else `None`
-/// in a debug build, or when run by cargo (`cargo test`, `cargo run`: it
-/// sets `CARGO_MANIFEST_DIR` for what it runs, so a release-mode test and
-/// the programs it starts write no logs either), or when this account's
-/// environment doesn't say where its data is.
+/// The logs folder (not created). In a debug build, or when run by cargo
+/// (`cargo test`, `cargo run`: it sets `CARGO_MANIFEST_DIR` for what it
+/// runs, so a release-mode test and the programs it starts too), only
+/// [`TEST_DIR_ENV`], else none. Otherwise this account's folder; `None`
+/// when its environment doesn't say where its data is.
 pub fn dir() -> Option<PathBuf> {
-    if let Some(d) = std::env::var_os(TEST_DIR_ENV).filter(|v| !v.is_empty()) {
-        return Some(PathBuf::from(d));
-    }
-    if cfg!(debug_assertions) || std::env::var_os("CARGO_MANIFEST_DIR").is_some() {
-        return None;
+    let testing = cfg!(debug_assertions) || std::env::var_os("CARGO_MANIFEST_DIR").is_some();
+    if testing {
+        // A release build run by itself never takes the test folder.
+        return std::env::var_os(TEST_DIR_ENV)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from);
     }
     dir_from(|n| std::env::var_os(n), cfg!(windows))
 }
@@ -1293,7 +1294,11 @@ fn prune_index(dir: &Path, file: &str) {
     if !out.is_empty() {
         out.push('\n');
     }
-    let _ = fs::write(&path, out);
+    // Replaced whole: a crash meanwhile leaves the old one or the new.
+    let tmp = dir.join(format!(".{file}.{}", std::process::id()));
+    if fs::write(&tmp, out).is_ok() && fs::rename(&tmp, &path).is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
 }
 
 // ---------------------------------------------------------- diagnostics
@@ -1317,6 +1322,25 @@ pub fn for_bundle(dir: &Path, now: i64, run: Option<&str>) -> Vec<(String, Strin
     for f in jobs.chain(recent) {
         if left == 0 {
             break;
+        }
+        // A crash report of another run's job: its fields, not that job's
+        // lines.
+        if f.name.starts_with("crash-") {
+            let job = CrashReport::read(&f.path).and_then(|c| c.job_log);
+            let ours = job
+                .as_deref()
+                .is_none_or(|j| j.starts_with("session-") || own.iter().any(|o| o == j));
+            if !ours {
+                if let Some(head) = tail_text_head(&f.path) {
+                    let head = head.split("\nBacktrace:").next().unwrap_or_default();
+                    let t = format!(
+                        "{head}\n\n(the rest is left out: the job it names is another run's)\n"
+                    );
+                    left = left.saturating_sub(t.len() as u64);
+                    out.push((f.name.clone(), t));
+                }
+                continue;
+            }
         }
         let text = if f.bytes <= left {
             fs::read(&f.path)

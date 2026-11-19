@@ -382,3 +382,12 @@ the repository.
 | The build is very slow on Windows | Antivirus scanning of `target\` is the usual cause. Exclude the repository's `target` folder if your policy allows, or build on a Dev Drive. |
 | The disk fills up | `target\` grows to several GB. `cargo clean` empties it. |
 | `error: this Pathwarden build has no built-in collector` | You're running the lean build. Use the full build, or pass `--sharphound PATH` / `--rusthound PATH` to `pathwarden collect`. |
+
+## Logs in tests
+
+A debug build, or any build cargo runs (`cargo test`, `cargo run`: cargo
+sets `CARGO_MANIFEST_DIR` for what it runs, and the programs a test starts
+inherit it), writes no logs unless `PATHWARDEN_TEST_LOGS` names a folder;
+outside those, `PATHWARDEN_TEST_LOGS` is ignored. So no test ever writes
+this account's `%LOCALAPPDATA%\Pathwarden\logs`
+([`crates/pathwarden-core/src/logs.rs`](../../crates/pathwarden-core/src/logs.rs) `dir`).

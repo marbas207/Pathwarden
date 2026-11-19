@@ -830,6 +830,8 @@ fn run_one(
     note_plain(ws);
     let ready = actions_ui::prepare(ws, blocks, ask.run.as_deref(), fingerprint, &ask.ask())
         .map_err(anyhow::Error::msg)?;
+    // This action's log goes in the run's diagnostics, as from the app.
+    pathwarden_core::logs::note_run_current(&ready.run.id);
     start(ws, &ready, yes, json)
 }
 

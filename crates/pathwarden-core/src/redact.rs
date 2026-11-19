@@ -101,27 +101,41 @@ pub fn register_secret(value: &str) {
     }
 }
 
+/// Values masked while a guard holds them ([`mask_while`]), with how many
+/// guards hold each.
+static HELD: Mutex<Vec<(zeroize::Zeroizing<String>, usize)>> = Mutex::new(Vec::new());
+
 /// Masks `value` in every [`log_line`] while the guard lives: a password
-/// or passphrase typed into a form, for the job it is typed for.
+/// or passphrase typed into a form, for the job it is typed for. Values
+/// shorter than 4 characters are ignored, as by [`register_secret`].
 pub fn mask_while(value: &str) -> Masked {
-    let v = value.trim().to_string();
-    let added = {
-        let all = SECRETS.lock().unwrap_or_else(|e| e.into_inner());
-        !all.iter().any(|s| s.as_str() == v)
-    };
-    register_secret(&v);
-    Masked(added.then(|| zeroize::Zeroizing::new(v)))
+    let v = value.trim();
+    if v.chars().count() < 4 {
+        return Masked(None);
+    }
+    let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+    match held.iter_mut().find(|(s, _)| s.as_str() == v) {
+        Some((_, n)) => *n += 1,
+        None => held.push((zeroize::Zeroizing::new(v.to_string()), 1)),
+    }
+    Masked(Some(zeroize::Zeroizing::new(v.to_string())))
 }
 
-/// [`mask_while`]'s guard: the value stops being masked when it drops
-/// (unless it was masked before).
+/// [`mask_while`]'s guard: the value stops being masked when its last
+/// guard drops. A value [`register_secret`] took (from the environment)
+/// stays masked.
 pub struct Masked(Option<zeroize::Zeroizing<String>>);
 
 impl Drop for Masked {
     fn drop(&mut self) {
         if let Some(v) = self.0.take() {
-            let mut all = SECRETS.lock().unwrap_or_else(|e| e.into_inner());
-            all.retain(|s| s.as_str() != v.as_str());
+            let mut held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(i) = held.iter().position(|(s, _)| s.as_str() == v.as_str()) {
+                held[i].1 -= 1;
+                if held[i].1 == 0 {
+                    held.swap_remove(i);
+                }
+            }
         }
     }
 }
@@ -145,6 +159,12 @@ pub fn log_line(line: &str) -> String {
     {
         let all = SECRETS.lock().unwrap_or_else(|e| e.into_inner());
         for s in all.iter() {
+            if out.contains(s.as_str()) {
+                out = out.replace(s.as_str(), MASK);
+            }
+        }
+        let held = HELD.lock().unwrap_or_else(|e| e.into_inner());
+        for (s, _) in held.iter() {
             if out.contains(s.as_str()) {
                 out = out.replace(s.as_str(), MASK);
             }
@@ -216,6 +236,19 @@ fn mask_url(url: &str) -> String {
         if matches && path.to_ascii_lowercase().starts_with(start) && path.len() > start.len() {
             b = format!("{}{start}{MASK}", &base[..host_end]);
             break;
+        }
+    }
+    // Any path segment `hook`, `hooks` or `webhook*`: what follows is the
+    // secret (Outlook connectors, Zapier, Mattermost and the like).
+    if b == base {
+        let segs: Vec<&str> = path.split('/').collect();
+        if let Some(i) = segs.iter().position(|s| {
+            let s = s.to_ascii_lowercase();
+            s == "hook" || s == "hooks" || s.starts_with("webhook")
+        }) {
+            if segs.len() > i + 1 && segs[i + 1..].iter().any(|s| !s.is_empty()) {
+                b = format!("{}{}/{MASK}", &base[..host_end], segs[..=i].join("/"));
+            }
         }
     }
     match query {

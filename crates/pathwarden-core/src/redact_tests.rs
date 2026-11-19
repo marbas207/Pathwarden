@@ -131,3 +131,18 @@ fn a_typed_secret_is_masked_for_its_job() {
         "bind as x with Typed-Form-Secret-77"
     );
 }
+
+/// Two holders of one value: masked until the last drops; a value from
+/// the environment stays masked whatever a guard does.
+#[test]
+fn masks_are_counted_and_env_values_stay() {
+    let a = mask_while("Counted-Secret-123");
+    let b = mask_while("Counted-Secret-123");
+    drop(a);
+    assert_eq!(log_line("x Counted-Secret-123"), "x ***");
+    drop(b);
+    assert_eq!(log_line("x Counted-Secret-123"), "x Counted-Secret-123");
+    register_secret("Env-Secret-456");
+    drop(mask_while("Env-Secret-456"));
+    assert_eq!(log_line("x Env-Secret-456"), "x ***");
+}

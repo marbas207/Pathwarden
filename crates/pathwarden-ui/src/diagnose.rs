@@ -608,23 +608,35 @@ fn logs_of(logs: Option<&Path>, run: Option<&str>) -> Vec<(String, String)> {
         .unwrap_or_default()
 }
 
-/// The names of every environment's runs of the last
-/// [`pathwarden_core::logs::BUNDLE_DAYS`] days, added to `scan`: a session
-/// log or crash report can name any of them.
+/// The names a session log can hold from every environment's runs of the
+/// last [`pathwarden_core::logs::BUNDLE_DAYS`] days, from their summaries
+/// (no object index is read): their domains, each domain's first label
+/// (its NetBIOS name as a rule), the domain controller chosen and the
+/// label. A session log names jobs, not their objects; crash reports of
+/// other runs' jobs come without their log lines
+/// ([`pathwarden_core::logs::for_bundle`]). The environments' names are
+/// [`known_names`]'.
 fn recent_names(ws: &Workspace, scan: &mut NameScan) {
     let since = pathwarden_core::analyze::now() - pathwarden_core::logs::BUNDLE_DAYS * 86_400;
     for r in ws.all_runs().iter().filter(|r| r.created_at >= since) {
-        for d in r.domains.iter().chain(r.trusted_domains.iter().flatten()) {
-            scan.add_domain(d);
-        }
-        let Some(dir) = ws.for_run(r).run_dir(&r.id) else {
-            continue;
-        };
-        if let Some(index) = crate::run_data::read_gz(&dir.join(crate::run_data::OBJECTS_FILE))
-            .ok()
-            .and_then(|b| serde_json::from_slice::<ObjectIndex>(&b).ok())
+        let collected = r.collection.as_ref().map(|c| c.domain.as_str());
+        for d in r
+            .domains
+            .iter()
+            .map(String::as_str)
+            .chain(r.trusted_domains.iter().flatten().map(String::as_str))
+            .chain(collected)
         {
-            scan.add_index(&index);
+            scan.add_domain(d);
+            if let Some(first) = d.split('.').next().filter(|l| l.len() >= 3) {
+                scan.add_name(first);
+            }
+        }
+        if let Some(s) = r.collection.as_ref().and_then(|c| c.server.as_ref()) {
+            scan.add_name(s);
+        }
+        if let Some(l) = &r.label {
+            scan.add_name(l);
         }
     }
 }

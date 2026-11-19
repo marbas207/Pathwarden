@@ -341,9 +341,10 @@ impl Jobs {
         if let Some(l) = log {
             l.end(outcome, detail);
             if outcome == Outcome::Failed {
+                // The kind only: the details stay in the job's log.
                 pathwarden_core::logs::session_line(&format!(
-                    "{} failed: see {}",
-                    l.title(),
+                    "{} failed (see its job log, {})",
+                    l.kind().title(),
                     l.name()
                 ));
             }
