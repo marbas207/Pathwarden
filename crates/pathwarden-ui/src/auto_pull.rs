@@ -442,7 +442,16 @@ pub fn foot_and_dot(ws: &Workspace, flag: Option<&std::path::Path>) -> (String, 
     (foot_html(ws, flag), settings_dot(ws, flag))
 }
 
-/// [`foot_and_dot`]'s dot.
+/// The last answer of [`settings_dot`] per `pathwarden.toml`, with the
+/// files it read as they were ([`pathwarden_core::settings_sync::dot_inputs`]).
+type DotCache = std::collections::HashMap<
+    std::path::PathBuf,
+    (Vec<pathwarden_core::settings_sync::Input>, bool),
+>;
+static DOTS: std::sync::Mutex<Option<DotCache>> = std::sync::Mutex::new(None);
+
+/// [`foot_and_dot`]'s dot. Worked out again only when a file it reads
+/// changed, so a page or a poll doesn't parse (or decrypt) the settings.
 pub fn settings_dot(ws: &Workspace, flag: Option<&std::path::Path>) -> bool {
     use pathwarden_core::settings_sync;
     let Ok(config) = ws.config() else {
@@ -454,14 +463,34 @@ pub fn settings_dot(ws: &Workspace, flag: Option<&std::path::Path>) -> bool {
     let Ok(loc) = history_ui::locate_with(ws, flag, &config) else {
         return false;
     };
+    let config_path = ws.config_path();
     let place = settings_sync::Place {
         store: &loc.store,
-        config_path: &ws.config_path(),
+        config_path: &config_path,
         pushes: loc.push,
         env_name: None,
     };
-    settings_sync::differs_key(&place)
-        .is_some_and(|k| settings_sync::dismissed_key(&loc.store).as_deref() != Some(k.as_str()))
+    let inputs = settings_sync::dot_inputs(&place);
+    if let Some((was, dot)) = DOTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .and_then(|m| m.get(&config_path))
+    {
+        if *was == inputs {
+            return *dot;
+        }
+    }
+    let dot = settings_sync::differs_key(&place)
+        .is_some_and(|k| settings_sync::dismissed_key(&loc.store).as_deref() != Some(k.as_str()));
+    let mut m = DOTS.lock().unwrap_or_else(|e| e.into_inner());
+    let m = m.get_or_insert_with(Default::default);
+    // A workspace has a handful of environments; this never grows large.
+    if m.len() > 64 {
+        m.clear();
+    }
+    m.insert(config_path, (inputs, dot));
+    dot
 }
 
 /// The last pull of `ws`'s history in words, when it is a git repository.

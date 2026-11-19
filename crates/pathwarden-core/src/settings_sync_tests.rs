@@ -8,7 +8,8 @@ fn first_sync_words_name_the_sections_and_the_copy() {
     assert_eq!(
         first_sync_words(
             &["Rule settings", "Zones"],
-            &["pathwarden.toml.before-connect-2026-11-18"]
+            &["pathwarden.toml.before-connect-2026-11-18"],
+            false
         ),
         "Rule settings and zones were taken from the run history. This computer's earlier \
          settings are saved in pathwarden.toml.before-connect-2026-11-18."
@@ -16,7 +17,8 @@ fn first_sync_words_name_the_sections_and_the_copy() {
     assert_eq!(
         first_sync_words(
             &["Accepted risks", "Tier Zero additions", "Mapping packs"],
-            &[]
+            &[],
+            true
         ),
         "Accepted risks, Tier Zero additions and mapping packs were taken from the run history."
     );
@@ -65,9 +67,9 @@ fn the_copy_never_overwrites_one() {
     // No pathwarden.toml yet: nothing to save.
     assert_eq!(save_before_connect(&config).unwrap(), None);
     std::fs::write(&config, "[rules]\nstale_days = 90\r\n").unwrap();
-    let a = save_before_connect(&config).unwrap().unwrap();
-    let b = save_before_connect(&config).unwrap().unwrap();
-    let c = save_before_connect(&config).unwrap().unwrap();
+    let a = save_before_connect(&config).unwrap().unwrap().0;
+    let b = save_before_connect(&config).unwrap().unwrap().0;
+    let c = save_before_connect(&config).unwrap().unwrap().0;
     let name = |p: &Path| p.file_name().unwrap().to_string_lossy().into_owned();
     assert!(
         name(&a).starts_with("pathwarden.toml.before-connect-20"),
@@ -238,4 +240,61 @@ fn a_copy_that_fails_replaces_nothing() {
         std::fs::read_to_string(h.dir.join(&h.copies("")[0])).unwrap(),
         local
     );
+}
+
+#[test]
+fn a_file_system_without_permissions_keeps_the_copy() {
+    let local = "[rules]\nstale_days = 90\n";
+    // No permissions to set (FAT, some shares): the copy keeps the
+    // folder's, and the line says so.
+    let h = Here::new("noperm", local, "[rules]\nstale_days = 30\n");
+    PRIVATE_FAILS.with(|f| f.set(Some(true)));
+    let o = h.sync();
+    PRIVATE_FAILS.with(|f| f.set(None));
+    let o = o.unwrap();
+    assert_eq!(o.done.first, ["Rule settings"], "{:?}", o.done);
+    assert!(o.done.folder_rights);
+    assert_eq!(h.copies("").len(), 1);
+    let line = o.sentence().unwrap();
+    assert!(
+        line.contains("are saved in pathwarden.toml.before-connect-")
+            && line.ends_with("The copy keeps the folder's permissions."),
+        "{line}"
+    );
+    // Refused where there are permissions: no copy, nothing replaced.
+    let h = Here::new("permrefused", local, "[rules]\nstale_days = 30\n");
+    PRIVATE_FAILS.with(|f| f.set(Some(false)));
+    let e = h.sync();
+    PRIVATE_FAILS.with(|f| f.set(None));
+    let e = format!("{:#}", e.unwrap_err());
+    assert!(e.contains("private to this account"), "{e}");
+    assert_eq!(std::fs::read_to_string(h.config()).unwrap(), local);
+    assert!(h.copies("").is_empty());
+}
+
+#[test]
+fn a_pack_file_that_isnt_text_is_never_replaced() {
+    let repo = format!(
+        "[[mapping]]\npath = \"packs/acme.toml\"\n\n[[mapping_files]]\npath = \"packs/acme.toml\"\ntext = '''\n{}'''\n",
+        pack("#222")
+    );
+    let h = Here::new(
+        "binary-pack",
+        "[[mapping]]\npath = \"packs/acme.toml\"\n",
+        &repo,
+    );
+    std::fs::create_dir_all(h.dir.join("packs")).unwrap();
+    let bytes = [0xff_u8, 0xfe, 0x00, 0x41, 0x80];
+    std::fs::write(h.dir.join("packs/acme.toml"), bytes).unwrap();
+    let o = h.sync().unwrap();
+    assert!(
+        o.done
+            .skipped
+            .iter()
+            .any(|s| s.contains("which is not a mapping pack")),
+        "{:?}",
+        o.done
+    );
+    assert_eq!(std::fs::read(h.dir.join("packs/acme.toml")).unwrap(), bytes);
+    assert!(h.copies("packs").is_empty());
 }

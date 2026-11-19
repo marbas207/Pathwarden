@@ -691,8 +691,9 @@ pub fn names_in_a_sentence(names: &[&str], first: bool) -> String {
 /// from the run history. This computer's earlier settings are saved in
 /// pathwarden.toml.before-connect-2026-11-18." `backups` are the copies'
 /// names (from the folder of `pathwarden.toml`); none when nothing of this
-/// computer's was replaced.
-pub fn first_sync_words(sections: &[&str], backups: &[&str]) -> String {
+/// computer's was replaced. `folder_rights`: a copy keeps its folder's
+/// permissions (a file system with none to set).
+pub fn first_sync_words(sections: &[&str], backups: &[&str], folder_rights: bool) -> String {
     let mut s = format!(
         "{} were taken from the run history.",
         names_in_a_sentence(sections, true)
@@ -706,6 +707,13 @@ pub fn first_sync_words(sections: &[&str], backups: &[&str]) -> String {
         s.push_str(&format!(
             " This computer's earlier settings are saved in {files}."
         ));
+        if folder_rights {
+            s.push_str(if backups.len() == 1 {
+                " The copy keeps the folder's permissions."
+            } else {
+                " The copies keep the folder's permissions."
+            });
+        }
     }
     s
 }
@@ -1228,6 +1236,57 @@ pub fn differs_key(p: &Place) -> Option<String> {
     key_of_differences(&sections, &local, &repo)
 }
 
+/// A file [`differs_key`] (and so the rail's dot) depends on, with when it
+/// was last written and its size: `None` when it isn't there.
+pub type Input = (PathBuf, Option<(std::time::SystemTime, u64)>);
+
+/// What [`differs_key`] and a dismissal read, as [`Input`]s: this
+/// computer's `pathwarden.toml` and its packs, the repository's shared
+/// settings, the base and the dismissal. While none of these changed, a
+/// cached answer holds; checking costs a few file system lookups.
+pub fn dot_inputs(p: &Place) -> Vec<Input> {
+    let stat = |f: PathBuf| {
+        let m = std::fs::metadata(&f)
+            .ok()
+            .and_then(|m| Some((m.modified().ok()?, m.len())));
+        (f, m)
+    };
+    let git = p.store.dir.join(".git");
+    let mut out = vec![
+        stat(p.config_path.to_path_buf()),
+        stat(p.store.dir.join(SETTINGS_FILE)),
+        stat(
+            p.store
+                .dir
+                .join(format!("{SETTINGS_FILE}{}", crate::crypt::SUFFIX)),
+        ),
+        stat(git.join(BASE_FILE)),
+        stat(git.join(DISMISSED_FILE)),
+    ];
+    // The packs folder, a few levels and files deep: the packs that travel.
+    let mut dirs = vec![(p.dir().join(PACKS_DIR), 0)];
+    let mut files = Vec::new();
+    while let Some((dir, depth)) = dirs.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for e in rd.flatten().take(256) {
+            let path = e.path();
+            match e.file_type() {
+                Ok(t) if t.is_dir() && depth < 4 => dirs.push((path, depth + 1)),
+                Ok(t) if t.is_file() => files.push(path),
+                _ => {}
+            }
+        }
+        if files.len() > 512 {
+            break;
+        }
+    }
+    files.sort();
+    out.extend(files.into_iter().map(stat));
+    out
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct Dismissed {
     #[serde(default)]
@@ -1482,6 +1541,9 @@ pub struct Done {
     /// [`Done::backups`] as the first-sync line names them, from the
     /// folder of `pathwarden.toml` (`packs/acme.toml.before-connect-…`).
     pub backup_names: Vec<String>,
+    /// A copy keeps its folder's permissions: the file system has none to
+    /// set.
+    pub folder_rights: bool,
     /// Sections pushed from here.
     pub pushed: Vec<&'static str>,
     /// The commit's first line, when something was committed.
@@ -1554,7 +1616,7 @@ impl Outcome {
         out.extend(d.notes.iter().cloned());
         if !d.taken.is_empty() {
             let names: Vec<&str> = d.backup_names.iter().map(String::as_str).collect();
-            out.push(first_sync_words(&d.taken, &names));
+            out.push(first_sync_words(&d.taken, &names, d.folder_rights));
         }
         let updates: Vec<&str> = d
             .applied
@@ -1762,6 +1824,7 @@ pub fn sync(p: &Place, resolve: Resolve) -> Result<Outcome> {
         done.taken = unsynced.iter().map(|k| section_name(k)).collect();
         done.backups = applied.backups;
         done.backup_names = applied.backup_names;
+        done.folder_rights = applied.folder_rights;
         done.skipped = applied.skipped;
         for k in &take_repo {
             base.set(k, &r.repo);
@@ -1868,15 +1931,26 @@ fn apply_repo(
                     if lower(&target).starts_with(lower(&state_dir)) {
                         return Err("it would be written into the history folder".into());
                     }
-                    if let Ok(existing) = std::fs::read_to_string(&target) {
-                        // Only a pack replaces a pack: never another file.
-                        if crate::pack_origin::normalize(&existing) != text
-                            && crate::config::check_pack_text(&existing).is_err()
-                        {
-                            return Err(format!(
-                                "it would replace {}, which is not a mapping pack",
-                                target.display()
-                            ));
+                    // Only a pack replaces a pack: never another file, nor
+                    // one that can't be read as text.
+                    let not_a_pack = || {
+                        format!(
+                            "it would replace {}, which is not a mapping pack",
+                            target.display()
+                        )
+                    };
+                    match std::fs::read(&target) {
+                        Ok(bytes) => {
+                            let existing = String::from_utf8(bytes).map_err(|_| not_a_pack())?;
+                            if crate::pack_origin::normalize(&existing) != text
+                                && crate::config::check_pack_text(&existing).is_err()
+                            {
+                                return Err(not_a_pack());
+                            }
+                        }
+                        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(e) => {
+                            return Err(format!("{} can't be read ({e})", target.display()));
                         }
                     }
                     Ok((target, text.to_string()))
@@ -1893,9 +1967,10 @@ fn apply_repo(
                         });
                         // A pack file here the repository's replaces: noted,
                         // for a first sync's copy.
-                        if std::fs::read_to_string(&target)
-                            .is_ok_and(|e| crate::pack_origin::normalize(&e) != text)
-                        {
+                        // (Checked above: absent, or a pack that reads.)
+                        if std::fs::read(&target).is_ok_and(|e| {
+                            crate::pack_origin::normalize(&String::from_utf8_lossy(&e)) != text
+                        }) {
                             let rel = target
                                 .strip_prefix(&canon_dir)
                                 .map(|r| r.to_string_lossy().replace('\\', "/"))
@@ -1947,6 +2022,7 @@ fn apply_repo(
             .collect();
         // Saved before anything is replaced: no copy, no change.
         let mut copies: Vec<(PathBuf, String)> = Vec::new();
+        let mut folder_rights = false;
         if !first.is_empty() {
             let own = p.config_path.file_name().map_or_else(
                 || "pathwarden.toml".into(),
@@ -1958,7 +2034,8 @@ fn apply_repo(
             }
             for (file, name) in sources {
                 match save_before_connect(&file) {
-                    Ok(Some(copy)) => {
+                    Ok(Some((copy, plain))) => {
+                        folder_rights |= plain;
                         let copy_name = copy
                             .file_name()
                             .map(|n| n.to_string_lossy().into_owned())
@@ -1983,10 +2060,10 @@ fn apply_repo(
             }
         }
         write_all(&files)?;
-        Ok((first, copies))
+        Ok((first, copies, folder_rights))
     })
     .map_err(anyhow::Error::msg)?;
-    let (first, copies) = done;
+    let (first, copies, folder_rights) = done;
     let names: Vec<&'static str> = keys.iter().map(|k| section_name(k)).collect();
     // A first sync's notice the app hasn't shown yet stays: this record
     // adds to it.
@@ -2018,6 +2095,7 @@ fn apply_repo(
     let me = Applied {
         first: (!first_names.is_empty()).then_some(first_names),
         backups,
+        folder_rights: folder_rights || earlier.as_ref().is_some_and(|a| a.folder_rights),
         at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs() as i64),
@@ -2035,6 +2113,7 @@ fn apply_repo(
         first,
         backups: copies.iter().map(|(c, _)| c.clone()).collect(),
         backup_names: copies.into_iter().map(|(_, n)| n).collect(),
+        folder_rights,
         skipped,
     })
 }
@@ -2049,6 +2128,9 @@ struct ApplyDone {
     /// `pathwarden.toml`.
     backups: Vec<PathBuf>,
     backup_names: Vec<String>,
+    /// A copy keeps its folder's rights: the file system has no
+    /// permissions to set.
+    folder_rights: bool,
     /// Packs left out, and why.
     skipped: Vec<String>,
 }
@@ -2057,6 +2139,31 @@ struct ApplyDone {
 thread_local! {
     /// Tests: the next copies fail, as a full disk would.
     static FAIL_COPY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Tests: making the next copies private fails: `Some(true)` as on a
+    /// file system without permissions, `Some(false)` as a refusal.
+    static PRIVATE_FAILS: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+/// Whether `e`, from setting a file's permissions, says the file system
+/// has none to set (FAT and exFAT, some SMB and NAS shares): the file then
+/// keeps its folder's rights, as the original does. Any other failure is
+/// a refusal.
+fn permissions_unsupported(e: &std::io::Error) -> bool {
+    if e.kind() == std::io::ErrorKind::Unsupported {
+        return true;
+    }
+    match e.raw_os_error() {
+        // ERROR_INVALID_FUNCTION, ERROR_NOT_SUPPORTED.
+        #[cfg(windows)]
+        Some(1 | 50) => true,
+        // EPERM on a file this process just created is a file system that
+        // keeps no modes (vfat, exFAT); ENOTSUP / EOPNOTSUPP.
+        #[cfg(target_os = "linux")]
+        Some(1 | 95) => true,
+        #[cfg(target_os = "macos")]
+        Some(1 | 45 | 102) => true,
+        _ => false,
+    }
 }
 
 /// Saves a file this computer has (its `pathwarden.toml`, or a mapping
@@ -2065,9 +2172,11 @@ thread_local! {
 /// ... when that one is taken), before a first sync replaces it. Never
 /// overwrites a file. The copy is private to this account (mode 600 from
 /// its creation on Unix; this account, Administrators and SYSTEM on
-/// Windows), and when that can't be set it is removed and the copy fails.
-/// `None` when the file isn't there.
-fn save_before_connect(config_path: &Path) -> Result<Option<PathBuf>, String> {
+/// Windows); when that is refused the copy is removed and fails, and on a
+/// file system with no permissions to set it keeps its folder's rights, as
+/// the original does (the second value then). `None` when the file isn't
+/// there.
+fn save_before_connect(config_path: &Path) -> Result<Option<(PathBuf, bool)>, String> {
     use std::io::Write as _;
     #[cfg(test)]
     if FAIL_COPY.with(std::cell::Cell::get) {
@@ -2107,21 +2216,33 @@ fn save_before_connect(config_path: &Path) -> Result<Option<PathBuf>, String> {
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
             Err(e) => return Err(format!("Could not save {}: {e}", target.display())),
         };
-        // Private before it holds anything, or no copy.
-        if let Err(e) = crate::perms::make_output_file_private(&target) {
-            drop(f);
-            let _ = std::fs::remove_file(&target);
-            return Err(format!(
-                "Could not make {} private to this account: {e}",
-                target.display()
-            ));
-        }
+        // Private before it holds anything, or no copy, unless the file
+        // system has no permissions to set.
+        let private = crate::perms::make_output_file_private(&target);
+        #[cfg(test)]
+        let private = match PRIVATE_FAILS.with(std::cell::Cell::get) {
+            Some(true) => Err(std::io::Error::from(std::io::ErrorKind::Unsupported)),
+            Some(false) => Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied)),
+            None => private,
+        };
+        let folder_rights = match private {
+            Ok(()) => false,
+            Err(e) if permissions_unsupported(&e) => true,
+            Err(e) => {
+                drop(f);
+                let _ = std::fs::remove_file(&target);
+                return Err(format!(
+                    "Could not make {} private to this account: {e}",
+                    target.display()
+                ));
+            }
+        };
         if let Err(e) = f.write_all(&bytes).and_then(|()| f.sync_all()) {
             drop(f);
             let _ = std::fs::remove_file(&target);
             return Err(format!("Could not save {}: {e}", target.display()));
         }
-        return Ok(Some(target));
+        return Ok(Some((target, folder_rights)));
     }
     Err(format!(
         "Could not save a copy of {} before the first sync: too many copies today.",
@@ -2337,6 +2458,10 @@ pub struct Applied {
     /// `packs/acme.toml.before-connect-…`).
     #[serde(default)]
     pub backups: Vec<String>,
+    /// A copy keeps its folder's permissions (a file system without
+    /// permissions to set).
+    #[serde(default)]
+    pub folder_rights: bool,
     /// The app showed it.
     #[serde(default)]
     pub seen: bool,

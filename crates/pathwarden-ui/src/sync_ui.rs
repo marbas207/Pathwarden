@@ -197,7 +197,7 @@ pub fn sync_line(v: &View, page: &str) -> String {
             r#"<div class="note warn sync-conflict dismissed" role="status">{}<div><p>{}: {}.</p></div></div>"#,
             icon("i-alert"),
             crate::pages::SETTINGS_DIFFER,
-            esc(&sections_words(&both))
+            esc(&settings_sync::names_in_a_sentence(&both, false))
         );
     }
     if !both.is_empty() {
@@ -480,7 +480,11 @@ pub fn pulled_note(v: &View) -> String {
         Some(first) if !first.is_empty() => {
             let first: Vec<&str> = first.iter().map(String::as_str).collect();
             let backups: Vec<&str> = a.backups.iter().map(String::as_str).collect();
-            esc(&settings_sync::first_sync_words(&first, &backups))
+            esc(&settings_sync::first_sync_words(
+                &first,
+                &backups,
+                a.folder_rights,
+            ))
         }
         _ => format!(
             "{} updated from the run history",

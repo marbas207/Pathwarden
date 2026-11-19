@@ -1160,11 +1160,11 @@ struct TierZeroBody {
 }
 
 /// Why a save of a section a pull changed since its page was loaded is
-/// refused (409): "Rules changed in the repository since you opened this
+/// refused (409): "Rules changed in the shared settings since you opened this
 /// page. Reload to see the changes."
 pub fn stale_words(section: &str) -> String {
     format!(
-        "{} changed in the repository since you opened this page. Reload to see the changes.",
+        "{} changed in the shared settings since you opened this page. Reload to see the changes.",
         crate::last_pull::short_name(section)
     )
 }

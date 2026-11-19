@@ -293,7 +293,7 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
     assert_eq!(s, StatusCode::CONFLICT, "{r}");
     assert_eq!(
         r["error"],
-        "Tier Zero changed in the repository since you opened this page. Reload to see the changes."
+        "Tier Zero changed in the shared settings since you opened this page. Reload to see the changes."
     );
     // From a page loaded after the pull, a stale list is the old refusal.
     let (s, r) = a
@@ -411,7 +411,7 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
         assert_eq!(
             r["error"],
             format!(
-                "{says} changed in the repository since you opened this page. Reload to see the changes."
+                "{says} changed in the shared settings since you opened this page. Reload to see the changes."
             ),
             "{uri}"
         );
