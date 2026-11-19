@@ -218,7 +218,10 @@ def exchange(argv: list, request: dict, env: dict | None = None, timeout: int = 
         e.update(env or {})
         e["PATHWARDEN_ACTION_REQUEST"] = request["kind"]
         e["PATHWARDEN_ACTION_RESULT"] = result
-        p = subprocess.run(argv, input=json.dumps(request).encode("utf-8"), capture_output=True, env=e, timeout=timeout, cwd=d)
+        try:
+            p = subprocess.run(argv, input=json.dumps(request).encode("utf-8"), capture_output=True, env=e, timeout=timeout, cwd=d)
+        except subprocess.TimeoutExpired:
+            return None, [], f"it didn't end within {timeout} s", None
         answer = None
         if os.path.exists(result):
             with open(result, encoding="utf-8-sig") as f:
@@ -283,7 +286,8 @@ def check_example(name: str, argv: list, schemas: dict) -> None:
     req = {"schema": "pathwarden.action-request.v1", "kind": "describe", "settings": settings}
     check(not validate(req, schemas["request"]), f"{name}: the describe request fits the request schema")
     code, _, err, answer = exchange(argv, req, EXAMPLE_ENV)
-    if not check(code == 0 and answer is not None, f"{name}: describe answers (exit {code}) {err.strip()[:200]}"):
+    if not check(code == 0 and isinstance(answer, dict) and isinstance(answer.get("actions"), list),
+                 f"{name}: describe answers (exit {code}) {err.strip()[:200]}"):
         return
     errors = validate(answer, schemas["describe"])
     check(not errors, f"{name}: describe fits the describe schema {errors[:3]}")
@@ -355,8 +359,16 @@ REFUSED_DESCRIBE = [
     ("a category Pathwarden doesn't know", ["actions", 0, "applies_to", "categories"], ["paths"]),
     ("for that isn't record", ["actions", 1, "for"], "finding"),
     ("a state Pathwarden doesn't know", ["actions", 1, "when"], ["closed"]),
-    ("when as another single state", ["actions", 1, "when"], "open"),
+    ("a single state Pathwarden doesn't know", ["actions", 1, "when"], "closed"),
+    ("an empty when", ["actions", 1, "when"], []),
     ("once as text", ["actions", 0, "once"], "yes"),
+]
+# What Pathwarden takes that GOOD_DESCRIBE doesn't show.
+FITTING_DESCRIBE = [
+    ("when as any single state", ["actions", 1, "when"], "open"),
+    ("when as held", ["actions", 1, "when"], "held"),
+    ("a state listed twice (counted once)", ["actions", 1, "when"], ["fixed", "fixed"]),
+    ("no when on a follow-up", ["actions", 1, "when"], KeyError),
 ]
 REFUSED_RESULT = [
     ("another schema", ["schema"], "pathwarden.action-result.v2"),
@@ -381,6 +393,15 @@ REFUSED_RESULT = [
 # ------------------------------------------------------------------ main
 
 
+def run_tests(argv: list, timeout: int = 600) -> subprocess.CompletedProcess:
+    """Runs a test suite; one that doesn't end in time is a failure."""
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        msg = f"it didn't end within {timeout} s"
+        return subprocess.CompletedProcess(argv, 1, msg, msg)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--pathwarden", help="a pathwarden binary: also run `pathwarden action check` on every example")
@@ -397,6 +418,9 @@ def main() -> int:
         check(not problems, f"{path.name} is a draft 2020-12 schema this check can read {problems}")
     check(not validate(GOOD_DESCRIBE, schemas["describe"]), "a describe using every field fits")
     check(not validate(GOOD_RESULT, schemas["result"]), "a result using every field fits")
+    for what, path, value in FITTING_DESCRIBE:
+        errors = validate(mutate(GOOD_DESCRIBE, path, value), schemas["describe"])
+        check(not errors, f"describe with {what} fits {errors[:3]}")
     for what, path, value in REFUSED_DESCRIBE:
         check(bool(validate(mutate(GOOD_DESCRIBE, path, value), schemas["describe"])), f"describe with {what} doesn't fit")
     for what, path, value in REFUSED_RESULT:
@@ -408,12 +432,12 @@ def main() -> int:
             check(not validate(json.loads(text), schemas[kind]), "testdata/actions/fake-action.sh's describe fits")
 
     step("Helper tests")
-    p = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", str(EXAMPLES), "-p", "test_*.py"], capture_output=True, text=True)
+    p = run_tests([sys.executable, "-m", "unittest", "discover", "-s", str(EXAMPLES), "-p", "test_*.py"])
     check(p.returncode == 0, "pathwarden_action.py: " + (p.stderr.strip().splitlines() or [""])[-1])
     if p.returncode:
         print(p.stderr)
     if ps:
-        p = subprocess.run([ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(EXAMPLES / "PathwardenAction.Tests.ps1")], capture_output=True, text=True)
+        p = run_tests([ps, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(EXAMPLES / "PathwardenAction.Tests.ps1")])
         check(p.returncode == 0, f"PathwardenAction.psm1 ({Path(ps).name}): " + (p.stdout.strip().splitlines() or [""])[-1])
         if p.returncode:
             print(p.stdout, p.stderr)
@@ -457,8 +481,13 @@ def stub_check(ps, schemas) -> None:
         base = m.group(0)
         settings = {"base_url": base, "token_env": "PW_EXAMPLE_TOKEN", "queue": "Identity"}
         rest = program("rest-ticket.py", ps)
-        describe = exchange(rest, {"schema": "pathwarden.action-request.v1", "kind": "describe", "settings": settings}, EXAMPLE_ENV)[3]
-        by_id = {x["id"]: x for x in describe["actions"]}
+        code, _, err, describe = exchange(rest, {"schema": "pathwarden.action-request.v1", "kind": "describe", "settings": settings}, EXAMPLE_ENV)
+        if not check(isinstance(describe, dict) and isinstance(describe.get("actions"), list),
+                     f"rest-ticket.py describes its actions (exit {code}) {err.strip()[:200]}"):
+            return
+        by_id = {x.get("id"): x for x in describe["actions"] if isinstance(x, dict)}
+        if not check({"open", "status", "close"} <= set(by_id), f"rest-ticket.py offers open, status and close: {sorted(map(str, by_id))}"):
+            return
 
         def go(action, what, **kw):
             req = run_request(by_id[action], settings, dry_run=False, **kw)
@@ -475,11 +504,17 @@ def stub_check(ps, schemas) -> None:
         check(r.get("message") == "DESK0001 is already open for this finding.", f"rest-ticket.py doesn't open a second ticket: {r.get('message')}")
         code, lines, r = go("status", "status", record=record)
         check(r.get("message") == "DESK0001 is Open.", f"rest-ticket.py status reads it: {r.get('message')}")
+        # A follow-up's record replaces the saved one, so it carries every field.
+        got = (r.get("records") or [{}])[0]
+        check(all(got.get(k) == record.get(k) for k in ("id", "kind", "number", "url", "fields", "open")),
+              f"rest-ticket.py status returns the whole record: {got}")
         code, lines, r = go("close", "close on an open finding", record=record)
         check(code == 1 and r.get("ok") is False, f"rest-ticket.py won't close the ticket of a finding that isn't fixed: {r.get('message')}")
         fixed = dict(SAMPLE_FINDING, status="fixed")
         code, lines, r = go("close", "close", record=record, finding=fixed)
-        check(r.get("ok") and r["records"][0]["open"] is False, f"rest-ticket.py close closes it: {r.get('message')}")
+        got = (r.get("records") or [{}])[0]
+        check(r.get("ok") and got.get("open") is False and got.get("fields") == record.get("fields") and got.get("kind") == record.get("kind"),
+              f"rest-ticket.py close closes it and returns the whole record: {r.get('message')} {got}")
         req = run_request(by_id["open"], settings, dry_run=False, finding=dict(SAMPLE_FINDING, fingerprint="PW-001-1111111111111111"))
         code, lines, err, r = exchange(rest, req, dict(EXAMPLE_ENV, PW_EXAMPLE_TOKEN="wrong"))
         check(code == 1 and r and r["message"].endswith("answered 401 Unauthorized."), f"rest-ticket.py says when the token is refused: {r and r['message']}")
@@ -508,7 +543,12 @@ def action_checks(binary: str, ps, schemas) -> None:
         env.update(EXAMPLE_ENV)
         env.pop("PATHWARDEN_SCHEDULED", None)
         # A real request, for a finding of the demo, fits the schema.
-        run = lambda *args: subprocess.run([binary, *args], capture_output=True, text=True, env=env, cwd=d, timeout=600)  # noqa: E731
+        def run(*args, timeout=600):
+            try:
+                return subprocess.run([binary, *args], capture_output=True, text=True, env=env, cwd=d, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                return subprocess.CompletedProcess(args, 1, "", f"it didn't end within {timeout} s")
+
         analyzed = run("run", "--save", "--workspace", "ws", "-i", "demo:")
         findings = run("findings", "-i", "demo:", "--json")
         if check(analyzed.returncode == 0 and findings.returncode == 0, f"the demo is analyzed into a scratch workspace {analyzed.stderr.strip()[-300:] if analyzed.returncode else ''}"):
@@ -525,13 +565,21 @@ def action_checks(binary: str, ps, schemas) -> None:
                 print(f"skip {name}: PowerShell isn't here")
                 continue
             sets = [x for k, v in settings.items() for x in ("--setting", f"{k}={v}")]
-            if name.endswith(".ps1"):
+            if name.endswith(".ps1") and os.name == "nt":
                 cmd = [binary, "action", "check", str(EXAMPLES / name)] + sets
+            elif name.endswith(".ps1"):
+                # Pathwarden runs a .ps1 path with powershell, which only
+                # Windows has: elsewhere give pwsh and its arguments.
+                cmd = [binary, "action", "check", ps] + sets + ["--", *argv[1:]]
             else:
                 # The full path of this Python: `python` must be in a folder only
                 # administrators can change, which a user install isn't.
                 cmd = [binary, "action", "check", sys.executable] + sets + ["--", str(EXAMPLES / name)]
-            p = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=d, timeout=300)
+            try:
+                p = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=d, timeout=300)
+            except subprocess.TimeoutExpired:
+                check(False, f"pathwarden action check {name}: it didn't end within 300 s")
+                continue
             out = p.stdout.strip()
             check(p.returncode == 0, f"pathwarden action check {name}: {out.splitlines()[-1] if out else p.stderr.strip()}")
             if p.returncode:

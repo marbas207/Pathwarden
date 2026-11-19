@@ -149,31 +149,44 @@ def record(
 # ------------------------------------------------------------- progress
 
 
-def _stdout():
-    out = sys.stdout
-    # Pathwarden reads stdout as UTF-8; Windows pipes default to the ANSI
-    # code page.
-    if hasattr(out, "reconfigure"):
-        try:
-            out.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
-        except (ValueError, OSError):
-            pass
-    return out
+def _utf8_streams() -> None:
+    # Pathwarden reads stdout and stderr as UTF-8; Windows pipes default to
+    # the ANSI code page. Done once, before the handler runs, so whatever
+    # it prints goes out as UTF-8 too.
+    for out in (sys.stdout, sys.stderr):
+        if hasattr(out, "reconfigure"):
+            try:
+                out.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
+            except (ValueError, OSError):
+                pass
+
+
+# The values of the secrets read through `Request.secret`. They are taken
+# out of every message, progress line and note, because what an action
+# prints is saved on the finding and shared with the history.
+_secrets: set = set()
+HIDDEN = "[hidden]"
+
+
+def _scrub(text: str) -> str:
+    for value in sorted(_secrets, key=len, reverse=True):
+        text = text.replace(value, HIDDEN)
+    return text
 
 
 def progress(line: str) -> None:
     """Prints one progress line. Pathwarden shows it while the action runs
     and keeps the latest 200, each cut to 500 characters."""
-    for part in str(line).splitlines() or [""]:
+    for part in _scrub(str(line)).splitlines() or [""]:
         text = _clean(part, MAX_LINE_CHARS, lines=False)[0]
         if text:
-            print(text, file=_stdout(), flush=True)
+            print(text, file=sys.stdout, flush=True)
 
 
 def note(line: str) -> None:
     """Writes a line to stderr: kept for Show details, never shown as
     progress. Use it for what helps someone fix a failure."""
-    print(str(line), file=sys.stderr, flush=True)
+    print(_scrub(str(line)), file=sys.stderr, flush=True)
 
 
 # --------------------------------------------------------------- request
@@ -262,6 +275,7 @@ class Request:
             if required:
                 raise Failed(f"The environment variable {var} (named by {name}_env) isn't set for this account.")
             return None
+        _secrets.add(value)
         return value
 
     def http(
@@ -285,6 +299,10 @@ class Request:
           127.0.0.1, ::1), for a test server.
         - On a dry run, only GET and HEAD are sent; anything else fails the
           run, so a dry run can't change anything by mistake.
+        - A redirect is followed only to the same scheme, host and port;
+          one anywhere else fails the run, so the token isn't sent on.
+        - Messages name only the scheme, host and port: a webhook's path
+          or query may hold its key.
         """
         method = method.upper()
         check_target(url)
@@ -302,8 +320,11 @@ class Request:
         h.update(headers or {})
         req = urllib.request.Request(url, data=data, method=method, headers=h)
         context = ssl.create_default_context()
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPSHandler(context=context), _SameOriginRedirect()
+        )
         try:
-            with urllib.request.urlopen(req, timeout=timeout, context=context) as r:
+            with opener.open(req, timeout=timeout) as r:
                 return Response(r.status, r.headers, r.read())
         except urllib.error.HTTPError as e:
             text = e.read()[:2000].decode("utf-8", errors="replace")
@@ -316,9 +337,47 @@ class Request:
 
 
 def _shown(url: str) -> str:
-    """`url` without its query, which may hold a key."""
+    """`url` as messages show it: scheme://host[:port] only. A webhook's
+    path (hooks.example.com/services/T0/B0/KEY) or query may hold its key,
+    and a message is saved on the finding and shared."""
+    try:
+        p = urllib.parse.urlsplit(str(url))
+        host = p.hostname or ""
+        port = p.port
+    except ValueError:
+        return "that address"
+    if not p.scheme or not host:
+        return "that address"
+    if ":" in host:
+        host = f"[{host}]"
+    return f"{p.scheme}://{host}" + (f":{port}" if port is not None else "")
+
+
+def _origin(url: str) -> Tuple[str, str, Optional[int]]:
     p = urllib.parse.urlsplit(url)
-    return urllib.parse.urlunsplit((p.scheme, p.netloc, p.path, "", ""))
+    scheme = p.scheme.lower()
+    port = p.port if p.port is not None else {"https": 443, "http": 80}.get(scheme)
+    return scheme, (p.hostname or "").lower(), port
+
+
+class _SameOriginRedirect(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect only to the same scheme, host and port. urllib
+    would otherwise send Authorization and Cookie on to any address,
+    https:// to http:// included."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        old = req.full_url
+        newurl = urllib.parse.urljoin(old, newurl)
+        try:
+            same = _origin(newurl) == _origin(old)
+        except ValueError:
+            same = False
+        if not same:
+            raise Failed(
+                f"{req.get_method()} {_shown(old)} answered {code}, a redirect to {_shown(newurl)}, which wasn't followed: "
+                "a redirect is followed only to the same address. Set the address it redirects to."
+            )
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def _loopback(host: str) -> bool:
@@ -366,7 +425,7 @@ def https_problem(url: Any) -> Optional[str]:
     if not isinstance(url, str):
         return "must be text"
     s = url.strip()
-    if len(s) > MAX_URL:
+    if len(s.encode("utf-8")) > MAX_URL:  # in bytes, as Pathwarden counts
         return "is longer than 2,048 characters"
     if any(c.isspace() or unicodedata.category(c) == "Cc" or c in _BIDI for c in s):
         return "holds a space or a control character"
@@ -429,7 +488,11 @@ def clean_result(result: Any) -> Tuple[dict, List[str]]:
             notes.append(f"{at}.id '{rid}' is there twice; the second was left out")
             continue
         seen.add(rid)
-        kept: Dict[str, Any] = {"id": rid, "open": bool(r.get("open", False))}
+        # Only a real true is open, as Pathwarden reads it.
+        is_open = r.get("open")
+        if is_open is not None and not isinstance(is_open, bool):
+            notes.append(f"{at}.open must be true or false, not {type(is_open).__name__}; it is read as false")
+        kept: Dict[str, Any] = {"id": rid, "open": is_open is True}
         for key in ("kind", "label", "number", "status"):
             if r.get(key) is not None:
                 text, cut = _clean(r[key], MAX_RECORD_TEXT, lines=False)
@@ -576,14 +639,13 @@ def check_describe(actions: Any) -> List[str]:
             p.append(f"{at}.for {json.dumps(a['for'])} isn't \"record\", the only value v1 knows")
         when = a.get("when")
         if when is not None:
-            states = [when] if isinstance(when, str) else when
-            if (
-                not isinstance(states, list)
-                or not states
-                or any(s not in STATES for s in states)
-                or (isinstance(when, str) and when != "fixed")
-            ):
-                p.append(f"{at}.when must be a list of states ({', '.join(STATES)}), or \"fixed\"")
+            # One status, or a list of them; one listed twice counts once.
+            states = when if isinstance(when, list) else [when]
+            if not states:
+                p.append(f"{at}.when must list at least one of {', '.join(STATES)}")
+            for s in states:
+                if s not in STATES:
+                    p.append(f"{at}.when: {json.dumps(s)} isn't one of {', '.join(STATES)}")
         for fu in a.get("follow_ups") or []:
             if fu not in record_ids:
                 p.append(f"Action '{a.get('id')}': follow-up '{fu}' isn't an action of this program with for: \"record\"")
@@ -603,7 +665,7 @@ def _write(path: Optional[str], doc: dict) -> None:
             f.write(text)
     else:
         note(f"{RESULT_ENV} isn't set, so the answer goes to stdout:")
-        print(text, file=_stdout(), flush=True)
+        print(text, file=sys.stdout, flush=True)
 
 
 def _read_request(stdin) -> Dict[str, Any]:
@@ -641,6 +703,7 @@ def main(
 
     Exits 0 when the answer says it worked, else 1 (`exit=False` returns
     the code instead, for tests)."""
+    _utf8_streams()
     env = dict(os.environ if env is None else env)
     stdin = sys.stdin if stdin is None else stdin
     path = env.get(RESULT_ENV) or None
@@ -684,8 +747,11 @@ def main(
     except Failed as e:
         result, _ = clean_result(failed(str(e) or "It didn't work."))
     except Exception as e:  # any other bug: a failed run, with details
-        traceback.print_exc(file=sys.stderr)
+        note(traceback.format_exc().rstrip())
         result, _ = clean_result(failed(f"It failed: {type(e).__name__}: {e}"))
+    # A message may quote a secret (an exception's text can hold a header
+    # value), and it is saved on the finding and shared: take them out.
+    result["message"] = _scrub(result["message"])
     _write(path, result)
     return _done(code, exit)
 

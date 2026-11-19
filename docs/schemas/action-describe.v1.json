@@ -96,14 +96,13 @@
           "description": "\"record\": only offered as a follow-up on a record this program returned."
         },
         "when": {
-          "description": "The finding statuses the action is offered on. Default: open, held and accepted. A fixed finding shows only actions whose list has fixed. \"fixed\" alone is the older form of [\"fixed\"].",
+          "description": "The finding statuses the action is offered on: one of open, held, accepted, fixed, or a list of them (\"fixed\" means [\"fixed\"]; a status listed twice counts once). Default: open, held and accepted; for a for: \"record\" action, every status. A fixed finding shows only actions whose when has fixed, and the follow-ups of its records.",
           "oneOf": [
             {"type": "null"},
-            {"const": "fixed"},
+            {"enum": ["open", "held", "accepted", "fixed"]},
             {
               "type": "array",
               "minItems": 1,
-              "uniqueItems": true,
               "items": {"enum": ["open", "held", "accepted", "fixed"]}
             }
           ]

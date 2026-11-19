@@ -85,26 +85,43 @@ class Desk:
     def call(self, method: str, url: str, body=None):
         return self.req.http(method, url, body=body, bearer=self.token).json()
 
-    def record(self, ticket) -> dict:
-        """The ticket as a record on the finding."""
+    def record(self, ticket, *, kept=None, open_without_status: bool = True) -> dict:
+        """The ticket as a record on the finding. A follow-up's record
+        replaces the one saved, so `kept` (the record it ran on) gives
+        whatever this answer doesn't. Without a status in the answer, the
+        ticket is open as `open_without_status` says."""
         if not isinstance(ticket, dict) or not ticket.get(self.req.setting("id_field", "id")):
             raise pw.Failed("The ticket system's answer has no ticket ID.")
-        get = lambda name, default=None: ticket.get(self.req.setting(f"{name}_field", name), default)  # noqa: E731
-        tid = str(get("id"))
-        number = str(get("number", tid))
-        status = str(get("status", "Open"))
+
+        def get(name):
+            v = ticket.get(self.req.setting(f"{name}_field", name))
+            return None if v is None or str(v).strip() == "" else str(v)
+
+        kept = dict(kept or {})
+        tid = get("id")
+        number = get("number") or kept.get("number") or tid
+        status = get("status") or kept.get("status")
         url = get("url")
         web = self.req.setting("web_url")  # e.g. https://desk.example.com/tickets/{number}
         if web:
             url = web.replace("{id}", urllib.parse.quote(tid, safe="")).replace("{number}", urllib.parse.quote(number, safe=""))
-        fields = {"Queue": self.queue} if self.queue else {}
+        if not url or pw.https_problem(url) is not None:
+            url = kept.get("url")
+        fields = dict(kept.get("fields") or {})
+        if self.queue:
+            fields["Queue"] = self.queue
+        if get("status"):
+            is_open = status.lower() not in self.closed
+        else:
+            is_open = open_without_status
         return pw.record(
             tid,
-            kind="ticket",
+            kind=kept.get("kind") or "ticket",
+            label=kept.get("label"),
             number=number,
             status=status,
-            open=status.lower() not in self.closed,
-            url=url if url and pw.https_problem(url) is None else None,
+            open=is_open,
+            url=url,
             fields=fields,
         )
 
@@ -166,8 +183,14 @@ def status(req: pw.Request):
     if req.dry_run:
         return pw.ok(f"Dry run: would read ticket {tid}.")
     pw.progress(f"Reading ticket {tid}")
-    r = desk.record(desk.call("GET", desk.url(desk.ticket, id=tid)))
-    return pw.ok(f"{r['number']} is {r['status']}.", records=[r])
+    # The record returned replaces the saved one: it carries every field.
+    r = desk.record(
+        desk.call("GET", desk.url(desk.ticket, id=tid)),
+        kept=req.record,
+        open_without_status=req.record.get("open") is True,
+    )
+    shown = f" is {r['status']}" if r.get("status") else (" is open" if r["open"] else " is closed")
+    return pw.ok(f"{r['number']}{shown}.", records=[r])
 
 
 def close(req: pw.Request):
@@ -179,7 +202,8 @@ def close(req: pw.Request):
     if req.finding.get("status") != "fixed":
         raise pw.Failed("The finding isn't fixed, so its ticket stays open.")
     pw.progress(f"Closing ticket {tid}")
-    r = desk.record(desk.call("PATCH", desk.url(desk.ticket, id=tid), body))
+    # The record returned replaces the saved one: it carries every field.
+    r = desk.record(desk.call("PATCH", desk.url(desk.ticket, id=tid), body), kept=req.record, open_without_status=False)
     return pw.ok(f"Closed {r['number']}.", records=[r])
 
 

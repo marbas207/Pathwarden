@@ -157,7 +157,104 @@ Test 'http is refused but to this computer, and a dry run sends only reads' {
     $msg = try { Invoke-PathwardenHttp -Request $req -Method Get -Uri 'http://desk.example.com/api'; '' } catch { $_.Exception.Message }
     Assert-True ($msg -like '*must start with https://*') $msg
     $msg = try { Invoke-PathwardenHttp -Request $req -Method Post -Uri 'https://desk.example.com/api?key=hidden' -Body @{}; '' } catch { $_.Exception.Message }
-    Assert-True ($msg -like "Dry run: POST https://desk.example.com/api wasn't sent*") $msg
+    Assert-True ($msg -like "Dry run: POST https://desk.example.com wasn't sent*") $msg
+}
+
+Test 'messages show only the scheme, host and port, and no secret' {
+    $req = New-Request @{ dry_run = $true } | ConvertFrom-Json
+    $msg = try { Invoke-PathwardenHttp -Request $req -Method Post -Uri 'https://hooks.example.com:8443/services/T0/B0/SECRET?k=v' -Body @{}; '' } catch { $_.Exception.Message }
+    Assert-True ($msg -like 'Dry run: POST https://hooks.example.com:8443 wasn''t sent*') $msg
+    $msg = try { Invoke-PathwardenHttp -Request $req -Method Get -Uri 'ftp://hooks.example.com/services/SECRET'; '' } catch { $_.Exception.Message }
+    Assert-True ($msg -notlike '*SECRET*' -and $msg -like '*must start with https://*') $msg
+    $msg = try { Invoke-PathwardenHttp -Request $req -Method Get -Uri 'hooks.example.com/services/SECRET'; '' } catch { $_.Exception.Message }
+    Assert-True ($msg -notlike '*SECRET*') $msg
+
+    $env:PW_TEST_HOOK = 'https://hooks.example.com/services/T0/B0/hook-7c6b5a4d3e2f'
+    try {
+        $h = @{ open = {
+            param($Request)
+            $url = Get-PathwardenSecret -Request $Request -Name webhook
+            Write-PathwardenProgress "Posting to $url"
+            throw "It went wrong at $url"
+        } }
+        $r = Invoke-Case (New-Request @{ settings = @{ webhook_env = 'PW_TEST_HOOK' } }) $h
+        Assert-Equal 'It went wrong at [hidden]' $r.Answer.message 'message'
+        Assert-True ($script:details.ToString() -notlike '*hook-7c6b5a4d3e2f*') 'stderr'
+    } finally {
+        Remove-Item Env:PW_TEST_HOOK
+    }
+}
+
+Test 'a redirect is followed only to the same address' {
+    # A small HTTP server on this computer, in a runspace.
+    $state = [hashtable]::Synchronized(@{ Port = 0; Seen = [Collections.ArrayList]::Synchronized((New-Object Collections.ArrayList)) })
+    $ps = [PowerShell]::Create()
+    [void]$ps.AddScript({
+        param($state)
+        $l = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0)
+        $l.Start()
+        $state.Listener = $l
+        $state.Port = $l.LocalEndpoint.Port
+        while ($true) {
+            $c = $l.AcceptTcpClient()
+            $s = $c.GetStream()
+            $r = New-Object IO.StreamReader($s)
+            $first = $r.ReadLine()
+            $auth = $null
+            while (($line = $r.ReadLine())) { if ($line -like 'Authorization:*') { $auth = $line.Substring(14).Trim() } }
+            $path = $first.Split(' ')[1]
+            [void]$state.Seen.Add("$path $auth")
+            $resp = switch ($path) {
+                '/away' { "HTTP/1.1 302 Found`r`nLocation: http://127.0.0.1:1/secret/path`r`nContent-Length: 0`r`nConnection: close`r`n`r`n" }
+                '/near' { "HTTP/1.1 302 Found`r`nLocation: /there`r`nContent-Length: 0`r`nConnection: close`r`n`r`n" }
+                default { $b = '{"path":"' + $path + '","auth":"' + $auth + '"}'; "HTTP/1.1 200 OK`r`nContent-Type: application/json`r`nContent-Length: $($b.Length)`r`nConnection: close`r`n`r`n$b" }
+            }
+            $bytes = [Text.Encoding]::ASCII.GetBytes($resp)
+            $s.Write($bytes, 0, $bytes.Length)
+            $s.Flush()
+            $c.Close()
+        }
+    }).AddArgument($state)
+    $async = $ps.BeginInvoke()
+    try {
+        for ($i = 0; $i -lt 100 -and -not $state.Port; $i++) { Start-Sleep -Milliseconds 50 }
+        $base = "http://127.0.0.1:$($state.Port)"
+        $req = New-Request | ConvertFrom-Json
+        $got = Invoke-PathwardenHttp -Request $req -Method Get -Uri "$base/near" -Bearer 't'
+        Assert-Equal '/there' $got.path 'followed'
+        Assert-Equal 'Bearer t' $got.auth 'auth kept on the same address'
+        $msg = try { Invoke-PathwardenHttp -Request $req -Method Get -Uri "$base/away" -Bearer 't'; '' } catch { $_.Exception.Message }
+        Assert-True ($msg -like "*answered 302, a redirect to http://127.0.0.1:1, which wasn't followed*") $msg
+        Assert-True ($msg -notlike '*/secret*') $msg
+        Assert-Equal '/near Bearer t,/there Bearer t,/away Bearer t' ($state.Seen -join ',') 'requests sent'
+    } finally {
+        if ($state.Listener) { $state.Listener.Stop() }
+        # Stop would wait for the blocked accept; the listener's Stop ends it.
+        [void]$ps.BeginStop($null, $null)
+    }
+}
+
+Test 'only a real true is open' {
+    $c = ConvertTo-PathwardenResult ([pscustomobject]@{ ok = $true; message = ''; links = @(); records = @(
+        @{ id = 'a'; open = 'yes' }, @{ id = 'b'; open = 1 }, @{ id = 'c'; open = $true }, @{ id = 'd' }) })
+    Assert-Equal 'False,False,True,False' (($c.Result.records | ForEach-Object { $_.open }) -join ',') 'open'
+    Assert-Equal 2 @($c.Notes | Where-Object { $_ -like '*.open must be true or false*' }).Count ($c.Notes -join '; ')
+}
+
+Test 'addresses and lengths are checked as Pathwarden does' {
+    $bidi = 'https://x.example/a' + [char]0x202E + 'b'
+    $long = 'https://x.example/' + ([string][char]0xE9 * 1100)
+    $c = ConvertTo-PathwardenResult (New-PathwardenResult -Links @((New-PathwardenLink 'A' $bidi), (New-PathwardenLink 'B' $long), (New-PathwardenLink 'C' 'https://x.example/c')))
+    Assert-Equal 1 @($c.Result.links).Count 'links'
+    Assert-True ($c.Notes -contains 'links[0].url holds a space or a control character; the link was left out') ($c.Notes -join '; ')
+    Assert-True ($c.Notes -contains 'links[1].url is longer than 2,048 characters; the link was left out') ($c.Notes -join '; ')
+    # A surrogate pair is one character, and never split.
+    $face = [char]::ConvertFromUtf32(0x1F600)
+    $m = (ConvertTo-PathwardenResult (New-PathwardenResult ($face * 2500))).Result.message
+    Assert-Equal (1999 * 2 + 1) $m.Length 'message length in UTF-16 units'
+    Assert-True ($m.EndsWith($face + [char]0x2026)) 'cut after a whole pair'
+    $short = (ConvertTo-PathwardenResult (New-PathwardenResult ($face * 2000))).Result.message
+    Assert-Equal 4000 $short.Length 'not cut at 2,000 characters'
 }
 
 Test 'as a program: UTF-8 in and out, progress lines and the exit code' {

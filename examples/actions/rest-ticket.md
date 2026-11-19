@@ -7,7 +7,7 @@ issue. Each ticket comes back as a record, saved on the finding.
 | Action | ID | Offered | Does |
 |---|---|---|---|
 | **Open a ticket** | `open` | On a finding without an open ticket from it (`once`). | Looks for an open ticket with the finding's ID, and returns it if there is one; else creates one. Inputs: **Note for the team**, **Urgency** (Low, Medium, High). |
-| **Check status** | `status` | On a ticket it opened (`for: "record"`). | Reads the ticket and updates the record. |
+| **Check status** | `status` | On a ticket it opened (`for: "record"`). | Reads the ticket and returns its whole record, which replaces the saved one: what the answer lacks comes from the record it ran on. |
 | **Close ticket** | `close` | On a ticket it opened, once the finding is fixed (`"when": ["fixed"]`). | Sets the ticket's status to closed, with a note. Refuses on a finding that isn't fixed. |
 
 It needs Python 3.9 or later, and nothing outside the standard library.

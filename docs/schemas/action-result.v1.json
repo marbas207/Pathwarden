@@ -68,7 +68,7 @@
         "label": {"$ref": "#/$defs/text", "description": "A name to show when it has no number."},
         "number": {
           "$ref": "#/$defs/text",
-          "description": "The number people know it by, e.g. RITM10816190. Shown on the chip."
+          "description": "The number people know it by, e.g. RITM0001234. Shown on the chip."
         },
         "url": {
           "oneOf": [{"type": "null"}, {"$ref": "#/$defs/url"}],

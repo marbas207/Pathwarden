@@ -106,22 +106,17 @@
     },
     "record": {
       "type": "object",
-      "required": ["id"],
-      "description": "A record kept on the finding: what a result returned (id, kind, label, number, url, status, open, fields), and which action made it, who first ran it, where and when, and when it last changed.",
+      "required": ["id", "open"],
+      "description": "The record a follow-up runs on, as the last result that gave it kept it: id and open, and kind, label, number, url, status and fields when it has them (a field it lacks is left out, never null). Which action made it, who first ran it and when aren't sent. Fields a later release of v1 keeps on a record may be there too.",
       "properties": {
         "id": { "type": "string" },
-        "action": { "type": "string", "description": "The action that made it, as <block name>/<id>." },
-        "kind": { "type": ["string", "null"] },
-        "label": { "type": ["string", "null"] },
-        "number": { "type": ["string", "null"] },
-        "url": { "type": ["string", "null"] },
-        "status": { "type": ["string", "null"] },
+        "kind": { "type": "string" },
+        "label": { "type": "string" },
+        "number": { "type": "string" },
+        "url": { "type": "string", "description": "Always https://." },
+        "status": { "type": "string" },
         "open": { "type": "boolean" },
-        "fields": { "type": "object", "additionalProperties": { "type": "string" } },
-        "by": { "type": ["string", "null"] },
-        "on": { "type": ["string", "null"] },
-        "at": { "type": "string" },
-        "updated_at": { "type": "string" }
+        "fields": { "type": "object", "additionalProperties": { "type": "string" } }
       }
     }
   }

@@ -53,6 +53,21 @@ try {
 $script:Utf8 = New-Object System.Text.UTF8Encoding($false)
 $script:Out = $null
 
+# The values of the secrets read with Get-PathwardenSecret. They are taken
+# out of every message, progress line and note, because what an action
+# prints is saved on the finding and shared with the history.
+$script:Secrets = New-Object System.Collections.Generic.List[string]
+$script:Hidden = '[hidden]'
+
+function Get-Scrubbed([AllowNull()][object]$Text) {
+    if ($null -eq $Text) { return '' }
+    $t = [string]$Text
+    foreach ($v in ($script:Secrets | Sort-Object -Property Length -Descending)) {
+        $t = $t.Replace($v, $script:Hidden)
+    }
+    $t
+}
+
 function Get-Out {
     # Pathwarden reads stdout as UTF-8; the console's code page would
     # garble names. One writer, flushed after every line, so progress
@@ -64,34 +79,62 @@ function Get-Out {
     $script:Out
 }
 
-function Get-CleanText {
+function Test-Bidi([char]$C) {
+    # The bidi controls Pathwarden drops (text::is_bidi_control).
+    $code = [int]$C
+    ($code -ge 0x202A -and $code -le 0x202E) -or ($code -ge 0x2066 -and $code -le 0x2069) -or $code -eq 0x200E -or $code -eq 0x200F -or $code -eq 0x061C
+}
+
+function Get-Scalars([string]$Text) {
+    # $Text as Unicode scalars (a surrogate pair is one), as Rust counts
+    # characters.
+    $out = New-Object System.Collections.Generic.List[string]
+    for ($i = 0; $i -lt $Text.Length; $i++) {
+        if ([char]::IsHighSurrogate($Text[$i]) -and $i + 1 -lt $Text.Length -and [char]::IsLowSurrogate($Text[$i + 1])) {
+            $out.Add($Text.Substring($i, 2)); $i++
+        } else {
+            $out.Add([string]$Text[$i])
+        }
+    }
+    , $out
+}
+
+function Get-CleanTextCut {
     # Text as Pathwarden keeps it: tabs as spaces, control and bidi
     # characters dropped (line breaks kept with -Lines), trimmed, cut to
-    # -Cap characters with an ellipsis.
+    # -Cap characters (Unicode scalars) with an ellipsis. Returns
+    # @(text, whether it was cut).
     param([AllowNull()][object]$Text, [int]$Cap, [switch]$Lines)
-    if ($null -eq $Text) { return '' }
+    if ($null -eq $Text) { return @('', $false) }
     $s = ([string]$Text).Replace("`r`n", "`n").Replace("`t", ' ')
     $sb = New-Object System.Text.StringBuilder
     foreach ($c in $s.ToCharArray()) {
-        $code = [int]$c
-        $bidi = ($code -ge 0x202A -and $code -le 0x202E) -or ($code -ge 0x2066 -and $code -le 0x2069) -or $code -eq 0x200E -or $code -eq 0x200F -or $code -eq 0x061C
         if ($Lines -and $c -eq "`n") { [void]$sb.Append($c); continue }
-        if ([char]::IsControl($c) -or $bidi) { continue }
+        if ([char]::IsControl($c) -or (Test-Bidi $c)) { continue }
         [void]$sb.Append($c)
     }
     $t = $sb.ToString().Trim()
-    if ($t.Length -le $Cap) { return $t }
-    return $t.Substring(0, $Cap - 1) + [char]0x2026
+    $scalars = Get-Scalars $t
+    if ($scalars.Count -le $Cap) { return @($t, $false) }
+    $kept = (($scalars.GetRange(0, $Cap - 1)) -join '') + [char]0x2026
+    return @($kept, $true)
+}
+
+function Get-CleanText {
+    param([AllowNull()][object]$Text, [int]$Cap, [switch]$Lines)
+    (Get-CleanTextCut $Text $Cap -Lines:$Lines)[0]
 }
 
 function Get-HttpsProblem {
-    # Why Pathwarden would leave $Url out of a result, or $null.
+    # Why Pathwarden would leave $Url out of a result, or $null
+    # (actions::https_url).
     param([AllowNull()][object]$Url)
     if ($Url -isnot [string]) { return 'must be text' }
     $s = $Url.Trim()
-    if ($s.Length -gt $script:Caps.Url) { return 'is longer than 2,048 characters' }
+    # In UTF-8 bytes, as Pathwarden counts.
+    if ($script:Utf8.GetByteCount($s) -gt $script:Caps.Url) { return 'is longer than 2,048 characters' }
     foreach ($c in $s.ToCharArray()) {
-        if ([char]::IsWhiteSpace($c) -or [char]::IsControl($c)) { return 'holds a space or a control character' }
+        if ([char]::IsWhiteSpace($c) -or [char]::IsControl($c) -or (Test-Bidi $c)) { return 'holds a space or a control character' }
     }
     if ($s.Length -lt 8 -or $s.Substring(0, 8).ToLowerInvariant() -ne 'https://') { return 'must start with https://' }
     $authority = ($s.Substring(8) -split '[/?#]', 2)[0]
@@ -124,7 +167,7 @@ function Write-PathwardenProgress {
     #>
     param([Parameter(Mandatory, ValueFromPipeline)][AllowEmptyString()][string]$Line)
     process {
-        foreach ($part in ($Line -split "`r?`n")) {
+        foreach ($part in ((Get-Scrubbed $Line) -split "`r?`n")) {
             $t = Get-CleanText $part $script:Caps.Line
             if ($t) { (Get-Out).WriteLine($t) }
         }
@@ -137,7 +180,7 @@ function Write-PathwardenNote {
     Writes a line to stderr: kept for Show details, never shown as progress.
     #>
     param([Parameter(Mandatory)][AllowEmptyString()][string]$Line)
-    [Console]::Error.WriteLine($Line)
+    [Console]::Error.WriteLine((Get-Scrubbed $Line))
 }
 
 function New-PathwardenLink {
@@ -221,6 +264,7 @@ function Get-PathwardenSecret {
         if ($Optional) { return $null }
         throw "The environment variable $var (named by $($Name)_env) isn't set for this account."
     }
+    if (-not $script:Secrets.Contains($value)) { $script:Secrets.Add($value) }
     $value
 }
 
@@ -230,6 +274,18 @@ function Test-Loopback([string]$HostName) {
     $ip = $null
     if ([Net.IPAddress]::TryParse($h, [ref]$ip)) { return [Net.IPAddress]::IsLoopback($ip) }
     return $false
+}
+
+function Get-Shown([Uri]$U) {
+    # An address as messages show it: scheme://host[:port] only. A
+    # webhook's path (hooks.example.com/services/T0/B0/KEY) or query may
+    # hold its key, and a message is saved on the finding and shared.
+    $port = if ($U.IsDefaultPort) { '' } else { ":$($U.Port)" }
+    "$($U.Scheme)://$($U.Host)$port"
+}
+
+function Get-Origin([Uri]$U) {
+    "$($U.Scheme.ToLowerInvariant())://$($U.Host.ToLowerInvariant()):$($U.Port)"
 }
 
 function Invoke-PathwardenHttp {
@@ -246,6 +302,10 @@ function Invoke-PathwardenHttp {
       ::1), for a test server.
     - On a dry run, only GET and HEAD are sent; anything else fails the
       run, so a dry run can't change anything by mistake.
+    - A redirect is followed only to the same scheme, host and port; one
+      anywhere else fails the run, so the token isn't sent on.
+    - Messages name only the scheme, host and port: a webhook's path or
+      query may hold its key.
     #>
     param(
         [Parameter(Mandatory)][object]$Request,
@@ -258,32 +318,83 @@ function Invoke-PathwardenHttp {
     )
     $Method = $Method.ToUpperInvariant()
     $u = $null
-    if (-not [Uri]::TryCreate($Uri, [UriKind]::Absolute, [ref]$u)) { throw "$Uri isn't a full address." }
-    $shown = $u.GetLeftPart([UriPartial]::Path)
+    if (-not [Uri]::TryCreate($Uri, [UriKind]::Absolute, [ref]$u)) { throw "The address given isn't a full https:// address." }
+    $shown = Get-Shown $u
     $okScheme = ($u.Scheme -eq 'https') -or ($u.Scheme -eq 'http' -and (Test-Loopback $u.Host))
     if (-not $okScheme) { throw "$shown must start with https:// (http:// only to this computer, for testing)." }
     if ((Get-Field $Request 'dry_run') -and $Method -notin 'GET', 'HEAD') {
         throw "Dry run: $Method $shown wasn't sent, because a dry run changes nothing. Return before sending it when `$Request.dry_run is true."
     }
-    $h = @{ Accept = 'application/json'; 'User-Agent' = "pathwarden-action/$script:Version" }
-    foreach ($k in $Headers.Keys) { $h[$k] = $Headers[$k] }
+    $h = [ordered]@{ Accept = 'application/json'; 'User-Agent' = "pathwarden-action/$script:Version" }
+    foreach ($k in $Headers.Keys) { $h[[string]$k] = [string]$Headers[$k] }
     if ($Bearer) { $h.Authorization = "Bearer $Bearer" }
-    $call = @{ Method = $Method; Uri = $u; Headers = $h; TimeoutSec = $TimeoutSec; UseBasicParsing = $true; ErrorAction = 'Stop' }
+    $bytes = $null
     if ($null -ne $Body) {
-        $call.Body = $script:Utf8.GetBytes((ConvertTo-Json -InputObject $Body -Depth 20 -Compress))
-        $call.ContentType = 'application/json; charset=utf-8'
+        $bytes = $script:Utf8.GetBytes((ConvertTo-Json -InputObject $Body -Depth 20 -Compress))
+        $h['Content-Type'] = 'application/json; charset=utf-8'
     }
-    try {
-        Invoke-RestMethod @call
-    } catch {
-        $status = $null
-        $resp = $_.Exception.PSObject.Properties['Response']
-        if ($resp -and $resp.Value) { try { $status = [int]$resp.Value.StatusCode } catch { } }
-        if ($status) {
-            Write-PathwardenNote "$Method $shown answered $status`n$($_.ErrorDetails)"
+    # HttpWebRequest, not Invoke-RestMethod: it follows redirects anywhere
+    # with the headers, and in 5.1 -MaximumRedirection 0 hides the answer.
+    $current = $u
+    for ($hop = 0; ; $hop++) {
+        $wr = [Net.HttpWebRequest]::Create($current)
+        $wr.Method = $Method
+        $wr.AllowAutoRedirect = $false
+        $wr.Timeout = $TimeoutSec * 1000
+        $wr.ReadWriteTimeout = $TimeoutSec * 1000
+        foreach ($k in $h.Keys) {
+            switch ($k) {
+                'Accept' { $wr.Accept = $h[$k] }
+                'User-Agent' { $wr.UserAgent = $h[$k] }
+                'Content-Type' { $wr.ContentType = $h[$k] }
+                default { $wr.Headers[$k] = $h[$k] }
+            }
+        }
+        $resp = $null
+        try {
+            if ($null -ne $bytes) {
+                $wr.ContentLength = $bytes.Length
+                $stream = $wr.GetRequestStream()
+                try { $stream.Write($bytes, 0, $bytes.Length) } finally { $stream.Close() }
+            }
+            $resp = $wr.GetResponse()
+        } catch {
+            $e = $_.Exception
+            while ($e -and $e -isnot [Net.WebException] -and $e.InnerException) { $e = $e.InnerException }
+            if ($e -is [Net.WebException] -and $e.Response) { $resp = $e.Response }
+            else { throw "Couldn't reach $($shown): $(Get-Scrubbed $e.Message)" }
+        }
+        try {
+            $status = [int]$resp.StatusCode
+            $location = $resp.Headers['Location']
+            $reader = New-Object IO.StreamReader($resp.GetResponseStream(), $script:Utf8)
+            $text = $reader.ReadToEnd()
+            $reader.Close()
+        } finally {
+            $resp.Close()
+        }
+        if ($status -ge 300 -and $status -lt 400 -and $location) {
+            $next = New-Object Uri($current, $location)
+            if ((Get-Origin $next) -ne (Get-Origin $u)) {
+                throw "$Method $shown answered $status, a redirect to $(Get-Shown $next), which wasn't followed: a redirect is followed only to the same address. Set the address it redirects to."
+            }
+            if ($hop -ge 5) { throw "$Method $shown redirected more than 5 times." }
+            if ($status -eq 303 -or (($status -eq 301 -or $status -eq 302) -and $Method -eq 'POST')) {
+                # As browsers do: the redirect is read with GET, without the body.
+                $Method = 'GET'; $bytes = $null; $h.Remove('Content-Type')
+            }
+            $current = $next
+            continue
+        }
+        if ($status -ge 400) {
+            $cut = if ($text.Length -gt 2000) { $text.Substring(0, 2000) } else { $text }
+            Write-PathwardenNote "$Method $shown answered $status`n$cut"
             throw "$Method $shown answered $status."
         }
-        throw "Couldn't reach $($shown): $($_.Exception.Message)"
+        if (-not $text.Trim()) { return $null }
+        try { $parsed = ConvertFrom-Json -InputObject $text } catch { return $text }
+        if ($parsed -is [array]) { return , $parsed }
+        return $parsed
     }
 }
 
@@ -297,10 +408,8 @@ function ConvertTo-PathwardenResult {
     param([AllowNull()][object]$Answer)
     $notes = New-Object System.Collections.Generic.List[string]
     $c = $script:Caps
-    $message = Get-CleanText (Get-Field $Answer 'message') $c.Message -Lines
-    if (([string](Get-Field $Answer 'message')).Trim().Length -gt $c.Message) {
-        $notes.Add("message is longer than $($c.Message) characters; it was cut")
-    }
+    $message, $cut = Get-CleanTextCut (Get-Scrubbed (Get-Field $Answer 'message')) $c.Message -Lines
+    if ($cut) { $notes.Add("message is longer than $($c.Message) characters; it was cut") }
     $links = New-Object System.Collections.Generic.List[object]
     $i = 0
     foreach ($l in @(Get-Field $Answer 'links')) {
@@ -321,11 +430,14 @@ function ConvertTo-PathwardenResult {
         if ($i -ge $c.Records) { $notes.Add("records has more than $($c.Records) records; the rest were left out"); break }
         $at = "records[$i]"
         $i++
-        $id = Get-CleanText (Get-Field $r 'id') $c.RecordText
-        if (-not $id -or $id.EndsWith([string][char]0x2026)) { $notes.Add("$at.id is missing or too long; the record was left out"); continue }
+        $id, $cut = Get-CleanTextCut (Get-Field $r 'id') $c.RecordText
+        if (-not $id -or $cut) { $notes.Add("$at.id is missing or too long; the record was left out"); continue }
         if ($seen.ContainsKey($id)) { $notes.Add("$at.id '$id' is there twice; the second was left out"); continue }
         $seen[$id] = $true
-        $kept = [ordered]@{ id = $id; open = [bool](Get-Field $r 'open') }
+        # Only a real true is open, as Pathwarden reads it.
+        $open = Get-Field $r 'open'
+        if ($null -ne $open -and $open -isnot [bool]) { $notes.Add("$at.open must be true or false; it is read as false") }
+        $kept = [ordered]@{ id = $id; open = ($open -is [bool] -and $open) }
         foreach ($k in 'kind', 'label', 'number', 'status') {
             $v = Get-Field $r $k
             if ($null -ne $v -and $v -ne '') { $kept[$k] = Get-CleanText $v $c.RecordText }

@@ -37,10 +37,13 @@ working program:
   go to stderr (**Show details**).
 - It cleans and caps the result as Pathwarden does, and leaves out a link
   that isn't `https://`, with a note on stderr.
-- It reads secrets from the variables `*_env` settings name.
+- It reads secrets from the variables `*_env` settings name, and takes
+  their values out of every message, progress line and note.
 - Its HTTPS function checks certificates against the system's store,
   refuses `http://` except to this computer, and on a dry run refuses
-  anything but GET and HEAD.
+  anything but GET and HEAD. It follows a redirect only to the same
+  scheme, host and port, and its messages name only those, never the
+  path or query, where a webhook keeps its key.
 - It checks your describe block, and notes each problem on stderr.
 
 Python:

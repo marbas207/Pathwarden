@@ -97,11 +97,18 @@ class DescribeTests(unittest.TestCase):
         self.assertIn("actions[1].sends is missing: say in plain words what leaves the computer", problems)
         self.assertTrue(any(p.startswith("actions[1].id must be lowercase") for p in problems), problems)
 
-    def test_when_takes_a_list_of_states_or_fixed(self):
-        ok = [{"id": "a", "label": "A", "sends": "x", "when": ["open", "fixed"]}, {"id": "b", "label": "B", "sends": "x", "when": "fixed"}]
+    def test_when_takes_one_state_or_a_list(self):
+        ok = [
+            {"id": "a", "label": "A", "sends": "x", "when": ["open", "fixed"]},
+            {"id": "b", "label": "B", "sends": "x", "when": "fixed"},
+            {"id": "c", "label": "C", "sends": "x", "when": "open"},
+            {"id": "d", "label": "D", "sends": "x", "when": "held"},
+            {"id": "e", "label": "E", "sends": "x", "when": ["fixed", "fixed"]},
+        ]
         self.assertEqual(pw.check_describe(ok), [])
-        bad = [{"id": "a", "label": "A", "sends": "x", "when": ["closed"]}]
-        self.assertEqual(len(pw.check_describe(bad)), 1)
+        for when in (["closed"], "closed", [], 3):
+            bad = [{"id": "a", "label": "A", "sends": "x", "when": when}]
+            self.assertEqual(len(pw.check_describe(bad)), 1, when)
 
     def test_a_missing_handler_is_noted(self):
         r = Run({"kind": "describe", "settings": {}}, {"open": None})
@@ -173,12 +180,64 @@ class RunTests(unittest.TestCase):
         r = Run(None, {"open": lambda r: r.inputs["note"]}, raw=b"\xef\xbb\xbf" + json.dumps(request()).encode())
         self.assertEqual(r.answer["message"], "hi")
 
+    def test_stdout_and_stderr_are_utf8_before_the_handler_runs(self):
+        class Stream(io.StringIO):
+            def reconfigure(self, **kw):
+                self.encoding_set = kw.get("encoding")
+
+        out, err = Stream(), Stream()
+        seen = {}
+
+        def open_(req):
+            seen["out"] = getattr(out, "encoding_set", None)
+            seen["err"] = getattr(err, "encoding_set", None)
+
+        with tempfile.TemporaryDirectory() as d, contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            env = {pw.RESULT_ENV: os.path.join(d, "result.json")}
+            pw.main(ACTIONS, {"open": open_}, stdin=Stdin(json.dumps(request()).encode()), env=env, exit=False)
+        self.assertEqual(seen, {"out": "utf-8", "err": "utf-8"})
+
     def test_without_the_result_variable_the_answer_goes_to_stdout(self):
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             pw.main(ACTIONS, {"open": lambda r: "Sent."}, stdin=Stdin(json.dumps(request()).encode()), env={}, exit=False)
         self.assertEqual(json.loads(out.getvalue())["message"], "Sent.")
         self.assertIn("isn't set", err.getvalue())
+
+
+class SecretTests(unittest.TestCase):
+    def test_a_secret_is_taken_out_of_messages_progress_and_notes(self):
+        settings = {"token_env": "DESK_TOKEN"}
+        env = {"DESK_TOKEN": "tok-9f8e7d6c5b4a"}
+
+        def open_(req):
+            token = req.secret("token")
+            pw.progress(f"Using {token}")
+            raise ValueError(f"Invalid header value b'Bearer {token}'")
+
+        r = Run(request(settings=settings), {"open": open_}, env=env)
+        self.assertFalse(r.answer["ok"])
+        self.assertEqual(r.answer["message"], "It failed: ValueError: Invalid header value b'Bearer [hidden]'")
+        self.assertNotIn("tok-9f8e7d6c5b4a", r.stdout + r.stderr)
+        self.assertIn("[hidden]", r.stdout)
+
+        def failed_(req):
+            raise pw.Failed(f"No: {req.secret('token')}")
+
+        self.assertEqual(Run(request(settings=settings), {"open": failed_}, env=env).answer["message"], "No: [hidden]")
+
+    def test_messages_show_only_the_scheme_host_and_port(self):
+        self.assertEqual(pw._shown("https://hooks.example.com/services/T0/B0/SECRET?k=v#f"), "https://hooks.example.com")
+        self.assertEqual(pw._shown("https://user:pw@desk.example.com:8443/a"), "https://desk.example.com:8443")
+        self.assertEqual(pw._shown("http://[::1]:8080/x"), "http://[::1]:8080")
+        req = pw.Request(request(dry_run=True))
+        with self.assertRaises(pw.Failed) as e:
+            req.http("POST", "https://hooks.example.com/services/T0/B0/SECRET", body={})
+        self.assertNotIn("SECRET", str(e.exception))
+        self.assertNotIn("/services", str(e.exception))
+        with self.assertRaises(pw.Failed) as e:
+            pw.check_target("ftp://hooks.example.com/services/SECRET")
+        self.assertNotIn("SECRET", str(e.exception))
 
 
 class SettingsTests(unittest.TestCase):
@@ -228,6 +287,21 @@ class ResultTests(unittest.TestCase):
         self.assertEqual(r["records"], [{"id": "a", "open": True, "fields": {"Done": "false", "Count": "3"}}])
         self.assertEqual(len(notes), 1)
 
+    def test_only_a_real_true_is_open(self):
+        for value in ("yes", "false", 1, [1]):
+            r, notes = pw.clean_result(pw.ok(records=[{"id": "a", "open": value}]))
+            self.assertIs(r["records"][0]["open"], False, value)
+            self.assertTrue(any("records[0].open must be true or false" in n for n in notes), notes)
+        r, notes = pw.clean_result(pw.ok(records=[{"id": "a", "open": True}, {"id": "b"}]))
+        self.assertEqual([x["open"] for x in r["records"]], [True, False])
+        self.assertEqual(notes, [])
+
+    def test_a_link_is_capped_in_utf8_bytes(self):
+        url = "https://x.example/" + "é" * 1100
+        self.assertLess(len(url), pw.MAX_URL)
+        self.assertEqual(pw.https_problem(url), "is longer than 2,048 characters")
+        self.assertEqual(pw.https_problem("https://x.example/a‮b"), "holds a space or a control character")
+
 
 class HttpTests(unittest.TestCase):
     def test_http_is_refused_but_to_this_computer(self):
@@ -240,7 +314,7 @@ class HttpTests(unittest.TestCase):
 
     def test_a_dry_run_sends_only_reads(self):
         req = pw.Request(request(dry_run=True))
-        with self.assertRaisesRegex(pw.Failed, "Dry run: POST https://desk.example.com/api wasn't sent"):
+        with self.assertRaisesRegex(pw.Failed, "Dry run: POST https://desk.example.com wasn't sent"):
             req.http("POST", "https://desk.example.com/api?key=hidden", body={})
 
     def test_it_talks_json_and_names_a_refusal(self):
@@ -269,6 +343,62 @@ class HttpTests(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+    def test_a_redirect_is_followed_only_to_the_same_address(self):
+        seen = []
+
+        def server_for(handler):
+            server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+            threading.Thread(target=server.serve_forever, daemon=True).start()
+            return server
+
+        class Other(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                seen.append(self.headers.get("Authorization"))
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"{}")
+
+            def log_message(self, *a):
+                pass
+
+        other = server_for(Other)
+
+        class Here(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/away":
+                    self.send_response(302)
+                    self.send_header("Location", f"http://127.0.0.1:{other.server_port}/secret/path")
+                elif self.path == "/near":
+                    self.send_response(302)
+                    self.send_header("Location", "/there")
+                else:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"path": self.path, "auth": self.headers.get("Authorization")}).encode())
+                    return
+                self.end_headers()
+
+            def log_message(self, *a):
+                pass
+
+        here = server_for(Here)
+        try:
+            req = pw.Request(request())
+            base = f"http://127.0.0.1:{here.server_port}"
+            self.assertEqual(req.http("GET", base + "/near", bearer="t").json(), {"path": "/there", "auth": "Bearer t"})
+            with self.assertRaises(pw.Failed) as e:
+                req.http("GET", base + "/away", bearer="t")
+            self.assertIn("wasn't followed", str(e.exception))
+            self.assertNotIn("/secret", str(e.exception))
+            self.assertEqual(seen, [])
+            self.assertEqual(pw._origin("https://a.example/x"), pw._origin("https://A.example:443/y"))
+            self.assertNotEqual(pw._origin("https://a.example/x"), pw._origin("http://a.example/x"))
+        finally:
+            for s in (here, other):
+                s.shutdown()
+                s.server_close()
 
 
 if __name__ == "__main__":

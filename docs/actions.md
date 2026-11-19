@@ -150,7 +150,8 @@ pathwarden action check C:\Pathwarden\actions\alert-team.ps1 --setting webhook_e
 ```
 
 `action check` asks the program what it offers, then runs a dry run of
-each action on a sample finding, and names every problem:
+every action it describes, whatever its filters and `when` say, on a
+sample finding, and names every problem:
 
 ```
 Checking alert-team on PW-001-0000000000000000, a sample finding.
@@ -298,7 +299,9 @@ usually a ticket: its `id` in the other system, its `number`, `status` and
 - The finding's ID stays the same across runs, so its records stay with it.
 - A record stays until someone removes it, in the app or with
   `pathwarden action records remove`.
-- A follow-up that returns a record with the same `id` updates it.
+- A follow-up that returns a record with the same `id` replaces it: the
+  stored record becomes the one returned. Return every field you want
+  kept, not only the ones that changed; a field left out is gone.
 - `open: true` keeps a `once` action hidden, and makes a fixed finding's
   chip read "Fixed — DESK0001 still Open".
 
@@ -334,13 +337,13 @@ program's actions.
 |---|---|
 | `once: true` | The action is hidden while the finding has an open record from it. One ticket per finding. |
 | `for: "record"` | Only offered as a follow-up on a record. |
-| `when` | The finding statuses the action is offered on: a list of `open`, `held`, `accepted` and `fixed`. Without it: open, held and accepted. |
+| `when` | The finding statuses the action is offered on: one of `open`, `held`, `accepted` and `fixed`, or a list of them. Without it: open, held and accepted; a `for: "record"` action without it is offered on its records whatever the finding's status, fixed included. |
 
 A fixed finding shows only the actions whose `when` lists `fixed`, and the
 follow-ups of its records. So a "close the ticket" follow-up says
 `"when": ["fixed"]`, and an action for every finding says
-`"when": ["open", "held", "accepted", "fixed"]`. `"when": "fixed"` is the
-older form of `["fixed"]` and still works.
+`"when": ["open", "held", "accepted", "fixed"]`. A single status, such as
+`"when": "fixed"`, means the same as a list of that one.
 
 A finding's status is in the request's `finding.status`:
 
@@ -466,7 +469,7 @@ A run request:
 | `dry_run` | true or false | Run only. True: change nothing. |
 | `run` | object | Run only. `run_id`, `domains` (collected) and `pathwarden` (the version that analyzed the run). |
 | `finding` | object | Run only. The finding; see below. |
-| `record` | object or null | Run only. For a follow-up, the record it runs on: the fields a result gave it, plus `action` (`<name>/<id>`), `by`, `on`, `at` and `updated_at`. Else null. |
+| `record` | object or null | Run only. For a follow-up, the record it runs on, as the last result that gave it kept it: `id`, `open`, and `kind`, `label`, `number`, `url`, `status` and `fields` when it has them. Which action made it, who and when aren't sent. Else null. |
 | `requested_by` | object | Run only. `by`, the user (`DOMAIN\user`), and `on`, the computer. Each null when unknown. |
 
 The finding is the run's [event document](dev/formats.md#the-event-document-pathwardeneventv1)
@@ -534,7 +537,7 @@ Each action:
 | `once` | true or false | no | Hide the action while the finding has an open record from it. |
 | `follow_ups` | list | no | IDs of this program's `for: "record"` actions, offered on the records this one returns. |
 | `for` | text | no | `"record"`: only offered as a follow-up. |
-| `when` | list | no | Finding statuses it is offered on: `open`, `held`, `accepted`, `fixed`. Default: open, held and accepted. `"fixed"` alone means `["fixed"]`. |
+| `when` | text or list | no | Finding statuses it is offered on: one of `open`, `held`, `accepted`, `fixed`, or a list of them (`"fixed"` means `["fixed"]`). Default: open, held and accepted; for a `for: "record"` action, every status. |
 
 Each input:
 
@@ -592,7 +595,7 @@ Each record:
 | `id` | text | yes | Its ID in the other system, at most 200 characters, unique in the result. A follow-up returns the same `id` to update it. |
 | `kind` | text | no | What it is: `ticket`, `request`. |
 | `label` | text | no | A name, when it has no number. |
-| `number` | text | no | The number people know it by, such as `RITM10816190`. Shown on the chip. |
+| `number` | text | no | The number people know it by, such as `RITM0001234`. Shown on the chip. |
 | `status` | text | no | Its status there, such as `Open`. Shown on the chip. |
 | `open` | true or false | no | Still open there. Default false. |
 | `url` | text | no | Where to open it. |
@@ -811,6 +814,12 @@ program does.
   helper, reads the Windows store; with `requests`, call
   `truststore.inject_into_ssl()`. PowerShell, Edge and Playwright with
   `channel="msedge"` use the Windows store.
+- Keep secrets out of what the program prints. Messages and progress
+  lines are saved on the finding and shared with the history, and a
+  webhook's address holds its key in the path. The helpers take the
+  values of `*_env` secrets out of what they print, name only an
+  address's scheme, host and port, and follow a redirect only to the
+  same address, so a token isn't sent on.
 - Reconcile by finding ID, so a retried run doesn't create a second ticket.
 
 ## Testing and debugging
@@ -821,8 +830,9 @@ program does.
 pathwarden action check C:\Pathwarden\actions\rest-ticket.py --setting base_url=https://desk.example.com/api --setting token_env=PATHWARDEN_DESK_TOKEN
 ```
 
-`action check` runs the program's describe, then a dry run of each action
-it offers, on a sample finding (a follow-up on a sample record), with each
+`action check` runs the program's describe, then a dry run of every action
+it describes, whatever its `applies_to`, `when` and the block's filters
+say, on a sample finding (a follow-up on a sample record), with each
 input's default or sample text. It names every problem, and exits 2 when
 there are any:
 
