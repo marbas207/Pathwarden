@@ -121,7 +121,7 @@
     form.hidden = f.acc === 1;
     if (f.acc === 1) {
       result("fixed", "Already accepted",
-        "pathwarden.toml already accepts this finding (or its whole rule). It shows as accepted from the next analysis; change or remove it in Settings.");
+        "It covers this finding or its whole rule. Change it in Settings › Accepted risks.");
     }
     if (dialog.showModal) dialog.showModal(); else dialog.setAttribute("open", "");
     if (!form.hidden) $("ar-reason").focus();
@@ -160,7 +160,7 @@
           }
           form.hidden = true;
           result("fixed", "Accepted",
-            "Saved in pathwarden.toml. From the next analysis this finding is shown as an accepted risk, with your reason.");
+            "Saved. Shown as accepted from the next analysis.");
           tellReport({ type: "pathwarden:accepted", fingerprint: fp });
         })
         .catch(function (err) { result("error", "Not saved", err.message); })
@@ -256,7 +256,7 @@
           a.notes = (a.notes || 0) + 1;
           noteForm.hidden = true;
           noteResult("fixed", "Note added",
-            "Kept with the accepted risk in Settings. The report shows it from the next analysis.");
+            "Saved. Shows in the report from the next analysis.");
           $("an-result").setAttribute("tabindex", "-1");
           $("an-result").focus();
         })

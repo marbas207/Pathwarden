@@ -75,16 +75,15 @@
     if (!targetable) {
       why.hidden = false;
       why.textContent = !builtin
-        ? "This build has no built-in collector, so it can't re-read single objects."
+        ? "This version of Pathwarden can't collect, so it can't re-read single objects. Upload a new collection or collect again to retest."
         : f.why;
     } else {
       why.hidden = true;
       var n = Number(f.n), c = Number(f.c) || 0;
-      var text = "Re-reads " + n + (n === 1 ? " object" : " objects") +
-        " from Active Directory (the affected objects, the path and their groups) and runs the rule again.";
+      var text = "Re-reads " + n + (n === 1 ? " object" : " objects") + " from Active Directory.";
       if (c > 0) {
-        text += " Also reads sessions and local groups on " + (c === 1 ? "the computer" : "the " + c + " computers") +
-          " on its path, which needs a user and password.";
+        text += " Also reads sessions on " + (c === 1 ? "1 computer" : c + " computers") +
+          " (needs a user and password).";
       }
       // A held finding: one line saying what this retest can check.
       if (typeof f.h === "string" && f.h) text = f.h + " " + text;
@@ -163,13 +162,17 @@
         try { j = JSON.parse(r.text); } catch (e2) {}
         if (!r.ok) throw new Error(j.error || "The retest failed.");
         var kind = j.verdict === "fixed" ? "fixed" : j.verdict === "still_open" ? "open" : "unknown";
-        var title = j.verdict === "fixed" ? "Fixed ✓" : j.label;
+        var title = j.verdict === "fixed" ? "Fixed" : j.label;
         // The details, then what was read (the server's sentences).
         var lines = (j.details || []).concat(j.lines || []);
         showResult(kind, title, lines);
         tellReport(fp, j);
       })
-      .catch(function (err) { showResult("error", "Couldn't retest.", [err.message]); })
+      .catch(function (err) {
+        // No answer at all: say so, not the browser's words.
+        var said = err instanceof TypeError ? "Pathwarden isn't answering. Is it still running?" : err.message;
+        showResult("error", "Couldn't retest.", [said]);
+      })
       .then(function () { busy = false; submit.disabled = false; submit.classList.remove("busy"); });
   });
 })();

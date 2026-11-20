@@ -531,7 +531,7 @@ async fn plugins_and_actions_shows_programs_tests_them_and_locks_changes() {
     );
     assert!(page.contains(r#"data-ac-test="fake" data-action="open""#));
     assert!(page.contains(
-        r#"<span class="ac-fu">Close the ticket <span class="when">once fixed</span></span>"#
+        r#"<span class="ac-fu">Close the ticket <span class="when">after the fix</span></span>"#
     ));
     assert!(page.contains("Critical only"), "Ping the team's filter");
     // Locked with --lock-destinations: plain words, an (i) with the

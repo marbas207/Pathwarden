@@ -682,7 +682,10 @@ async fn retest_buttons_dialog_progress_and_api() {
             .post_json(&uri, serde_json::json!({"fingerprint": PW003}))
             .await;
         assert_eq!(s, StatusCode::CONFLICT);
-        assert!(body.contains("no built-in collector"), "{body}");
+        assert!(
+            body.contains("can't collect, so it can't re-read"),
+            "{body}"
+        );
     }
 
     // A recorded targeted result reaches the report's row, escaped: the
@@ -728,7 +731,7 @@ async fn retest_buttons_dialog_progress_and_api() {
     // "retested".
     let (_, page) = a.get(&format!("/runs/{first}")).await;
     assert!(
-        page.contains("15 compared with a later run, <strong>2 fixed"),
+        page.contains("15 checked by a later run, <strong>2 fixed"),
         "{page}"
     );
     assert!(!page.contains(" retested, <strong>"), "{page}");

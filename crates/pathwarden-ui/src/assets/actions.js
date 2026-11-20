@@ -51,10 +51,10 @@
       return r.text().then(function (t) {
         var j = {};
         try { j = JSON.parse(t); } catch (e) {}
-        if (!r.ok) { var err = new Error(j.error || "That didn't work. Try again."); err.status = r.status; throw err; }
+        if (!r.ok) { var err = new Error(j.error || "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs."); err.status = r.status; throw err; }
         return j;
       });
-    }, function () { throw new Error("Pathwarden is not answering. Is it still running?"); });
+    }, function () { throw new Error("Pathwarden isn't answering. Is it still running?"); });
   }
   function anyDialogOpen() {
     return Array.prototype.some.call(document.querySelectorAll("dialog"), function (d) { return d.open; });
@@ -264,11 +264,11 @@
       seeBtn.setAttribute("aria-expanded", "false");
       json.hidden = true;
       jsonNote.hidden = true;
-      jsonNote.textContent = "What Pathwarden gives the " + visible(current.name) + " program, with your inputs.";
+      jsonNote.textContent = "Sent to " + visible(current.name) + ", with your inputs.";
       testBox.checked = false;
       $("ac-saved").textContent = "";
       cancel.textContent = "Cancel";
-      setGo("Run", true, false);
+      setGo("Start", true, false);
       show("form");
       closeX.disabled = false;
       if (dialog.showModal) dialog.showModal(); else dialog.setAttribute("open", "");
@@ -303,7 +303,7 @@
       $("ac-saved").textContent = "";
       cancel.textContent = "Cancel";
       cancel.disabled = false;
-      setGo("Running…", true, true);
+      setGo(current.dry ? "Testing…" : "Working…", true, true);
       closeX.disabled = true;
       tick = setInterval(function () { $("ac-elapsed").textContent = clock((Date.now() - started) / 1000); }, 500);
     }
@@ -331,7 +331,7 @@
             // The job is gone (Pathwarden restarted, say): say so, once.
             busy = false;
             stopTimers();
-            failed("Pathwarden lost track of this action. Look at the finding's activity, then try again.");
+            failed("This action's progress was lost. Look at the finding's activity, then try again.");
             return null;
           }
           return r.json();
@@ -348,7 +348,7 @@
       var box = $("ac-result");
       box.className = "rt-result error ac-res";
       box.textContent = "";
-      box.appendChild(el("strong", null, "Couldn't start it."));
+      box.appendChild(el("strong", null, "Couldn't start " + visible(current.label || "the action") + "."));
       box.appendChild(el("p", null, message));
       show("result");
       closeX.disabled = false;
@@ -378,11 +378,11 @@
       var c = el("button", "btn small-btn");
       c.type = "button";
       c.appendChild(use("i-copy"));
-      var cl = el("span", null, "Copy");
+      var cl = el("span", null, "Copy number");
       c.appendChild(document.createTextNode(" "));
       c.appendChild(cl);
       c.addEventListener("click", function () {
-        copyText(String(name), function (ok) { cl.textContent = ok ? "Copied" : visible(name); setTimeout(function () { cl.textContent = "Copy"; }, 1600); });
+        copyText(String(name), function (ok) { cl.textContent = ok ? "Copied" : "Copy failed"; setTimeout(function () { cl.textContent = "Copy number"; }, 1600); });
       });
       row.appendChild(c);
       return row;
@@ -401,8 +401,8 @@
       if (ok) {
         strong = el("strong", null, first || "Done.");
       } else if (cancelled) {
-        strong = el("strong", null, "Cancelled.");
-        rest = "It was stopped before it finished.";
+        strong = el("strong", null, "Canceled before it finished.");
+        rest = "";
       } else {
         strong = el("strong", null, "Couldn't " + lowerFirst(current.label || "run it") + ".");
         rest = msg;
@@ -422,8 +422,12 @@
         var d = el("details");
         d.appendChild(el("summary", null, "Show details"));
         var text = (Array.isArray(r.progress) ? r.progress : []).slice();
-        String(r.details || "").split("\n").filter(Boolean).forEach(function (l) { text.push("[stderr] " + l); });
-        text.push((r.status ? r.status.charAt(0).toUpperCase() + r.status.slice(1) : "Ended") + " after " + clock((Date.now() - started) / 1000));
+        String(r.details || "").split("\n").filter(Boolean).forEach(function (l) { text.push("Error output: " + l); });
+        // "exit code 1" from the program: plain words.
+        var st = String(r.status || "");
+        var code = /^exit code (-?\d+)$/.exec(st);
+        st = code ? "Ended with error code " + code[1] : st ? st.charAt(0).toUpperCase() + st.slice(1) : "Ended";
+        text.push(st + " after " + clock((Date.now() - started) / 1000));
         d.appendChild(el("pre", null, text.join("\n")));
         box.appendChild(d);
       }
@@ -436,7 +440,7 @@
         go.hidden = false;
         go.disabled = false;
         go.classList.remove("busy");
-        go.textContent = "Done";
+        go.textContent = "Close";
         go.setAttribute("data-done", "1");
       } else {
         cancel.hidden = false;
@@ -468,7 +472,7 @@
         start("/api/actions/test", { name: current.name, action: current.id });
         return;
       }
-      if (!$("ac-result").hidden) { show("form"); setGo("Run", true, false); cancel.textContent = "Cancel"; return; }
+      if (!$("ac-result").hidden) { show("form"); setGo("Start", true, false); cancel.textContent = "Cancel"; return; }
       current.dry = testBox.checked;
       head(current.label, $("ac-title").textContent, $("ac-desc").textContent);
       start("/api/runs/" + encodeURIComponent(run) + "/actions/run", body());
@@ -565,7 +569,7 @@
   Array.prototype.forEach.call(document.querySelectorAll("[data-ac-remove]"), function (b) {
     b.addEventListener("click", function () {
       var name = b.getAttribute("data-name");
-      ask("Remove " + name + "?", "Its buttons go from every finding. What it did stays in the findings' activity.", "Remove").then(function (yes) {
+      ask("Remove the action " + name + "?", "Its buttons go from every finding. What it did stays in the findings' activity.", "Remove").then(function (yes) {
         if (!yes) return;
         post("/api/actions/" + encodeURIComponent(b.getAttribute("data-ac-remove")), { expect: name }, "DELETE").then(function () {
           location.href = "/automate/ticketing#saved";

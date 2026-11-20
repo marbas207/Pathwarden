@@ -163,7 +163,12 @@ pub fn log(ws: &Workspace) -> Result<ActionsFile, String> {
         return Ok(ActionsFile::default());
     }
     loc.store.check_expected().map_err(|e| format!("{e:#}"))?;
-    action_log::load(&loc.store).map_err(|e| format!("{e:#}"))
+    // The page says what the log's words say; the cause (a decryption
+    // error, say) goes to the log.
+    action_log::load(&loc.store).map_err(|e| {
+        pathwarden_core::logs::session_line(&format!("{e:#}"));
+        e.to_string()
+    })
 }
 
 /// The fixed findings with records, newest fix first, with those records
@@ -200,6 +205,17 @@ pub fn activity_for(ws: &Workspace, fingerprint: &str) -> Vec<Activity> {
     log(ws).map(|l| l.activity(fingerprint)).unwrap_or_default()
 }
 
+/// What a failed pull says: plain words, the error in the log.
+fn pull_failed(e: anyhow::Error) -> String {
+    let detail = format!("Couldn't get the latest history: {e:#}");
+    if pathwarden_core::logs::current().is_some() {
+        pathwarden_core::logs::note(&detail);
+    } else {
+        pathwarden_core::logs::session_line(&detail);
+    }
+    "Couldn't reach the run history. Check the network, then try again.".to_string()
+}
+
 /// Saves `change` in the environment's run history at once
 /// ([`action_log::save`]): under its lock, after a pull, then committed and
 /// pushed when it is in git. Notes for the user; the error says why it
@@ -214,19 +230,13 @@ pub fn save_change_reporting(ws: &Workspace, change: &Change) -> Result<action_l
     let config = ws.config().map_err(|e| format!("{e:#}"))?;
     let loc = crate::history_ui::locate_with(ws, None, &config)?;
     if !loc.records() {
-        return Err(
-            "This computer only reads the run history ([state] push = false), so this isn't saved there."
-                .into(),
-        );
+        return Err("This computer only reads the run history, so this isn't saved there.".into());
     }
     let _lock = loc
         .store
         .lock_waiting(pathwarden_core::settings_sync::lock_wait())
         .map_err(|e| format!("{e:#}"))?;
-    let pulled = loc
-        .store
-        .pull()
-        .map_err(|e| format!("Couldn't get the latest history: {e:#}"))?;
+    let pulled = loc.store.pull().map_err(pull_failed)?;
     let saved =
         action_log::save_reporting(&loc.store, change, loc.push).map_err(|e| format!("{e:#}"))?;
     Ok(action_log::Saved {
@@ -295,10 +305,7 @@ pub fn save_outcome_quick(
     let config = ws.config().map_err(|e| format!("{e:#}"))?;
     let loc = crate::history_ui::locate_with(ws, None, &config)?;
     if !loc.records() {
-        return Err(
-            "This computer only reads the run history ([state] push = false), so this isn't saved there."
-                .into(),
-        );
+        return Err("This computer only reads the run history, so this isn't saved there.".into());
     }
     let current = log(ws).unwrap_or_default();
     let fp = &ready.finding.fingerprint;
@@ -498,9 +505,7 @@ pub fn plain_summary(ws: &Workspace, newest: usize) -> Result<Option<action_log:
             .store
             .lock_waiting(pathwarden_core::settings_sync::lock_wait())
             .map_err(|e| format!("{e:#}"))?;
-        loc.store
-            .pull()
-            .map_err(|e| format!("Couldn't get the latest history: {e:#}"))?;
+        loc.store.pull().map_err(pull_failed)?;
     }
     Ok(action_log::read_plain(&loc.store)
         .map_err(|e| format!("{e:#}"))?
@@ -520,10 +525,7 @@ pub fn import_plain(ws: &Workspace, shown: &str) -> Result<Vec<String>, String> 
         .store
         .lock_waiting(pathwarden_core::settings_sync::lock_wait())
         .map_err(|e| format!("{e:#}"))?;
-    let pulled = loc
-        .store
-        .pull()
-        .map_err(|e| format!("Couldn't get the latest history: {e:#}"))?;
+    let pulled = loc.store.pull().map_err(pull_failed)?;
     let notes =
         action_log::import_plain(&loc.store, loc.push, shown).map_err(|e| format!("{e:#}"))?;
     Ok(pulled.into_iter().chain(notes).collect())
@@ -551,7 +553,7 @@ pub struct RecordView {
     #[serde(flatten)]
     pub record: ActionRecord,
     /// "RITM0001234 · Open", or on a fixed finding whose record is still
-    /// open "Fixed — RITM0001234 still Open" ([`action_log::chip`]).
+    /// open "Fixed · RITM0001234 still Open" ([`action_log::chip`]).
     pub chip: String,
     /// The follow-ups offered on it, as `<name>/<id>`.
     pub follow_ups: Vec<String>,
@@ -562,7 +564,7 @@ pub struct RecordView {
 pub struct ActivityView {
     #[serde(flatten)]
     pub entry: Activity,
-    /// "Opened RITM0001234 — CORP\a.admin, SECOPS-WS02, Nov 18,
+    /// "Opened RITM0001234 · CORP\a.admin, SECOPS-WS02, Nov 18,
     /// 2026, 2:02 PM" ([`Activity::line`]).
     pub line: String,
     /// What happened, in a few words ([`Activity::summary`]): a page
@@ -650,13 +652,13 @@ pub fn view(file: &ActionsFile, programs: &[Program], f: &FindingContext) -> Fin
 
 /// What a page says once a run's outcome was saved on the finding, for
 /// everyone who shares the run history.
-pub const SAVED_PAGE_WORDS: &str = "Saved on this finding for everyone on this history.";
+pub const SAVED_PAGE_WORDS: &str = "Saved on this finding for everyone who shares the run history.";
 /// What a page says when it was saved on this computer only, for now
 /// ([`SavedOutcome::pushed`] false).
 pub const SAVED_HERE_PAGE_WORDS: &str =
     "Saved on this computer, not shared yet: the next sync shares it.";
 /// What a page says of a dry run.
-pub const DRY_RUN_PAGE_WORDS: &str = "A test: nothing was sent for real or saved.";
+pub const DRY_RUN_PAGE_WORDS: &str = "Test finished. Nothing was sent or saved.";
 
 /// What a run of `ready`'s action did, as `pathwarden action run --json`
 /// prints it and the app's result card reads it: the outcome, which
@@ -733,9 +735,7 @@ pub fn test_target(
         .ok_or_else(|| format!("There is no finding action {}.", name.trim()))?;
     let described = actions::describe(block).map_err(|e| e.to_string())?;
     let Some((run, findings)) = latest_findings(ws) else {
-        return Err(
-            "Testing needs one analysis first. Analyze a collection or try the demo.".into(),
-        );
+        return Err("Testing needs one run first. Analyze a collection or try the demo.".into());
     };
     let programs = [Program {
         config: block,
@@ -751,12 +751,19 @@ pub fn test_target(
             .map(|o| (f, o))
     }) else {
         return Err(format!(
-            "{} applies to no finding of the latest run ({}).",
+            "{} doesn't apply to any finding of the latest run.",
             match action {
-                Some(id) => format!("{}/{}", block.name, id.trim()),
+                Some(id) => described
+                    .describe
+                    .actions
+                    .iter()
+                    .find(|d| d.id.eq_ignore_ascii_case(id.trim()))
+                    .map_or_else(
+                        || format!("{}/{}", block.name, id.trim()),
+                        |d| d.label.clone()
+                    ),
                 None => block.name.clone(),
-            },
-            run.id
+            }
         ));
     };
     let ask = Ask {
