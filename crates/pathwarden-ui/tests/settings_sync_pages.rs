@@ -205,7 +205,10 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         page.contains("From the repository · not trusted here"),
         "{page}"
     );
-    assert!(page.contains("Never travels."), "{page}");
+    assert!(
+        page.contains("Trust isn&#39;t shared") || page.contains("Trust isn't shared"),
+        "{page}"
+    );
 
     // Two saves from the page, one right after the other: each answered at
     // once with its own sharing, shared in order.
