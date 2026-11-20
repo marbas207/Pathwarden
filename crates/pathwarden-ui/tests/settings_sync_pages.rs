@@ -373,7 +373,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     let (_, page) = a.get("/runs").await;
     assert!(dot(&page), "{page}");
     assert!(
-        page.contains(r#"<span class="sr-only">: a setting has two values</span>"#),
+        page.contains(r#"<span class="sr-only">: settings differ from the shared settings</span>"#),
         "a name for screen readers: {page}"
     );
     let foot = page

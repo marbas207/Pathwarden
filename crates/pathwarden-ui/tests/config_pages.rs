@@ -1716,12 +1716,8 @@ async fn api_errors_are_json_sentences() {
         )
         .await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
-    let e = v["error"].as_str().unwrap();
-    assert!(
-        e.starts_with("A value in the request is not of the right kind"),
-        "{e}"
-    );
-    assert!(e.ends_with('.'), "{e}");
+    // Plain words on the page; the detail goes to the log.
+    assert_eq!(v["error"], pathwarden_ui::server::UNREADABLE_REQUEST, "{v}");
 
     let req = a
         .request(Method::POST, "/api/settings/rules")
@@ -1732,18 +1728,12 @@ async fn api_errors_are_json_sentences() {
     let (s, _, b) = a.send(req).await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "{b}");
     let v: Value = serde_json::from_str(&b).unwrap();
-    assert!(
-        v["error"]
-            .as_str()
-            .unwrap()
-            .starts_with("The request is not valid JSON"),
-        "{v}"
-    );
+    assert_eq!(v["error"], pathwarden_ui::server::UNREADABLE_REQUEST, "{v}");
 
     let (s, b) = a.get("/api/no-such-thing").await;
     assert_eq!(s, StatusCode::NOT_FOUND);
     let v: Value = serde_json::from_str(&b).unwrap();
-    assert_eq!(v["error"], "There is no /api/no-such-thing here.");
+    assert_eq!(v["error"], "That page doesn't exist.");
 
     // Pages keep the HTML Not found page.
     let (s, b) = a.get("/no-such-page").await;

@@ -370,6 +370,11 @@ async fn api_errors(req: axum::extract::Request, next: axum::middleware::Next) -
     json_error(status, message)
 }
 
+/// What a page is told when Pathwarden can't read what it sent (the
+/// detail is in the log).
+pub const UNREADABLE_REQUEST: &str =
+    "The page sent something Pathwarden can't read. Reload the page and try again.";
+
 /// [`api_errors`]'s status and sentence for an error answered as `text`.
 fn api_error_words(status: StatusCode, path: &str, text: &str) -> (StatusCode, String) {
     let text = text.trim();
@@ -389,36 +394,31 @@ fn api_error_words(status: StatusCode, path: &str, text: &str) -> (StatusCode, S
         }
     };
     if status == StatusCode::NOT_FOUND && text.starts_with('<') {
-        return (status, format!("There is no {path} here."));
+        return (status, "That page doesn't exist.".into());
     }
+    // What the page sent that couldn't be read: the detail goes to the log,
+    // the page gets what to do.
+    let unreadable = |d: &str| {
+        pathwarden_core::logs::session_line(&format!("{path}: {d}"));
+        (StatusCode::BAD_REQUEST, UNREADABLE_REQUEST.to_string())
+    };
     if let Some(d) = detail("Failed to deserialize the JSON body into the target type") {
-        return (
-            StatusCode::BAD_REQUEST,
-            sentence(format!(
-                "A value in the request is not of the right kind: {d}"
-            )),
-        );
+        return unreadable(&sentence(format!("a value is not of the right kind: {d}")));
     }
     if let Some(d) = detail("Failed to parse the request body as JSON") {
-        return (
-            StatusCode::BAD_REQUEST,
-            sentence(format!("The request is not valid JSON: {d}")),
-        );
+        return unreadable(&sentence(format!("not valid JSON: {d}")));
     }
     if status == StatusCode::UNSUPPORTED_MEDIA_TYPE {
-        return (
-            StatusCode::BAD_REQUEST,
-            "The request must be JSON (Content-Type: application/json).".into(),
-        );
+        return unreadable("not JSON (Content-Type: application/json).");
     }
     if status == StatusCode::PAYLOAD_TOO_LARGE {
         return (status, "The request is too large.".into());
     }
     if text.contains("multipart") || text.contains("boundary") {
-        return (
-            StatusCode::BAD_REQUEST,
-            sentence(format!("The upload could not be read: {text}")),
-        );
+        return (StatusCode::BAD_REQUEST, {
+            pathwarden_core::logs::session_line(&format!("{path}: {text}"));
+            UPLOAD_INTERRUPTED.to_string()
+        });
     }
     if text.is_empty() || text.starts_with('<') {
         let words = status.canonical_reason().unwrap_or("The request failed");
@@ -618,7 +618,7 @@ async fn point_page(st: &Shared, id: String) -> Response {
         Some(Ok(p)) => p,
         Some(Err(gate)) => {
             let body = format!(
-                r#"<div class="page-head"><div><h1 class="panel-title">Run</h1></div></div>{gate}"#
+                r#"<div class="page-head"><div><h1 class="panel-title">Run (locked)</h1></div></div>{gate}"#
             );
             return Html(pages::shell(
                 &pages::Ctx::new(st, &runs),
@@ -1001,7 +1001,7 @@ async fn stop(State(st): State<Shared>) -> Response {
         StatusCode::OK,
         Html(pages::bare_page(
             "Pathwarden has stopped",
-            "You are signed out and the server is stopping. You can close this tab. Start Pathwarden again to use it.",
+            "Pathwarden has stopped and you're signed out. You can close this tab.",
         )),
     )
         .into_response();
@@ -1024,7 +1024,10 @@ async fn job_status(State(st): State<Shared>, Path(id): Path<String>) -> Respons
             }
             Json(job).into_response()
         }
-        None => json_error(StatusCode::NOT_FOUND, "No such job."),
+        None => json_error(
+            StatusCode::NOT_FOUND,
+            "That analysis or collection is no longer running. Reload the page.",
+        ),
     }
 }
 
@@ -1054,7 +1057,10 @@ fn follow_first_run(st: &AppState, run: &str) {
 
 async fn delete_run(State(st): State<Shared>, Path(id): Path<String>) -> Response {
     if !workspace::valid_run_id(&id) {
-        return json_error(StatusCode::BAD_REQUEST, "Invalid run.");
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "That run no longer exists. Reload the page.",
+        );
     }
     // Its point in the run history goes too (history_ui::delete_run, the
     // same as `pathwarden history --forget`).
@@ -1066,7 +1072,7 @@ async fn delete_run(State(st): State<Shared>, Path(id): Path<String>) -> Respons
         crate::history_ui::delete_run(&ws, flag.as_deref(), &id)
     })
     .await
-    .unwrap_or_else(|_| Err("Deleting failed.".into()));
+    .unwrap_or_else(|_| Err("The run couldn't be deleted. Try again.".into()));
     match result {
         // Deleted, with something about the history the user should read.
         Ok(d) if d.folder && !d.notes.is_empty() => {
@@ -1081,7 +1087,7 @@ async fn delete_run(State(st): State<Shared>, Path(id): Path<String>) -> Respons
 fn busy() -> Response {
     json_error(
         StatusCode::CONFLICT,
-        "Pathwarden is already collecting or analyzing. Wait for it to finish, then try again.",
+        "A collection or analysis is running. Try again when it finishes.",
     )
 }
 
@@ -1115,7 +1121,10 @@ async fn analyze_anyway(State(st): State<Shared>, Path(id): Path<String>) -> Res
             spec.force = true;
             begin(&st, spec, false)
         }
-        None => json_error(StatusCode::NOT_FOUND, "That analysis is no longer waiting."),
+        None => json_error(
+            StatusCode::NOT_FOUND,
+            "That analysis has already been saved or discarded. Reload the page.",
+        ),
     }
 }
 
@@ -1221,7 +1230,10 @@ async fn place_job(
             let check = !spec.force;
             begin(&st, spec, check)
         }
-        None => json_error(StatusCode::NOT_FOUND, "That analysis is no longer waiting."),
+        None => json_error(
+            StatusCode::NOT_FOUND,
+            "That analysis has already been saved or discarded. Reload the page.",
+        ),
     }
 }
 
@@ -1304,7 +1316,10 @@ async fn label_history_run(
     axum::Form(f): axum::Form<LabelForm>,
 ) -> Response {
     if !workspace::looks_like_history_id(&run) {
-        return json_error(StatusCode::BAD_REQUEST, "Invalid run.");
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "That run no longer exists. Reload the page.",
+        );
     }
     let label = match workspace::clean_label(&f.label) {
         Ok(l) => l,
@@ -1388,6 +1403,15 @@ async fn start_analysis(State(st): State<Shared>, mut form: Multipart) -> Respon
     }
 }
 
+/// What an upload that stopped part way says.
+const UPLOAD_INTERRUPTED: &str = "The upload was interrupted. Try again.";
+
+/// What a file that couldn't be written says; the error goes to the log.
+fn save_failed(e: std::io::Error) -> String {
+    pathwarden_core::logs::session_line(&format!("Couldn't save the upload: {e}"));
+    "Couldn't save the upload. Check the free space on this computer.".to_string()
+}
+
 fn gb(bytes: u64) -> String {
     let g = bytes as f64 / (1u64 << 30) as f64;
     if g >= 1.0 {
@@ -1446,7 +1470,13 @@ pub(crate) async fn receive(
         let field = match form.next_field().await {
             Ok(Some(f)) => f,
             Ok(None) => break,
-            Err(e) => return Err(format!("The upload was interrupted: {}", e.body_text())),
+            Err(e) => {
+                pathwarden_core::logs::session_line(&format!(
+                    "The upload was interrupted: {}",
+                    e.body_text()
+                ));
+                return Err(UPLOAD_INTERRUPTED.into());
+            }
         };
         match field.name() {
             Some("force") => force = true,
@@ -1462,13 +1492,15 @@ pub(crate) async fn receive(
                     continue;
                 }
                 if !workspace::valid_run_id(&id) {
-                    return Err("That run doesn't exist.".into());
+                    return Err("That run no longer exists.".into());
                 }
                 let ws = st.ws();
                 let (run, dir) =
                     tokio::task::spawn_blocking(move || crate::add_data::find_kept(&ws, &id, true))
                         .await
-                        .map_err(|_| "Finding the collection failed.".to_string())??;
+                        .map_err(|_| {
+                            "Couldn't find this run's kept collection. Try again.".to_string()
+                        })??;
                 inputs.insert(0, dir);
                 from = Some(run);
             }
@@ -1480,18 +1512,22 @@ pub(crate) async fn receive(
                     match field.chunk().await {
                         Ok(Some(c)) => {
                             if raw.len() + c.len() > crate::opengraph_ui::MAX_DECLARATION_BYTES {
-                                return Err("The coverage declaration is too long.".into());
+                                return Err("The coverage file is too long.".into());
                             }
                             raw.extend_from_slice(&c);
                         }
                         Ok(None) => break,
-                        Err(_) => return Err("The upload was interrupted.".into()),
+                        Err(_) => return Err(UPLOAD_INTERRUPTED.into()),
                     }
                 }
                 if !raw.iter().all(u8::is_ascii_whitespace) {
                     let mut list: Vec<crate::opengraph_ui::DeclaredFile> =
-                        serde_json::from_slice(&raw)
-                            .map_err(|e| format!("The coverage declaration is not valid: {e}"))?;
+                        serde_json::from_slice(&raw).map_err(|e| {
+                            pathwarden_core::logs::session_line(&format!(
+                                "The coverage file is not valid: {e}"
+                            ));
+                            "The coverage file isn't valid. Add the file again.".to_string()
+                        })?;
                     declarations.append(&mut list);
                 }
             }
@@ -1509,7 +1545,7 @@ pub(crate) async fn receive(
                             raw.extend_from_slice(&c);
                         }
                         Ok(None) => break,
-                        Err(_) => return Err("The upload was interrupted.".into()),
+                        Err(_) => return Err(UPLOAD_INTERRUPTED.into()),
                     }
                 }
                 let text = String::from_utf8(raw)
@@ -1542,26 +1578,20 @@ pub(crate) async fn receive(
                     continue;
                 }
                 let Some(name) = safe_file_name(&raw) else {
-                    return Err(format!(
-                        "{raw} is not a .zip or .json file. Use the output of SharpHound or RustHound-CE."
-                    ));
+                    return Err(format!("{raw} isn't a .zip or .json file."));
                 };
                 // Each file in its own folder keeps names as they were.
                 let dir = scratch.join(uploaded.len().to_string());
-                tokio::fs::create_dir_all(&dir)
-                    .await
-                    .map_err(|e| format!("Couldn't save the upload: {e}"))?;
+                tokio::fs::create_dir_all(&dir).await.map_err(save_failed)?;
                 let dest = dir.join(&name);
-                let mut out = tokio::fs::File::create(&dest)
-                    .await
-                    .map_err(|e| format!("Couldn't save the upload: {e}"))?;
+                let mut out = tokio::fs::File::create(&dest).await.map_err(save_failed)?;
                 let mut size = 0u64;
                 let mut field = field;
                 loop {
                     let chunk = match field.chunk().await {
                         Ok(Some(c)) => c,
                         Ok(None) => break,
-                        Err(_) => return Err("The upload was interrupted.".into()),
+                        Err(_) => return Err(UPLOAD_INTERRUPTED.into()),
                     };
                     size += chunk.len() as u64;
                     total += chunk.len() as u64;
@@ -1577,13 +1607,9 @@ pub(crate) async fn receive(
                             gb(st.limits.total)
                         ));
                     }
-                    out.write_all(&chunk)
-                        .await
-                        .map_err(|e| format!("Couldn't save the upload: {e}"))?;
+                    out.write_all(&chunk).await.map_err(save_failed)?;
                 }
-                out.flush()
-                    .await
-                    .map_err(|e| format!("Couldn't save the upload: {e}"))?;
+                out.flush().await.map_err(save_failed)?;
                 uploaded.push(name);
                 inputs.push(dest);
             }
@@ -1606,7 +1632,7 @@ pub(crate) async fn receive(
             crate::opengraph_ui::write_declarations(&declarations, &files, &packs, now)
         })
         .await
-        .map_err(|_| "Writing the coverage file failed.".to_string())??;
+        .map_err(|_| "Couldn't save the coverage file. Try again.".to_string())??;
     }
     // Several paths (picked or dropped in the desktop window): the first.
     let paths = typed.len();
@@ -1623,7 +1649,10 @@ pub(crate) async fn receive(
         (None, [], Some(p)) => p,
         (None, [one], None) => one.clone(),
         (None, files, None) => format!("{} uploaded files", files.len()),
-        (None, files, Some(p)) => format!("{p} and {} uploaded file(s)", files.len()),
+        (None, files, Some(p)) => format!(
+            "{p} and {}",
+            pathwarden_core::text::count(files.len(), "uploaded file", "uploaded files")
+        ),
     };
     let (env, new_env) =
         check_choice(st, env.as_deref(), new_env.as_deref(), env_auto)?.unwrap_or_default();
@@ -1651,7 +1680,7 @@ async fn short_text(mut field: axum::extract::multipart::Field<'_>) -> Result<St
                 raw.extend_from_slice(&c);
             }
             Ok(None) => break,
-            Err(_) => return Err("The upload was interrupted.".into()),
+            Err(_) => return Err(UPLOAD_INTERRUPTED.into()),
         }
     }
     String::from_utf8(raw).map_err(|_| "A field of the form is not valid text.".to_string())

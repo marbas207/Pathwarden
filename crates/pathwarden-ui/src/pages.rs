@@ -607,8 +607,8 @@ pub(crate) fn shell(
         <p class="about-links"><a href="{SITE_URL}" target="_blank" rel="noopener noreferrer">pathwarden.org</a><a href="{COFFEE_URL}" target="_blank" rel="noopener noreferrer">Buy me a coffee</a><a href="{REPO_URL}/issues/new" target="_blank" rel="noopener noreferrer">Report a problem</a><a href="{REPO_URL}/releases" target="_blank" rel="noopener noreferrer">Check for updates</a></p>
       </div>
     </details>
-    <button type="button" class="theme-toggle icon-btn" id="theme-toggle" aria-pressed="false" title="Light mode">{i_theme}<span class="tt-label sr-only">Light mode</span></button>
-    <form method="post" action="/stop" class="stop-form" data-confirm="Stop Pathwarden? This signs you out and stops the server; anything still collecting or analyzing is canceled."><button type="submit" class="theme-toggle icon-btn stop-btn" title="Stop Pathwarden: sign out and stop the server">{i_stop}<span class="tt-label sr-only">Stop Pathwarden</span></button></form>
+    <button type="button" class="theme-toggle icon-btn" id="theme-toggle" title="Light mode">{i_theme}<span class="tt-label sr-only">Light mode</span></button>
+    <form method="post" action="/stop" class="stop-form" data-confirm="Stop Pathwarden? You are signed out and any collection or analysis still running stops."><button type="submit" class="theme-toggle icon-btn stop-btn" title="Stop Pathwarden and sign out">{i_stop}<span class="tt-label sr-only">Stop Pathwarden</span></button></form>
   </div>
 </aside>
 <main class="{main_class}">
@@ -684,8 +684,11 @@ pub(crate) fn shell(
     )
 }
 
-/// What the rail's dot on Settings says.
+/// What a Settings section's dot says (Settings' jump links).
 pub const SETTINGS_DIFFER: &str = "A setting has two values";
+
+/// What the rail's dot on Settings says; `app.js` says the same.
+pub const RAIL_DIFFER: &str = "Settings differ from the shared settings";
 
 /// The rail's Settings link `link`, with one amber dot when some shared
 /// section differs from the shared settings, or Pathwarden stopped
@@ -695,10 +698,10 @@ pub const SETTINGS_DIFFER: &str = "A setting has two values";
 fn settings_item(link: String, differ: bool, crash: bool) -> String {
     let words = match (differ, crash) {
         (false, false) => return link,
-        (true, false) => SETTINGS_DIFFER.to_string(),
+        (true, false) => RAIL_DIFFER.to_string(),
         (false, true) => crate::logs_ui::CRASH_DOT.to_string(),
         (true, true) => format!(
-            "{SETTINGS_DIFFER}; {}",
+            "{RAIL_DIFFER}; {}",
             crate::logs_ui::CRASH_DOT.to_lowercase()
         ),
     };
@@ -741,7 +744,7 @@ pub fn home(
             // A new environment: say whose Home this is.
             let _ = write!(
                 b,
-                r#"<div class="env-note card" role="note">{}<p><strong>{}</strong> has no runs yet. Analyze a collection, collect from Active Directory or try the demo: the run is saved in this environment, with its settings.</p></div>"#,
+                r#"<div class="env-note card" role="note">{}<p><strong>{}</strong> has no runs yet. New runs are saved here.</p></div>"#,
                 icon("i-layers"),
                 esc(&ctx.env_name)
             );
@@ -757,7 +760,7 @@ pub fn home(
         };
         let _ = write!(
             b,
-            r#"<div class="page-head home-head"><div><h1 class="panel-title">{title}</h1><p class="lead">Last analysis {when}.</p></div>{menu}</div>"#,
+            r#"<div class="page-head home-head"><div><h1 class="panel-title">{title}</h1><p class="lead">Last run {when}.</p></div>{menu}</div>"#,
             when = time(latest.created_at),
             menu = new_analysis_menu(ctx.has_demo()),
         );
@@ -770,7 +773,7 @@ pub fn home(
         };
         let _ = write!(
             b,
-            r#"<a class="banner card" href="/{page}?job={id}"><span class="spinner" aria-hidden="true"></span><span><strong>{what}</strong> <span class="muted">{source}</span></span><span class="more-link">See progress {arrow}</span></a>"#,
+            r#"<a class="banner card" href="/{page}?job={id}"><span class="spinner" aria-hidden="true"></span><span><strong>{what}</strong> <span class="muted">{source}</span></span><span class="more-link">Open {arrow}</span></a>"#,
             id = esc(&job.id),
             source = esc(&crate::workspace::hide_profile(&job.source)),
             arrow = icon("i-arrow"),
@@ -787,6 +790,10 @@ pub fn home(
             }
         }
         b.push_str("</div>");
+    }
+    // On first run the welcome card is the page: no empty list under it.
+    if runs.is_empty() {
+        return shell(ctx, Some(Nav::Home), "Home", "", &b);
     }
     let _ = write!(
         b,
@@ -813,7 +820,7 @@ fn welcome(b: &mut String) {
     b.push_str(&welcome_card(
         "Attack path analysis",
         "See every attack path to Tier Zero.",
-        "Pathwarden reads what SharpHound or RustHound-CE collects, finds every path to Tier Zero, and the fewest changes that cut them. Everything stays on this computer.",
+        "Pathwarden reads what SharpHound or RustHound-CE collects, finds every path to Tier Zero, and the fewest fixes that cut them. Runs stay on this computer unless you share a run history.",
     ));
 }
 
@@ -848,8 +855,9 @@ pub(crate) fn welcome_card(eyebrow: &str, title: &str, lead: &str) -> String {
 /// The way in to Analyze, which asks where the data comes from (Active
 /// Directory, or a collection you have), wherever a page offers it: it
 /// opens on Collect from Active Directory (`/collect`).
-pub(crate) const ANALYZE_TITLE: &str = "Collect or analyze";
-pub(crate) const ANALYZE_SUB: &str = "Collect from Active Directory, or use a collection you have.";
+pub(crate) const ANALYZE_TITLE: &str = "Analyze";
+pub(crate) const ANALYZE_SUB: &str =
+    "Collect from Active Directory, or analyze a previous collection.";
 
 /// The ways in, as buttons, for a page with nothing to show yet.
 pub(crate) fn empty_actions() -> String {
@@ -860,19 +868,19 @@ pub(crate) fn empty_actions() -> String {
     )
 }
 
-/// "New analysis ▾": Analyze and the demo, as a menu; once there is a demo
+/// "Analyze ▾": Analyze and the demo, as a menu; once there is a demo
 /// environment, a plain button to Analyze.
 fn new_analysis_menu(has_demo: bool) -> String {
     if has_demo {
         return format!(
-            r#"<a class="btn primary" href="/collect">{} New analysis</a>"#,
+            r#"<a class="btn primary" href="/collect">{} Analyze</a>"#,
             icon("i-plus")
         );
     }
     format!(
-        r#"<details class="menu new-menu"><summary class="btn primary">{i_plus} New analysis <svg class="ic chev" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary><ul class="menu-list card menu-right">
+        r#"<details class="menu new-menu"><summary class="btn primary">{i_plus} Analyze <svg class="ic chev" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary><ul class="menu-list card menu-right">
 <li><a href="/collect">{i_upload}<span><strong>{ANALYZE_TITLE}</strong><span class="muted small">{ANALYZE_SUB}</span></span></a></li>
-<li><button type="button" class="menu-item" data-demo>{i_play}<span><strong>Try the demo</strong><span class="muted small">A made-up company, built in.</span></span></button></li>
+<li><button type="button" class="menu-item" data-demo>{i_play}<span><strong>Try the demo</strong><span class="muted small">A made-up company: 15,000 users, 10,000 computers.</span></span></button></li>
 </ul></details>"#,
         i_plus = icon("i-plus"),
         i_upload = icon("i-upload"),
@@ -910,7 +918,7 @@ fn env_overview(b: &mut String, env: &Env, now: i64, ov: &str) {
     let _ = write!(
         b,
         r#"<section class="env-ov">
-  <header class="ec-head"><h2 class="ec-name"><a href="/runs/{id}">{env}</a>{demo}</h2><span class="muted small">{n_runs} · latest {when} · collected {ago}</span><span class="ec-links"><a href="/runs/{id}">Report</a><a href="/runs/{id}/explore">Explore</a><a href="/progress?env={key}">Progress</a></span></header>
+  <header class="ec-head"><h2 class="ec-name"><a href="/runs/{id}">{env}</a>{demo}</h2><span class="muted small">{n_runs} · latest run {when} · collected {ago}</span><span class="ec-links"><a href="/runs/{id}">Report</a><a href="/runs/{id}/explore">Explore</a><a href="/progress?env={key}">Progress</a></span></header>
   {ov}
 </section>"#,
         id = esc(&r.id),
@@ -968,9 +976,9 @@ fn env_card(b: &mut String, env: &Env, now: i64) {
         Some(p) => {
             let d = r.exposed as i64 - p.exposed as i64;
             if d == 0 && just_before {
-                r#"<span class="ec-delta muted">No change since the run before.</span>"#.to_string()
+                r#"<span class="ec-delta muted">No change since the last run</span>"#.to_string()
             } else if d == 0 {
-                r#"<span class="ec-delta muted">No change since the last comparable run.</span>"#
+                r#"<span class="ec-delta muted">No change since the last run of the same kind</span>"#
                     .to_string()
             } else {
                 format!(
@@ -999,12 +1007,9 @@ fn env_card(b: &mut String, env: &Env, now: i64) {
     // (`exposure_delta > 0`), not of the rounding of the figure.
     let pts = |d: f64| {
         if d < 0.005 {
-            r#"<span class="good">&minus;&lt;0.01 pts</span>"#.to_string()
+            r#"<span class="good">&minus;&lt;0.01 points</span>"#.to_string()
         } else {
-            format!(
-                r#"<span class="good">&minus;{}</span>"#,
-                pathwarden_core::posture::points(d)
-            )
+            format!(r#"<span class="good">&minus;{d:.2} points</span>"#)
         }
     };
     let plan_drop = if r.exposure_delta > 0.0 {
@@ -1024,7 +1029,7 @@ fn env_card(b: &mut String, env: &Env, now: i64) {
                     if d > 0.0 { format!(" {}", pts(d)) } else { String::new() }
                 ),
                 _ if r.plan_steps > 1 && r.exposure_delta > 0.0 => format!(
-                    r#" <span class="muted">· the full plan ({} steps):</span>{plan_drop}"#,
+                    r#" <span class="muted">· all {} steps</span>{plan_drop}"#,
                     num(r.plan_steps)
                 ),
                 _ if r.plan_steps > 1 => {
@@ -1037,7 +1042,7 @@ fn env_card(b: &mut String, env: &Env, now: i64) {
             r#"<p class="ec-next"><span class="ec-k">First step</span> <span class="muted">No attack path to cut.</span></p>"#.to_string()
         }
         None => format!(
-            r#"<p class="ec-next"><span class="ec-k">First step</span> <a href="/runs/{}">{} plan steps cut every path.</a>{plan_drop}</p>"#,
+            r#"<p class="ec-next"><span class="ec-k">First step</span> <a href="/runs/{}">{} steps cut every path.</a>{plan_drop}</p>"#,
             esc(&r.id),
             num(r.plan_steps)
         ),
@@ -1045,15 +1050,15 @@ fn env_card(b: &mut String, env: &Env, now: i64) {
     let _ = write!(
         b,
         r#"<section class="env-card card">
-  <header class="ec-head"><h2 class="ec-name"><a href="/runs/{id}">{env}</a>{demo}</h2><span class="muted small">{n_runs} · latest {when}</span></header>
+  <header class="ec-head"><h2 class="ec-name"><a href="/runs/{id}">{env}</a>{demo}</h2><span class="muted small">{n_runs} · latest run {when}</span></header>
   <div class="ec-main">
-    <div class="ec-expo {band}" title="{reason}"><span class="ec-label">Tier Zero <span class="ec-grade">· {grade}</span></span><span class="ec-pct">{count}</span><span class="ec-what">{what}</span>{change}<span class="ec-share muted small">{share}{mark}</span></div>
+    <div class="ec-expo {band}"><span class="ec-label">Tier Zero <span class="ec-grade">· {grade}</span>{reason}</span><span class="ec-pct">{count}</span><span class="ec-what">{what}</span>{change}<span class="ec-share muted small">{share}{mark}</span></div>
     {protect}
-    <div class="ec-sev"><span class="ec-k">Open</span>{crit}{high}<span class="muted small">of {open} open findings</span></div>
+    <div class="ec-sev"><span class="ec-k">Open</span>{crit}{high}<span class="muted small">of {open}</span></div>
     {spark}
   </div>
   {next}
-  <footer class="ec-foot"><span class="muted small" title="When the data was collected">Collected {ago}</span><span class="ec-links"><a href="/runs/{id}">Report</a><a href="/runs/{id}/explore">Explore</a><a href="/progress?env={key}">Progress</a></span></footer>
+  <footer class="ec-foot"><span class="muted small">Collected {ago}</span><span class="ec-links"><a href="/runs/{id}">Report</a><a href="/runs/{id}/explore">Explore</a><a href="/progress?env={key}">Progress</a></span></footer>
 </section>"#,
         id = esc(&r.id),
         env = esc(&r.environment()),
@@ -1069,7 +1074,7 @@ fn env_card(b: &mut String, env: &Env, now: i64) {
         },
         when = time(r.created_at),
         band = grade_class(r),
-        reason = esc(&r.status_reason()),
+        reason = tip(&format!("ec-why-{}", r.id), "this status", &r.status_reason()),
         count = num(r.exposed),
         what = if r.exposed == 0 {
             "accounts have an attack path to Tier Zero"
@@ -1088,7 +1093,7 @@ fn env_card(b: &mut String, env: &Env, now: i64) {
         spark = sparkline(&alike),
         crit = sev(r.critical, Severity::Critical, "critical"),
         high = sev(r.high, Severity::High, "high"),
-        open = num(r.open_findings()),
+        open = pathwarden_core::text::count(r.open_findings(), "finding", "findings"),
         ago = days_ago(collected, now),
         key = esc(&crate::progress::urlencode(&crate::retest_ui::env_key(r))),
     );
@@ -1133,7 +1138,7 @@ fn run_list(b: &mut String, runs: &[RunSummary]) {
     if runs.is_empty() {
         let _ = write!(
             b,
-            r#"<div class="empty card">{}<div><p><strong>No runs yet.</strong><br><span class="muted">Analyze a collection, collect from Active Directory or try the demo, and the results show up here.</span></p>{}</div></div>"#,
+            r#"<div class="empty card">{}<div><p><strong>No runs yet.</strong><br><span class="muted">Analyze a collection or try the demo, and the run shows up here.</span></p>{}</div></div>"#,
             icon("i-runs"),
             empty_actions()
         );
@@ -1160,7 +1165,7 @@ pub(crate) fn label_editor(
 ) -> (String, String) {
     let button = match label {
         Some(_) => format!(
-            r#"<button type="button" class="rr-edit" data-label-edit aria-label="Change the label" title="Change the label">{}</button>"#,
+            r#"<button type="button" class="rr-edit" data-label-edit aria-label="Edit label" title="Edit label">{}</button>"#,
             icon("i-edit")
         ),
         None => format!(
@@ -1169,7 +1174,7 @@ pub(crate) fn label_editor(
         ),
     };
     let form = format!(
-        r#"<form class="inline-edit" method="post" action="{action}" data-label-form hidden><input type="hidden" name="back" value="{back}"><input type="text" name="label" value="{value}" maxlength="{max}" autocomplete="off" aria-label="Run label" placeholder="e.g. baseline, after GPO fix"><button type="submit" class="btn primary icon-only" aria-label="Save the label" title="Save">{i_check}</button><button type="button" class="btn icon-only" data-label-cancel aria-label="Cancel" title="Cancel">{i_x}</button>{hint}</form>"#,
+        r#"<form class="inline-edit" method="post" action="{action}" data-label-form hidden><input type="hidden" name="back" value="{back}"><input type="text" name="label" value="{value}" maxlength="{max}" autocomplete="off" aria-label="Run label" placeholder="for example baseline, after GPO fix"><button type="submit" class="btn primary icon-only" aria-label="Save label" title="Save label">{i_check}</button><button type="button" class="btn icon-only" data-label-cancel aria-label="Cancel" title="Cancel">{i_x}</button>{hint}</form>"#,
         action = esc(action),
         back = esc(back),
         value = attr(label.unwrap_or_default()),
@@ -1262,20 +1267,20 @@ pub(crate) fn tip(id: &str, about: &str, body: &str) -> String {
 
 /// What a safety lock is, behind the (i) of each lock note
 /// ([`lock_note`]).
-pub(crate) const LOCK_ABOUT: &str = "A safety lock: it keeps a page from choosing a program for Pathwarden to run, or where findings and runs go.";
+pub(crate) const LOCK_ABOUT: &str = "Safety locks keep pages from choosing programs for Pathwarden to run, or where findings and runs are sent.";
 
 /// A lock note: `words` (fixed text: what is turned off in this app and
 /// what still works), with an (i) that says it is a safety lock and links
 /// to the docs on turning it off. The page names no command.
 pub(crate) fn lock_note(id: &str, words: &str) -> String {
     format!(
-        r#"<div class="note locked" data-lock="{id}">{lock}<p>{words} <span class="tip"><button type="button" class="tip-btn" aria-label="About: safety lock" aria-describedby="{id}-tip">{i}</button><span class="tip-text" role="tooltip" id="{id}-tip">{about} {docs}</span></span></p></div>"#,
+        r#"<div class="note locked" data-lock="{id}">{lock}<p>{words} <span class="tip"><button type="button" class="tip-btn" aria-label="About: safety locks" aria-describedby="{id}-tip">{i}</button><span class="tip-text" role="tooltip" id="{id}-tip">{about} {docs}</span></span></p></div>"#,
         id = esc(id),
         lock = icon("i-lock"),
         words = esc(words),
         i = icon("i-info"),
         about = esc(LOCK_ABOUT),
-        docs = repo_link("docs/ui.md#safety-locks", "How to turn it off"),
+        docs = repo_link("docs/ui.md#safety-locks", "How to turn them off"),
     )
 }
 
@@ -1373,7 +1378,7 @@ pub(crate) fn source_switch(collect: bool) -> String {
             "/analyze",
             "i-upload",
             "A previous collection",
-            "The .zip or .json files SharpHound or RustHound-CE wrote",
+            "SharpHound, RustHound-CE, AzureHound or OpenGraph files",
         ),
     )
 }
@@ -1389,12 +1394,12 @@ pub fn analyze(
     from: Option<&RunSummary>,
 ) -> String {
     let example = if cfg!(windows) {
-        r"e.g. C:\Collections\20240410083609_BloodHound.zip"
+        r"C:\Collections\20240410083609_BloodHound.zip"
     } else {
-        "e.g. /home/me/collections/20240410083609_BloodHound.zip"
+        "/home/me/collections/20240410083609_BloodHound.zip"
     };
     let kept = if ctx.window {
-        "In this window, files are read where they are on this computer: nothing is copied or uploaded."
+        "Files are read where they are; nothing is copied."
     } else if ctx.keep_uploads {
         "Uploaded copies are kept on this computer. Delete them when you are done."
     } else {
@@ -1427,7 +1432,7 @@ pub fn analyze(
             ),
         ),
         None => (
-            "Add what SharpHound or RustHound-CE collected: the .zip it creates, or the .json files inside it. OpenGraph files from TaskHound and similar collectors can go with them.",
+            "SharpHound or RustHound-CE output (.zip or .json), plus any AzureHound or OpenGraph files.",
             String::new(),
         ),
     };
@@ -1445,7 +1450,7 @@ pub fn analyze(
     <input type="file" id="files" name="files" multiple accept=".zip,.json">
     <span class="dz-icon">{i_upload}</span>
     <span class="dz-title">Drop files here, or <span class="link">browse</span></span>
-    <span class="dz-hint">.zip or .json, up to {max} each</span>
+    <span class="dz-hint">.zip or .json up to {max} each, or drop a folder</span>
    </label>
    <div class="sb-path">
     <span class="or"><span>or paste the path of a file or folder on this computer</span></span>
@@ -1463,7 +1468,7 @@ pub fn analyze(
  </div>
  <div class="an-col an-dest">
   <h2 class="an-step"><span>2</span> Where it goes</h2>
-  <div class="note">{i_lock}<p><strong>Collector data is a map of your domain.</strong> {kept} Reports are saved on this computer only, until you delete them.</p></div>
+  <div class="note">{i_lock}<p><strong>Collector data is a map of your domain.</strong> {kept}</p></div>
   {env_choice}
   <div id="an-applies">{applies}</div>
 
@@ -1486,12 +1491,12 @@ pub fn analyze(
     <li data-step="report"><span class="st"></span><span class="sl">Writing the report</span></li>
   </ol>
   <div class="upbar" id="upbar" hidden><span id="upbar-fill"></span></div>
-  <p class="muted small">Large directories can take a few minutes. You can leave this page; the analysis keeps going.</p>
+  <p class="muted small">You can leave this page; it keeps going.</p>
 </section>
 
 <section class="ask-env card" id="ask-env" hidden>
   <div class="env-where" id="ask-where" data-state="ask"></div>
-  <div class="form-actions"><button type="button" class="btn primary" id="ask-go" disabled>Save the run {i_arrow}</button><button type="button" class="btn" id="ask-discard">Discard</button><span class="muted small" id="ask-hint">Nothing was saved yet. Choose an environment, or discard the files.</span></div>
+  <div class="form-actions"><button type="button" class="btn primary" id="ask-go" disabled>Save the run {i_arrow}</button><button type="button" class="btn" id="ask-discard">Discard</button><span class="muted small" id="ask-hint">Nothing is saved yet. Choose an environment, or discard.</span></div>
 </section>
 
 <section class="failed card" id="duplicate" hidden role="alert">
@@ -1501,10 +1506,10 @@ pub fn analyze(
 </section>
 
 <section class="failed card" id="failed" hidden role="alert">
-  <div class="failed-head">{i_alert}<h2 class="sub">We couldn't analyze that</h2></div>
+  <div class="failed-head">{i_alert}<h2 class="sub">The analysis didn't finish</h2></div>
   <p id="failed-message"></p>
   <p class="muted small failed-source" id="failed-source" hidden></p>
-  <div class="failed-actions"><button type="button" class="btn primary" id="retry">Try again</button><button type="button" class="btn" data-demo>{i_play} Try the demo</button><a class="btn" href="/collect">{i_radar} Collect from Active Directory</a></div>
+  <div class="failed-actions"><button type="button" class="btn primary" id="retry">Try again</button><a class="btn" href="/collect">{i_radar} Collect from Active Directory</a></div>
 </section>
 <script src="/static/opengraph.js" defer></script>
 "##,
@@ -1530,7 +1535,6 @@ pub fn analyze(
         i_lock = icon("i-lock"),
         i_arrow = icon("i-arrow"),
         i_alert = icon("i-alert"),
-        i_play = icon("i-play"),
         i_radar = icon("i-radar"),
     );
     shell(ctx, Some(Nav::Analyze), "Analyze", "", &body)
@@ -1565,7 +1569,7 @@ pub fn runs(ctx: &Ctx, runs: &[RunSummary], rows: &[String], note: &str, gate: &
             String::new()
         } else {
             format!(
-                r#"<a class="btn" href="/collect">{} New analysis</a>"#,
+                r#"<a class="btn" href="/collect">{} Analyze</a>"#,
                 icon("i-upload")
             )
         }
@@ -1574,7 +1578,7 @@ pub fn runs(ctx: &Ctx, runs: &[RunSummary], rows: &[String], note: &str, gate: &
     if rows.is_empty() {
         run_list(&mut b, &[]);
     } else {
-        b.push_str(r#"<div class="rows card runlist with-vs"><div class="runhead" aria-hidden="true"><span>Run</span><span>With an attack path to Tier Zero</span><span>Vs previous</span><span>Critical and high</span><span></span></div>"#);
+        b.push_str(r#"<div class="rows card runlist with-vs"><div class="runhead" aria-hidden="true"><span>Run</span><span>With an attack path to Tier Zero</span><span>Since the previous run</span><span>Critical and high</span><span></span></div>"#);
         for row in rows {
             b.push_str(row);
         }
@@ -1605,7 +1609,7 @@ pub fn run(
 ) -> String {
     let collected = r
         .collected_at
-        .map(|t| format!(" · Data collected {}", collected_time(t)))
+        .map(|t| format!(" · Collected {}", collected_time(t)))
         .unwrap_or_default();
     // How the run was collected and recorded, and the other sources read
     // with it, are on Run details; when findings may be missing, one line
@@ -1634,9 +1638,9 @@ pub fn run(
     } else {
         // Without a targeted retest, every result is a later run's: nobody
         // retested anything, so don't say so.
-        let (what, tip) = if parts.targeted == 0 {
+        let (what, about) = if parts.targeted == 0 {
             (
-                "compared with a later run",
+                "checked by a later run",
                 "Open findings checked against a later run of this environment",
             )
         } else {
@@ -1646,7 +1650,8 @@ pub fn run(
             )
         };
         format!(
-            r#"<span class="rh-retest" title="{tip}">{i_retest} {n} {what}, <strong>{f} fixed</strong></span>"#,
+            r#"<span class="rh-retest">{i_retest} {n} {what}, <strong>{f} fixed</strong> {tip}</span>"#,
+            tip = tip("rh-retest-tip", "these counts", about),
             i_retest = icon("i-check"),
             n = num(parts.retested),
             f = num(parts.fixed),
@@ -1657,7 +1662,7 @@ pub fn run(
         &format!("/runs/{}/label", r.id),
         &format!("/runs/{}", r.id),
         &format!(
-            "Up to {} characters. Leave it empty to show {}.",
+            "Up to {} characters. Empty shows {}.",
             crate::workspace::MAX_LABEL,
             r.environment()
         ),
@@ -1665,7 +1670,7 @@ pub fn run(
     let body = format!(
         r##"<div class="page-head run-head">
   <div class="rh-top">
-    <div class="eyebrow"><a class="rh-env" href="/environments#env-{env_id}" title="Its environment">{i_layers}{env_name}</a>{demo}</div>
+    <div class="eyebrow"><a class="rh-env" href="/environments#env-{env_id}" title="Open this environment">{i_layers}{env_name}</a>{demo}</div>
     <div class="rh-title"><h1 class="panel-title">{title}</h1>{edit}{form}</div>
   </div>
   <div class="rh-text">
@@ -1677,12 +1682,12 @@ pub fn run(
     <div class="rh-actions">
       <a class="btn primary" href="/runs/{id}/explore">{i_explore} Explore</a>
       {download}
-      <a class="btn" href="/runs/{id}/report" target="_blank" rel="noopener">{i_external} Open full page</a>
+      <a class="btn" href="/runs/{id}/report" target="_blank" rel="noopener">{i_external} Open report in a new tab</a>
     </div>
   </div>
   <button type="button" class="rd-delete" data-delete="{id}"{data_rd} hidden aria-hidden="true" tabindex="-1">{delete_words}</button>
 </div>
-{env_note}<div class="frame card"><iframe class="report-frame" id="report-frame" title="Report for {env}" data-src="/runs/{id}/report?embed=1{rd}" sandbox="{sandbox}"></iframe></div>
+{env_note}<div class="frame card"><iframe class="report-frame" id="report-frame" title="Report: {run_title}" data-src="/runs/{id}/report?embed=1{rd}" sandbox="{sandbox}"></iframe></div>
 {below}
 
 {dialogs}<dialog id="confirm-delete" class="card">
@@ -1702,7 +1707,7 @@ pub fn run(
         },
         from_repo = if r.shared.is_some() {
             format!(
-                r#" <span class="tag repo">{}From the repository</span>"#,
+                r#" <span class="tag repo">{}From the run history</span>"#,
                 icon("i-history")
             )
         } else {
@@ -1736,7 +1741,7 @@ pub fn run(
             String::new()
         },
         demo = if r.demo { " · Demo data" } else { "" },
-        env = esc(&r.environment()),
+        run_title = esc(&r.title()),
         when = time(r.created_at),
         source = esc(&crate::workspace::hide_profile(&r.source)),
         dialogs = parts.dialogs,
@@ -1759,7 +1764,7 @@ fn delete_dialog(r: &RunSummary, remove: crate::run_details::Remove) -> String {
                 "The report for <strong>{}</strong> is removed from this computer. This can't be undone.{}",
                 esc(&r.title()),
                 if recorded {
-                    " Its point in the run history is removed too, so Progress stops showing it (what it taught the findings state, such as when a finding was first seen, stays)."
+                    " It is also removed from the run history and Progress. Findings keep their first-seen dates."
                 } else {
                     ""
                 }
@@ -1767,20 +1772,20 @@ fn delete_dialog(r: &RunSummary, remove: crate::run_details::Remove) -> String {
             "Delete run",
         ),
         Remove::FromHistory => (
-            "Remove this run from the history?".to_string(),
+            "Remove this run from the run history?".to_string(),
             format!(
-                "<strong>{}</strong> is removed from the repository, with its point in the run history, so every computer loses it on its next sync (what it taught the findings state stays). The repository's git history still holds it.",
+                "<strong>{}</strong> is removed from the run history for everyone at their next sync. Findings keep their dates. It can be recovered from the repository's git history.",
                 esc(&r.title())
             ),
-            "Remove from the history",
+            "Remove from the run history",
         ),
         Remove::Hide => (
             "Hide this run on this computer?".to_string(),
             format!(
-                "<strong>{}</strong> stays in the repository for everyone else and isn't loaded here again.",
+                "<strong>{}</strong> stays in the run history for everyone else. It won't load on this computer again.",
                 esc(&r.title())
             ),
-            "Hide",
+            "Hide on this computer",
         ),
     };
     format!(
