@@ -44,15 +44,43 @@ says the change is turned off in this app:
   credentials go;
 - turning the close limit off (100%).
 
-Without the flag, the page can change a plugin's other settings, its
+With the flag, the page can still change a plugin's other settings, its
 ticket fields and the safety limits. The page saves only the names of
 environment variables, never their values.
 
-The same flag is needed to change where the run history is kept on
-**History storage** (another repository, branch or folder), to keep
-full runs and settings in a history that isn't encrypted, to use
-**Connect to a run history**, and to add or remove a finding action's
-program under **Finding actions** on the same page.
+The same flag also turns off changing where the run history is kept on
+**History storage** (another repository, branch or folder), keeping full
+runs and settings in a history that isn't encrypted, **Connect to a run
+history**, and adding or removing a finding action's program under
+**Finding actions** on the same page.
+
+### Passwords and tokens
+
+Pathwarden never stores a password or token. A plugin's setting names an
+environment variable instead (a setting ending in `_env`), and the plugin
+reads the value from it when it runs.
+
+1. **Pick a name**, such as `PATHWARDEN_SN_PASSWORD`, and type that name,
+   not the password, in the plugin's setting (in the app's form, or
+   `password_env = "PATHWARDEN_SN_PASSWORD"` in `pathwarden.toml`).
+2. **Set its value** for the Windows account that runs Pathwarden:
+   - Click Start, type *environment variables*, and open **Edit
+     environment variables for your account**.
+   - Under **User variables**, click **New**. Enter the name from step 1
+     and the password as the value, then click **OK** twice.
+
+   Or, in a command prompt: `setx PATHWARDEN_SN_PASSWORD "the password"`.
+   On Linux, export it in the profile of the account that runs
+   Pathwarden.
+3. **For scheduled runs**, do step 2 signed in as the account the
+   scheduled task runs as (a service account keeps it out of your own
+   profile). A secret store your scheduler supports works too, as long
+   as it sets the variable.
+4. **Restart Pathwarden.** It only sees variables that existed when it
+   started: close it (Stop Pathwarden at the bottom of the left rail) and
+   start it again.
+5. **Click Test** on the plugin. A missing variable is named in the
+   result.
 
 ### Finding actions in the app
 

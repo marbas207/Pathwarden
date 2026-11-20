@@ -23,8 +23,7 @@ const SPRITE: &str = r##"<svg class="sprite" width="0" height="0" aria-hidden="t
 <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M12.5 15H17"/></symbol>
 </defs></svg>"##;
 
-const DOCS_COLLECT: &str =
-    "https://github.com/marbas207/Pathwarden/blob/main/docs/collect.md#what-each-method-collects";
+const DOCS_COLLECT: &str = "https://pathwarden.org/docs/collect.html#what-each-method-collects";
 const SHARPHOUND_RELEASES: &str = "https://github.com/SpecterOps/SharpHound/releases";
 
 const STEPS: [&str; 6] = ["Where", "Who", "How deep", "Check", "Collect", "Results"];

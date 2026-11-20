@@ -534,10 +534,10 @@ async fn plugins_and_actions_shows_programs_tests_them_and_locks_changes() {
         r#"<span class="ac-fu">Close the ticket <span class="when">once fixed</span></span>"#
     ));
     assert!(page.contains("Critical only"), "Ping the team's filter");
-    // Locked without --allow-destinations: plain words, an (i) with the
+    // Locked with --lock-destinations: plain words, an (i) with the
     // docs, no command, no Add, Remove off.
     assert!(page.contains(pathwarden_core::plugin_form::ACTIONS_LOCKED));
-    assert!(page.contains("docs/ui.md#safety-locks"));
+    assert!(page.contains("pathwarden.org/docs/ui.html#safety-locks"));
     assert!(!page.contains("--allow-destinations"));
     assert!(!page.contains("pathwarden ui"));
     assert!(!page.contains(r#"href="/actions/new""#));
@@ -636,7 +636,7 @@ async fn plugins_and_actions_shows_programs_tests_them_and_locks_changes() {
             page.contains(words) || page.contains(&html_words),
             "{uri}: {words}"
         );
-        assert!(page.contains("docs/ui.md#safety-locks"), "{uri}");
+        assert!(page.contains("pathwarden.org/docs/ui.html#safety-locks"), "{uri}");
         assert!(!page.contains("--allow-destinations"), "{uri}");
     }
 }

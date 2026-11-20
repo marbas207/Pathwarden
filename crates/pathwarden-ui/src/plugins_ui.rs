@@ -100,47 +100,33 @@ fn where_note() -> String {
         .collect();
     installed.sort();
     installed.dedup();
-    let found = if installed.is_empty() {
-        "None found yet.".to_string()
-    } else {
-        format!(
-            "Found: {}.",
-            installed
-                .iter()
-                .map(|n| format!("<strong>{}</strong>", esc(n)))
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    };
+    // Nothing installed: nothing to say here (docs/plugins.md has where
+    // plugins come from).
+    if installed.is_empty() {
+        return String::new();
+    }
+    let found = installed
+        .iter()
+        .map(|n| format!("<strong>{}</strong>", esc(n)))
+        .collect::<Vec<_>>()
+        .join(", ");
     let about = format!(
         "A plugin named x is the program pathwarden-output-x{} in {}. A script or program you choose must be given by its full path, or run through powershell, pwsh, python, node, bash, sh or cmd, which are only taken from system folders (System32, Program Files, or folders only root can change). Pathwarden never runs plugins from the current folder or from a PATH folder you can write to, so nobody can plant one there.",
         std::env::consts::EXE_SUFFIX,
         dirs.join(" or "),
     );
     format!(
-        r#"<div class="note">{}<p><strong>Plugin programs.</strong> {found} {}</p></div>"#,
+        r#"<div class="note">{}<p><strong>Installed plugins:</strong> {found}. {}</p></div>"#,
         icon("i-folder"),
         pages::tip("where-plugins", "Where plugins come from", &about),
     )
 }
 
+/// Where secrets go: one line, and the steps on pathwarden.org.
 fn env_help() -> String {
-    let example = if cfg!(windows) {
-        r#"<pre class="code">setx PATHWARDEN_SN_USER "svc-pathwarden"
-setx PATHWARDEN_SN_PASSWORD "••••••••"</pre>"#
-    } else {
-        r#"<pre class="code">export PATHWARDEN_SN_USER="svc-pathwarden"
-export PATHWARDEN_SN_PASSWORD="••••••••"</pre>"#
-    };
     format!(
-        r#"<details class="help card"><summary>{} How to set an environment variable</summary><div class="help-body">
-<p>Secrets never go in <code>pathwarden.toml</code> or on this page. The config only names the variable; set its value where the plugin runs.</p>
-<p><strong>For the scheduled task</strong>: sign in as the account the task runs as and run, in a command prompt:</p>
-{example}
-<p class="muted small"><code>setx</code> stores the value in that account's profile, where every new process sees it. Running Pathwarden as a service account keeps it out of your own profile. A secret store your scheduler supports (a pipeline secret, a vault agent) works too, as long as it sets the variable.</p>
-<p><strong>For "Test" on this page</strong>: this window only sees variables that were set before Pathwarden started. After <code>setx</code>, close Pathwarden and start it again from a new terminal.</p>
-</div></details>"#,
-        icon("i-lock")
+        r#"<p class="muted small">Passwords and tokens stay in environment variables, never on this page. {}</p>"#,
+        pages::repo_link("docs/plugins.md#passwords-and-tokens", "How to set one"),
     )
 }
 

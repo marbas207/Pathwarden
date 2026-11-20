@@ -450,12 +450,36 @@ pub(crate) const SITE_URL: &str = "https://pathwarden.org";
 pub(crate) const COFFEE_URL: &str = "https://buymeacoffee.com/marbasec";
 
 /// A link to a file in the repository (`docs/privilege-zones.md`), opening
-/// in a new tab, with `text` (HTML) as its text.
+/// in a new tab, with `text` (HTML) as its text. A page of `docs/` opens on
+/// pathwarden.org, which builds its docs from the repository; anything
+/// else (a plugin's README) on GitHub.
 pub(crate) fn repo_link(path: &str, text: &str) -> String {
     format!(
-        r#"<a href="{REPO_URL}/blob/main/{}" target="_blank" rel="noopener noreferrer">{text}</a>"#,
-        esc(path)
+        r#"<a href="{}" target="_blank" rel="noopener noreferrer">{text}</a>"#,
+        esc(&doc_url(path))
     )
+}
+
+/// Where `path` (`docs/ui.md#safety-locks`) is read: `docs/x.md` is
+/// `https://pathwarden.org/docs/x.html`, the glossary is in the site's
+/// knowledge base, and the rest is on GitHub.
+pub(crate) fn doc_url(path: &str) -> String {
+    let (file, frag) = match path.split_once('#') {
+        Some((f, a)) => (f, format!("#{a}")),
+        None => (path, String::new()),
+    };
+    if file == "docs/glossary.md" {
+        return format!("{SITE_URL}/kb/glossary.html{frag}");
+    }
+    if let Some(name) = file
+        .strip_prefix("docs/")
+        .and_then(|f| f.strip_suffix(".md"))
+    {
+        if !name.is_empty() && !name.contains('/') {
+            return format!("{SITE_URL}/docs/{name}.html{frag}");
+        }
+    }
+    format!("{REPO_URL}/blob/main/{path}")
 }
 
 /// The wizards' step indicator (the Collect and Zone wizards): numbered
@@ -1911,7 +1935,33 @@ pub fn not_found() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{esc, json_attr};
+    use super::{doc_url, esc, json_attr};
+
+    /// Docs pages open on pathwarden.org, with their section; the glossary
+    /// in its knowledge base; anything else on GitHub.
+    #[test]
+    fn docs_links_open_on_the_site() {
+        assert_eq!(
+            doc_url("docs/ui.md#safety-locks"),
+            "https://pathwarden.org/docs/ui.html#safety-locks"
+        );
+        assert_eq!(
+            doc_url("docs/privilege-zones.md"),
+            "https://pathwarden.org/docs/privilege-zones.html"
+        );
+        assert_eq!(
+            doc_url("docs/glossary.md"),
+            "https://pathwarden.org/kb/glossary.html"
+        );
+        assert_eq!(
+            doc_url("crates/pathwarden-output-jira/README.md"),
+            "https://github.com/marbas207/Pathwarden/blob/main/crates/pathwarden-output-jira/README.md"
+        );
+        assert_eq!(
+            doc_url("docs/dev/threat-model.md"),
+            "https://github.com/marbas207/Pathwarden/blob/main/docs/dev/threat-model.md"
+        );
+    }
 
     /// A run summary of `exposed` accounts, Quick (nothing targeted) or Full.
     fn run(id: &str, at: i64, exposed: usize, quick: bool) -> super::RunSummary {

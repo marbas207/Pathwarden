@@ -1287,7 +1287,7 @@ async fn plugin_commands_need_the_flag() {
     let (s, body) = a.get("/plugins/new?kind=command").await;
     assert_eq!(s, StatusCode::OK);
     assert!(body.contains("Adding or changing plugin programs is turned off in this app."));
-    assert!(body.contains("docs/ui.md#safety-locks"));
+    assert!(body.contains("pathwarden.org/docs/ui.html#safety-locks"));
     assert!(!body.contains("--allow-destinations"));
     assert!(body.contains(r#"value="command" disabled"#), "{body}");
     assert!(body.contains(r#"value="named" checked"#), "{body}");
@@ -1392,7 +1392,7 @@ async fn plugin_commands_refuse_network_paths() {
     assert!(a.config().is_none());
     // The form has no lock note.
     let (_, body) = a.get("/plugins/new?kind=command").await;
-    assert!(!body.contains("docs/ui.md#safety-locks"));
+    assert!(!body.contains("pathwarden.org/docs/ui.html#safety-locks"));
     assert!(body.contains(r#"value="command" checked"#));
 }
 

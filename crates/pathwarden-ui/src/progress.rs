@@ -2529,7 +2529,7 @@ const DEFINITIONS: &str = r#"<details class="explain pv-defs"><summary>{info} Al
 <div><dt>What changed</dt><dd>The latest run against the run before it in the same environment. Over the time range above, or two days picked: everything net new in it (new findings, findings back after a fix, findings that gained objects, new members of Tier Zero and the zones, new paths into them) and what was fixed. The report's Findings tab names them.</dd></div>
 <div><dt>Introduced</dt><dd>First seen by Pathwarden: a change carries the date of the run that found it, not when it was made in the directory. Objects and paths are dated from the first run of this version on.</dd></div>
 <div><dt>Time range</dt><dd>The week, month or three months up to the latest run (not up to today). At most the latest 40 runs are charted.</dd></div>
-</dl><p class="muted small">More terms in the <a href="https://github.com/marbas207/Pathwarden/blob/main/docs/glossary.md">glossary</a>.</p></details>"#;
+</dl><p class="muted small">More terms in the <a href="https://pathwarden.org/kb/glossary.html">glossary</a>.</p></details>"#;
 
 #[cfg(test)]
 mod tests {
