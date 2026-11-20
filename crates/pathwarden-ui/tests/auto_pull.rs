@@ -308,7 +308,7 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
     assert_eq!(s, StatusCode::CONFLICT, "{r}");
     assert_eq!(
         r["error"],
-        "You switched environment in another tab. Reload this page."
+        "You switched environments in another tab. Reload this page."
     );
     let v = a
         .json("/api/history/pulled?since=1&page=settings&env=another")

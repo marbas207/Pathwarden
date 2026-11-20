@@ -195,7 +195,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         "shown once"
     );
     assert!(
-        page.contains("From the repository"),
+        page.contains("From the run history"),
         "a risk from another computer"
     );
 
@@ -339,7 +339,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     );
     assert!(
         page.contains(
-            r##"<a href="#rules" title="A setting has two values">Rules<span class="sr-only">"##
+            r##"<a href="#rules" title="Differs from the shared settings">Rules<span class="sr-only">"##
         ),
         "the jump link's dot: {page}"
     );
