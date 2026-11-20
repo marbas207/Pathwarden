@@ -509,7 +509,7 @@ fn what_changed_is_neutral_when_only_the_settings_changed() {
     assert_eq!(
         lines
             .iter()
-            .filter(|l| l.text.contains("not compared"))
+            .filter(|l| l.text.contains("aren't compared"))
             .count(),
         1,
         "{lines:?}"

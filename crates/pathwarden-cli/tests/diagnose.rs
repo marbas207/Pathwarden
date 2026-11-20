@@ -214,7 +214,10 @@ fn diagnose_prints_the_panel_and_writes_a_bundle_without_names() {
 
     // An upload has no timings, and says why.
     let none = ok(&pw(&dir, &["diagnose", &upload, "--workspace", &wsarg]));
-    assert!(none.contains("this run's data was uploaded"), "{none}");
+    assert!(
+        none.contains("only collections Pathwarden runs itself are timed"),
+        "{none}"
+    );
 
     // The bundle: written, none of the names in it.
     let zip = dir.join("bundle.zip");

@@ -1676,7 +1676,7 @@ fn a_large_object_index_answers_queries_on_another_computer() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
         err.contains(
-            "This run's object index wasn't shared, so it can't be explored on this computer"
+            "This run was shared without its object list, so it can't be explored on this computer"
         ),
         "{err}"
     );
@@ -1690,7 +1690,7 @@ fn a_large_object_index_answers_queries_on_another_computer() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
         err.contains(&format!(
-            "The latest run of {env}, {second}, can't be explored (its object index wasn't shared): an older run answers."
+            "The latest run of {env}, {second}, can't be explored (it was shared without its object list): an older run answers."
         )),
         "{err}"
     );

@@ -429,9 +429,9 @@ fn runs_show_has_the_other_sources() {
     for want in [
         "    Source             TaskHound, OpenGraph · 1 file: taskhound.json",
         "    Relationships kept ",
-        "    Mapping            Trusted, ",
-        "    Coverage           No coverage file.",
-        "    For retests: Findings that rest on TaskHound can't be marked Fixed",
+        "    Mapping            Trusted mapping: ",
+        "    Coverage           No coverage file: its findings are never marked Fixed.",
+        "    For retests: findings from TaskHound can't be marked Fixed",
         "    Mappings lists what each pack means. `pathwarden mappings list` shows them.",
     ] {
         assert!(text.contains(want), "{want} in {text}");
