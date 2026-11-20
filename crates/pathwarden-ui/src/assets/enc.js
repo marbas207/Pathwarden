@@ -19,13 +19,13 @@
         var j = null;
         try { j = text ? JSON.parse(text) : {}; } catch (e) {}
         if (!r.ok) {
-          var err = new Error((j && j.error) || "Pathwarden didn't answer (" + r.status + "). Is it still running?");
+          var err = new Error((j && j.error) || "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs.");
           err.data = j || {};
           throw err;
         }
         return j || {};
       });
-    }, function () { throw new Error("Pathwarden is not answering. Is it still running?"); });
+    }, function () { throw new Error("Pathwarden isn't answering. Is it still running?"); });
   }
 
   function say(el, text, bad) {
@@ -38,7 +38,7 @@
   function strength(p) {
     var n = p.length;
     var words = p.trim().split(/[\s\-_.,;:+]+/).filter(Boolean).length;
-    var hint = "Five words or more is easy to type and hard to guess.";
+    var hint = "Five or more words are easy to type and hard to guess.";
     if (n < MIN) return [Math.round((n / MIN) * 25), "Too short.", "At least " + MIN + " characters."];
     if (words >= 5 || n >= 28) return [Math.min(100, 70 + n), "Strong.", hint];
     if (n >= 16 || words >= 3) return [55, "Fair.", "Longer is stronger. " + hint];

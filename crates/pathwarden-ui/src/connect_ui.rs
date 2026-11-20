@@ -199,9 +199,9 @@ fn where_card(q: &PageQuery) -> String {
     let folder = q.kind.as_deref() == Some("folder");
     format!(
         r#"<section class="card setting cx-card" id="cx-where" data-env="{env}">
-<header><h2 class="sub">Where is it?</h2></header>
+<header><h2 class="sub">Where it is</h2></header>
 <fieldset class="choice"><legend class="sr-only">Where the run history is</legend>
-  <label class="option card"><input type="radio" name="cx-kind" value="git"{git_on}><span><strong>A git repository</strong><span class="muted">A private repository that teammates or a server push runs to.</span></span></label>
+  <label class="option card"><input type="radio" name="cx-kind" value="git"{git_on}><span><strong>A git repository</strong><span class="muted">A private repository that teammates or a server share runs to.</span></span></label>
   <label class="option card"><input type="radio" name="cx-kind" value="folder"{folder_on}><span><strong>A shared folder</strong><span class="muted">A folder on a network share that teammates or a server record into.</span></span></label>
 </fieldset>
 <div class="fields2" data-when-kind="git"{git_hidden}>
@@ -209,7 +209,7 @@ fn where_card(q: &PageQuery) -> String {
   <div class="field"><label for="cx-branch">Branch</label><input class="input mono" id="cx-branch" value="{branch}" placeholder="The repository's default branch" autocomplete="off" spellcheck="false"><p class="hint">Leave it empty unless your team uses another branch.</p></div>
 </div>
 <div class="field" data-when-kind="folder"{folder_hidden}><label for="cx-folder">Folder</label><input class="input mono" id="cx-folder" value="{folder_value}" placeholder="\\fileserver\security\pathwarden-history" autocomplete="off" spellcheck="false"><p class="hint">The folder that holds the history itself.</p></div>
-<div class="card-actions"><button type="button" class="btn primary" id="cx-look">{search} Connect</button><span class="muted small cx-quiet">Pathwarden only reads it. Nothing is pushed.</span></div>
+<div class="card-actions"><button type="button" class="btn primary" id="cx-look">{search} Check it</button><span class="muted small cx-quiet">Pathwarden only reads it. Nothing changes.</span></div>
 </section>"#,
         env = attr(q.env.as_deref().unwrap_or_default()),
         git_on = if folder { "" } else { " checked" },
@@ -223,7 +223,7 @@ fn where_card(q: &PageQuery) -> String {
         tip_url = tip(
             "tip-cx-signin",
             "Signing in",
-            "Sign-in comes from git on this computer. If git needs you to sign in, its sign-in window opens. Never put a password in the URL.",
+            "Git on this computer signs you in, with its own sign-in window if it needs one. Never put a password in the URL.",
             false
         ),
     )
@@ -247,7 +247,7 @@ fn where_done(s: &Session) -> String {
     };
     let back = change_href(s);
     format!(
-        r#"<section class="card setting cx-card"><header><h2 class="sub">Where is it?</h2></header>
+        r#"<section class="card setting cx-card"><header><h2 class="sub">Where it is</h2></header>
 <p class="cx-found"><span>{place}</span> <button type="button" class="linkish small" data-cx-change="{back}" data-s="{token}">Change</button></p></section>"#,
         back = attr(&back),
         token = attr(&s.token),
@@ -372,7 +372,7 @@ fn holds_open(s: &Session, found: &Found, lock: shared::Lock) -> String {
     if found.keep == Keep::Full && found.git.is_some() {
         rows.push((
             "Shared settings".into(),
-            esc(c.settings.as_deref().unwrap_or("None yet.")),
+            esc(c.settings.as_deref().unwrap_or("None shared yet.")),
             None,
         ));
     }
@@ -416,7 +416,7 @@ fn this_computer(st: &AppState, s: &Session, found: &Found, lock: shared::Lock) 
     let name = shared::suggested_name(root, &c, target);
     let git = s.meta.is_git();
     let mut b = format!(
-        r#"<section class="card setting cx-card" id="cx-go-card" data-s="{token}"><header><h2 class="sub">On this computer</h2></header>
+        r#"<section class="card setting cx-card" id="cx-go-card" data-s="{token}"><header><h2 class="sub">Open and sync</h2></header>
 <div class="fields2">
   <div class="field"><label for="cx-name">Environment name</label><input class="input" id="cx-name" value="{name}" maxlength="{max}" autocomplete="off"><p class="hint">From the run history. The name is this computer's own.</p></div>"#,
         token = attr(&s.token),
@@ -460,7 +460,7 @@ fn this_computer(st: &AppState, s: &Session, found: &Found, lock: shared::Lock) 
                     tip(
                         "tip-cx-ro",
                         "Read only",
-                        "Settings you change here stay on this computer until someone who can push shares them. To push later, get write access and turn pushing on under History storage.",
+                        "Your changes stay on this computer. To share them, get write access and turn on Share runs from this computer in History storage.",
                         true
                     ),
                 );
@@ -475,8 +475,8 @@ fn this_computer(st: &AppState, s: &Session, found: &Found, lock: shared::Lock) 
                 let _ = write!(
                     b,
                     r#"<div class="cx-push"><p class="cx-found">{sentence} {detail}</p>
-<fieldset class="choice"><legend class="sr-only">Pushing</legend>
-<label class="option card"><input type="radio" name="cx-push" value="push"{push_on}><span><strong>Push runs from this computer</strong><span class="muted">Runs you start here are added to the run history, for everyone.</span></span></label>
+<fieldset class="choice"><legend class="sr-only">Sharing</legend>
+<label class="option card"><input type="radio" name="cx-push" value="push"{push_on}><span><strong>Share runs from this computer</strong><span class="muted">Runs you start here are added to the run history, for everyone.</span></span></label>
 <label class="option card"><input type="radio" name="cx-push" value="read"{read_on}><span><strong>Read only</strong><span class="muted">This computer only reads the run history. Runs you start here stay on this computer.</span></span></label>
 </fieldset></div>"#,
                     sentence = esc(access.sentence()),
@@ -506,11 +506,11 @@ fn this_computer(st: &AppState, s: &Session, found: &Found, lock: shared::Lock) 
         tip = tip(
             "tip-cx-adopt",
             "From the run history",
-            "This computer keeps what the run history keeps, encrypted with the same passphrase. Only a computer that pushes can change them, on History storage.",
+            connect::ADOPTED_WORDS,
             false
         ),
         i = icon(if git { "i-sync" } else { "i-download" }),
-        go = if git { "Use this history and sync" } else { "Use this history" },
+        go = if git { "Connect and sync" } else { "Connect" },
         is_new = target.is_none(),
         what = esc(&match &target_name {
             Some(n) => format!("Connects {n} and loads its runs."),
@@ -613,7 +613,7 @@ fn error(status: StatusCode, message: impl Into<String>) -> Response {
 /// Why Connect refuses with `--lock-destinations`: looking at a history
 /// makes Pathwarden reach (and maybe sign in to) the place the page named,
 /// and connecting sends this computer's runs there.
-pub const CONNECT_LOCKED: &str = "Connecting to a run history is turned off in this app. You can still open the runs this computer has, and add a history on the command line.";
+pub const CONNECT_LOCKED: &str = "Safety locks are on, so connecting to a run history can't be done here. You can still open the runs on this computer.";
 
 /// [`CONNECT_LOCKED`] unless the UI was started with the flag.
 fn locked(st: &AppState) -> Option<Response> {
@@ -687,7 +687,10 @@ async fn probe_api(State(st): State<Shared>, Json(body): Json<ProbeBody>) -> Res
             })),
         )
             .into_response(),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "That failed."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't check the run history. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -716,13 +719,16 @@ async fn open_api(State(st): State<Shared>, SecretJson(body): SecretJson<OpenBod
     match done {
         Ok(Ok(())) => Json(serde_json::json!({ "opened": true })).into_response(),
         Ok(Err(e)) => error(StatusCode::BAD_REQUEST, e),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "That failed."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't open the history. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
 /// A probe that is gone (connected or cancelled meanwhile, or older than
 /// a day).
-const GONE: &str = "This page is out of date: connect to the run history again.";
+const GONE: &str = "This page is out of date. Connect to the run history again.";
 
 #[derive(Deserialize)]
 struct GoBody {
@@ -746,7 +752,7 @@ async fn go_api(State(st): State<Shared>, Json(body): Json<GoBody>) -> Response 
     if st.jobs.running().is_some() {
         return error(
             StatusCode::CONFLICT,
-            "An analysis is running. Try again when it has finished.",
+            "A collection or analysis is running. Try again when it finishes.",
         );
     }
     let root = st.workspace.root().to_path_buf();
@@ -790,7 +796,10 @@ async fn go_api(State(st): State<Shared>, Json(body): Json<GoBody>) -> Response 
         )
             .into_response(),
         Ok(Err(e)) => error(StatusCode::BAD_REQUEST, e),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "That failed."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't connect. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 

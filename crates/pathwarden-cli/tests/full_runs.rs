@@ -454,7 +454,8 @@ fn a_full_run_the_remote_refuses_fails_every_recording_command() {
     refused(&out, "run");
     // A schedule's run says it can't make it again.
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("keeps no folder here"),
+        String::from_utf8_lossy(&out.stderr)
+            .contains("If this run's upload is lost before it is shared"),
         "{out:?}"
     );
     // Each from a working copy of its own: one that holds the refused
@@ -531,7 +532,7 @@ fn history_storage_show_names_the_full_run_settings() {
         ),
         "{text}"
     );
-    assert!(text.contains("The history point is always kept."), "{text}");
+    assert!(text.contains("Its numbers are always kept."), "{text}");
     let json: serde_json::Value = serde_json::from_str(&ok(&pw(
         &dir,
         &["history", "storage", "show", "--workspace", "ws", "--json"],
@@ -1005,7 +1006,7 @@ fn a_full_run_a_failed_push_kept_goes_with_the_next_pull() {
     );
     let text = ok(&pw(&dir, &["runs", "list", "--workspace", "ws"], &[]));
     assert!(
-        text.contains("Its full run is waiting to be pushed."),
+        text.contains("Its full run is waiting to be shared."),
         "{text}"
     );
     assert!(!text.contains("Numbers only"), "{text}");
@@ -1031,7 +1032,7 @@ fn a_full_run_a_failed_push_kept_goes_with_the_next_pull() {
         .unwrap();
     assert_eq!(now.state, FullRunState::Shared, "{now:?}");
     let text = ok(&pw(&dir, &["runs", "list", "--workspace", "ws"], &[]));
-    assert!(!text.contains("waiting to be pushed"), "{text}");
+    assert!(!text.contains("waiting to be shared"), "{text}");
     assert!(text.contains("shared"), "{text}");
     remove_all(&dir);
 }
@@ -1109,7 +1110,7 @@ fn a_point_kept_here_goes_with_the_next_pull() {
         &["history", "storage", "show", "--workspace", "ws"],
         &[],
     ));
-    assert!(show.contains("1 run is waiting to be pushed."), "{show}");
+    assert!(show.contains("1 run is waiting to be shared."), "{show}");
     // Sync now's command, at once: it says what it pushed.
     let text = ok(&pw(
         &dir,
@@ -1407,7 +1408,7 @@ fn a_full_run_the_history_never_got_goes_with_the_next_pull() {
         text.contains(pathwarden_ui::shared_runs::CANT_SHARE_WORDS),
         "{text}"
     );
-    assert!(!text.contains("waiting to be pushed"), "{text}");
+    assert!(!text.contains("waiting to be shared"), "{text}");
     // Nothing more to do: the next pull says nothing of it.
     let text = ok(&pw(
         &dir,
@@ -1772,7 +1773,7 @@ fn files_a_full_run_left_out_go_in_once_they_fit() {
     // Its row says it waits.
     let text = ok(&pw(&dir, &["runs", "list", "--workspace", "ws"], &[]));
     assert!(
-        text.contains("Its full run is waiting to be pushed."),
+        text.contains("Its full run is waiting to be shared."),
         "{text}"
     );
 
@@ -1838,7 +1839,7 @@ fn files_a_full_run_left_out_go_in_once_they_fit() {
     assert_eq!(link.state, FullRunState::Shared, "{link:?}");
     assert!(link.left_out.is_empty(), "{link:?}");
     let text = ok(&pw(&dir, &["runs", "list", "--workspace", "ws"], &[]));
-    assert!(!text.contains("waiting to be pushed"), "{text}");
+    assert!(!text.contains("waiting to be shared"), "{text}");
     // Nothing more to add.
     let pushed = commits();
     assert_ne!(pushed, was);

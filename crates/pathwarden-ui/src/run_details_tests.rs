@@ -490,7 +490,7 @@ fn history_points_say_recorded_from() {
     assert_eq!(words("schedule"), "Recorded by the schedule");
     assert_eq!(words("ui"), "Recorded in the app");
     assert_eq!(words("import"), "Imported from the app");
-    assert_eq!(words("other"), "Recorded by a run");
+    assert_eq!(words("other"), "Source not recorded");
 }
 
 /// A report made before the tab held Run details' rows

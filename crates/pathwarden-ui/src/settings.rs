@@ -268,7 +268,10 @@ pub(crate) async fn edit_answering(
             Json(out).into_response()
         }
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Saving failed."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't save. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -277,7 +280,7 @@ pub(crate) async fn edit_answering(
 /// nobody can tell what the page would overwrite.
 fn current(d: &ConfigDoc) -> Result<Config, String> {
     d.validate().map_err(|e| {
-        format!("{CONFIG_FILE} can't be loaded, so this save can't tell what it would change: {e}. Fix the file in a text editor, then reload this page.")
+        format!("Settings can't be read: {e}. Fix {CONFIG_FILE} in a text editor, then reload.")
     })
 }
 
@@ -299,7 +302,10 @@ pub(crate) async fn edit_in(
             Json(serde_json::json!({ "saved": true, "sharing": sharing })).into_response()
         }
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Saving failed."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't save. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -316,7 +322,7 @@ pub(crate) fn after_save(st: &AppState) -> String {
         _ if st.jobs.running().is_some() => {
             "An analysis is running now; it started before this change.".to_string()
         }
-        None => r#"<a href="/analyze">Analyze a collection</a> or try the demo to see it."#.into(),
+        None => r#"No run yet. <a href="/analyze">Analyze a collection</a> or try the demo first."#.into(),
         Some(r) if r.demo => format!(
             r#"<button type="button" class="btn small-btn" data-demo data-demo-again>{} Re-analyze the demo</button>"#,
             icon("i-play")
@@ -333,10 +339,10 @@ pub(crate) fn after_save(st: &AppState) -> String {
             icon("i-play")
         )
         }
-        Some(_) => "The latest run's collector files were removed after it was analyzed, so <a href=\"/analyze\">analyze the collection again</a> to see the change.".into(),
+        Some(_) => "The latest run's collection is gone. <a href=\"/analyze\">Analyze a collection</a> to see the change.".into(),
     };
     format!(
-        r#"<div class="saved-note card" id="saved" hidden role="status">{}<div><strong>Saved.</strong> Changes apply to the next analysis. <span class="saved-action">{action}</span></div><button type="button" class="fl-remove" id="saved-close" aria-label="Close">{}</button></div>"#,
+        r#"<div class="saved-note card" id="saved" hidden role="status">{}<div><strong>Saved.</strong> Changes apply to the next run. <span class="saved-action">{action}</span></div><button type="button" class="fl-remove" id="saved-close" aria-label="Close">{}</button></div>"#,
         icon("i-check"),
         icon("i-x"),
     )
@@ -364,9 +370,7 @@ pub(crate) fn applies_note(text: &str) -> String {
 pub(crate) fn applies_words_in(ws: &Workspace, lead: &str) -> Result<String, String> {
     let loaded = load_ws(ws);
     if loaded.error.is_some() {
-        return Err(format!(
-            "{CONFIG_FILE} can't be loaded, so analyzing fails until it is fixed."
-        ));
+        return Err("Settings can't be read, so runs fail until they are fixed.".to_string());
     }
     let what = applies_parts(&loaded.config).unwrap_or_else(|| {
         "the default settings (no zones, accepted risks or extra Tier Zero objects)".to_string()
@@ -383,7 +387,7 @@ pub(crate) fn applies_line_in(ws: &Workspace, lead: &str) -> String {
     let loaded = load_ws(ws);
     if loaded.error.is_some() {
         return format!(
-            r#"<p class="applies warn">{} <span>{CONFIG_FILE} can't be loaded, so analyzing fails until it is fixed.</span> <a href="/settings">Settings</a></p>"#,
+            r#"<p class="applies warn">{} <span>Settings can't be read, so runs fail until they are fixed.</span> <a href="/settings">Settings</a></p>"#,
             icon("i-alert")
         );
     }
@@ -448,7 +452,7 @@ pub(crate) fn file_line(_st: &AppState, loaded: &Loaded) -> String {
         return String::new();
     };
     format!(
-        r#"<div class="cfg-error card" role="alert">{}<div><strong>{CONFIG_FILE} can't be loaded, so analyzing fails until it is fixed.</strong><pre>{}</pre><p class="muted small">Fix it in a text editor, or save a change here that fixes it. Pages show the defaults until then.</p></div></div>"#,
+        r#"<div class="cfg-error card" role="alert">{}<div><strong>Settings can't be read, so runs fail until they are fixed.</strong><pre>{}</pre><p class="muted small">Fix {CONFIG_FILE} in a text editor, or save a change here that fixes it. Pages show the defaults until then.</p></div></div>"#,
         icon("i-alert"),
         esc(e)
     )
@@ -493,7 +497,7 @@ pub(crate) fn picker(id: &str, placeholder: &str, kinds: &str, enabled: bool) ->
         nosearch = if enabled {
             String::new()
         } else {
-            r#"<p class="muted small">Searching needs one analysis first (<a href="/analyze">analyze a collection</a> or try the demo); you can still type a name or SID and add it.</p>"#.into()
+            r#"<p class="muted small">Search works after the first run (<a href="/analyze">analyze a collection</a> or try the demo). You can still type a name or SID.</p>"#.into()
         },
     )
 }
@@ -546,14 +550,14 @@ fn render(
             jump,
             r##"<a href="#{href}"{title}>{name}{dot}</a>"##,
             title = if dot {
-                format!(r#" title="{}""#, pages::SETTINGS_DIFFER)
+                format!(r#" title="{SECTION_DIFFER}""#)
             } else {
                 String::new()
             },
             dot = if dot {
                 format!(
                     r#"<span class="sr-only">: {}</span><span class="nav-dot" aria-hidden="true"></span>"#,
-                    pages::SETTINGS_DIFFER.to_lowercase()
+                    SECTION_DIFFER.to_lowercase()
                 )
             } else {
                 String::new()
@@ -614,12 +618,13 @@ fn render(
         b,
         r#"<section class="card setting" id="tier-zero" data-section="tier-zero" data-loaded="{loaded}">
 <header><h2 class="sub">Additional Tier Zero{tag}</h2>
-<p class="muted">Pathwarden already treats domain controllers, Domain Admins, Enterprise Admins, CA servers and the other built-in control points as Tier Zero. Add what your organization also treats that way: Entra Connect servers and their sync accounts, PAM or password vaults, servers that back up domain controllers, and hypervisors that host them.</p></header>
+<p class="muted">Built-in Tier Zero is always included. Add what your organization also treats as Tier Zero.{t0_tip}</p></header>
 {t0_body}
 </section>
 "#,
         loaded = pages::json_attr(&serde_json::to_string(&c.tier_zero).unwrap_or_default()),
         tag = tag("tier_zero"),
+        t0_tip = pages::tip("tip-t0", "Additional Tier Zero", T0_TIP),
     );
 
     // Tier Zero settings folders.
@@ -726,17 +731,17 @@ fn render(
         r#"<section class="card setting" id="rules" data-section="rules" data-loaded="{loaded}">
 <header><h2 class="sub">Rules{tag}</h2><p class="muted">When an account or password counts as old, how attack paths are rated, and which rules run.</p></header>
 {conflict}{rules_list}<div class="fields3"{hidden}>
-  <div class="field{c_stale}"><label for="stale_days">Stale Tier Zero account</label><div class="unit"><input class="input" type="number" id="stale_days" min="1" max="36500" step="1" value="{stale}" required><span>days</span></div>{r_stale}<p class="hint">Tier Zero accounts with no logon for this long are reported. It also sets which accounts count as active for exposure.</p></div>
+  <div class="field{c_stale}"><label for="stale_days">Stale Tier Zero account</label><div class="unit"><input class="input" type="number" id="stale_days" min="1" max="36500" step="1" value="{stale}" required><span>days</span></div>{r_stale}<p class="hint">Tier Zero accounts not signed in for this long are reported. This also decides which accounts count as enabled for exposure.</p></div>
   <div class="field{c_pwd}"><label for="password_age_days">Old Tier Zero password</label><div class="unit"><input class="input" type="number" id="password_age_days" min="1" max="36500" step="1" value="{pwd}" required><span>days</span></div>{r_pwd}<p class="hint">Tier Zero passwords older than this are reported.</p></div>
   <div class="field{c_krb}"><label for="krbtgt_age_days">Old krbtgt password</label><div class="unit"><input class="input" type="number" id="krbtgt_age_days" min="1" max="36500" step="1" value="{krbtgt}" required><span>days</span></div>{r_krb}<p class="hint">The krbtgt account signs every Kerberos ticket.</p></div>
   <div class="field{c_sso}"><label for="sso_key_age_days">Old Seamless SSO key</label><div class="unit"><input class="input" type="number" id="sso_key_age_days" min="1" max="36500" step="1" value="{sso}" required><span>days</span></div>{r_sso}<p class="hint">The Seamless SSO key signs in to Entra ID as any synced user.</p></div>
 </div>
 <fieldset class="choice{c_sev}"{hidden}><legend>How attack paths are rated</legend>{r_sev}
-  <label class="option card"><input type="radio" name="severity" value="exposure"{exp_on}><span><span class="opt-title"><strong>By exposure</strong> <span class="tag">Default</span></span><span class="muted">A path many users and computers can use is critical; one only a few can reach is lower, as in BloodHound Enterprise.</span></span></label>
+  <label class="option card"><input type="radio" name="severity" value="exposure"{exp_on}><span><span class="opt-title"><strong>By exposure</strong> <span class="tag">Default</span></span><span class="muted">A path many users and computers can use is Critical; one only a few can reach is lower.</span></span></label>
   <label class="option card"><input type="radio" name="severity" value="static"{static_on}><span><strong>By rule</strong><span class="muted">Each rule keeps its own severity, however many accounts can use the path.</span></span></label>
 </fieldset>
 <details class="rules-box"{hidden}><summary><span>Rules</span> <span class="muted small" id="rules-count"></span></summary>
-<p class="muted small">Turn a rule off to skip it, or set its severity. To hide one finding or one rule's findings with a reason, add an accepted risk below instead: it stays on record and counts as open again after its review date.</p>
+<p class="muted small">Turn a rule off or set its severity. To hide findings with a reason, accept the risk below instead.</p>
 <div class="rules-tools"><div class="seg" role="group" aria-label="Show"><button type="button" class="seg-btn" data-show="all" aria-pressed="true">All <span class="n" id="rules-all-n"></span></button><button type="button" class="seg-btn" data-show="changed" aria-pressed="false">Changed <span class="n" id="rules-changed-n"></span></button></div><span class="sev-head">Severity{sev_tip}</span></div>
 <div class="rule-list">{rule_rows}</div>
 <p class="muted small rules-none" id="rules-none" hidden>Every rule is on, with its default severity.</p>
@@ -812,7 +817,7 @@ fn render(
             merged
         } else if from_repository(s, &me.computer, shared_through_repository(c)) {
             format!(
-                r#"<span class="risk-tag">{}From the repository</span>"#,
+                r#"<span class="risk-tag">{}From the run history</span>"#,
                 icon("i-history")
             )
         } else {
@@ -820,7 +825,7 @@ fn render(
         };
         let _ = write!(
             rows,
-            r#"<div class="risk-row" data-risk="{data}"><div class="risk-main"><div>{target}{tag}</div><p class="risk-reason">{reason}</p>{who}{notes}</div><div class="risk-exp">{expiry}</div><div class="risk-actions"><button type="button" class="btn small-btn" data-note-risk aria-expanded="false" aria-controls="note-form">{i_plus} Add a note</button><button type="button" class="btn small-btn" data-edit-risk>{i_edit} Edit</button><button type="button" class="btn small-btn danger" data-remove-risk aria-label="Remove">{i_trash}</button></div></div>"#,
+            r#"<div class="risk-row" data-risk="{data}"><div class="risk-main"><div>{target}{tag}</div><p class="risk-reason">{reason}</p>{who}{notes}</div><div class="risk-exp">{expiry}</div><div class="risk-actions"><button type="button" class="btn small-btn" data-note-risk aria-expanded="false" aria-controls="note-form">{i_plus} Add note</button><button type="button" class="btn small-btn" data-edit-risk>{i_edit} Edit</button><button type="button" class="btn small-btn danger" data-remove-risk aria-label="Remove accepted risk {target_label}" title="Remove">{i_trash}</button></div></div>"#,
             data = pages::json_attr(&data.to_string()),
             reason = esc(&s.reason),
             who = risk_who(s),
@@ -828,6 +833,12 @@ fn render(
             i_plus = icon("i-plus"),
             i_edit = icon("i-edit"),
             i_trash = icon("i-trash"),
+            target_label = crate::pages::attr(
+                s.fingerprint
+                    .as_deref()
+                    .or(s.rule.as_deref())
+                    .unwrap_or_default()
+            ),
         );
     }
     let warnings = if c.warnings.is_empty() {
@@ -857,11 +868,9 @@ fn render(
         let heading = if keys.is_empty() {
             String::new()
         } else {
-            format!(
-                "<p><strong>{CONFIG_FILE} has keys this version doesn't know, so they are \
-                 ignored.</strong> A newer Pathwarden probably wrote them. They stay in the \
-                 file.</p>"
-            )
+            "<p><strong>Some settings come from a newer Pathwarden and are ignored \
+             here.</strong> They are kept as they are.</p>"
+                .to_string()
         };
         format!(
             r#"<div class="risk-warn" role="note">{}<div>{heading}{keys}{notices}</div></div>"#,
@@ -893,17 +902,17 @@ fn render(
     let finding_search = if has_findings {
         r##"<div class="picker" data-picker="fp" data-source="findings"><div class="pathfield card"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><label class="sr-only" for="fp-q">Search the latest run's findings</label><input type="search" id="fp-q" placeholder="Search the latest run's findings by title, rule or ID" autocomplete="off" spellcheck="false" data-search></div><ul class="results card" role="listbox" hidden></ul></div>"##
     } else {
-        r#"<p class="muted small">After an analysis you can search its findings here.</p>"#
+        r#"<p class="muted small">After the first run you can search its findings here.</p>"#
     };
     let _ = write!(
         b,
         r#"<section class="card setting" id="risks" data-section="risks">
-<header class="with-action"><div><h2 class="sub">Accepted risks{tag}</h2><p class="muted">Findings you keep, with a reason. Each counts as open again after its review date.{risks_tip}</p></div><button type="button" class="btn" id="add-risk">{i_plus} Accept a risk</button></header>
+<header class="with-action"><div><h2 class="sub">Accepted risks{tag}</h2><p class="muted">Findings you accept, with a reason. Each counts as open again after its review date.{risks_tip}</p></div><button type="button" class="btn" id="add-risk">{i_plus} Accept a risk</button></header>
 {risk_conflict}{warnings}<div class="risk-list">{rows}</div>
 <form class="risk-note-form" id="note-form" hidden novalidate>
   <label for="note-text">Add a note</label>
-  <textarea class="input" id="note-text" rows="2" maxlength="2000" placeholder="e.g. Checked with the CAB: still needed until the new jump host is in."></textarea>
-  <p class="hint">Kept with this accepted risk, oldest first, with your name and this computer: {note_by}. A note doesn't change the reason or the review date.</p>
+  <textarea class="input" id="note-text" rows="2" maxlength="2000" placeholder="For example: checked with the CAB, still needed until the new jump host is in."></textarea>
+  <p class="hint">Saved with your name ({note_by}). It doesn't change the reason or review date.</p>
   <div class="card-actions"><button type="submit" class="btn primary">Add note</button><button type="button" class="btn" id="note-cancel">Cancel</button><span class="save-status muted small" aria-live="polite"></span></div>
 </form>
 <form class="risk-form" id="risk-form" hidden novalidate>
@@ -913,10 +922,10 @@ fn render(
     <label><input type="radio" name="target" value="rule"><span>Every finding of a rule</span></label>
   </fieldset>
   <div class="field" data-when="fingerprint">{finding_search}
-    <label for="risk-fp">Finding ID</label><input class="input mono" id="risk-fp" placeholder="e.g. PW-004-13b0863341b2e306" autocomplete="off" spellcheck="false">
-    <p class="hint">In a report, open a finding: its ID is listed under <strong>Finding ID</strong>. It stays the same from run to run while the problem exists.</p></div>
+    <label for="risk-fp">Finding ID</label><input class="input mono" id="risk-fp" placeholder="For example PW-004-13b0863341b2e306" autocomplete="off" spellcheck="false">
+    <p class="hint">Shown as <strong>Finding ID</strong> on each finding in the report.</p></div>
   <div class="field" data-when="rule" hidden><label for="risk-rule">Rule</label><select class="input" id="risk-rule">{rule_options}</select></div>
-  <div class="field"><label for="risk-reason">Reason <span class="req">required</span></label><textarea class="input" id="risk-reason" rows="2" maxlength="2000" placeholder="e.g. Break-glass account, reviewed quarterly (CHG0012345)"></textarea><p class="hint">Why it is accepted and who decided. It is shown with the finding in every report.</p><p class="hint risk-bidi" id="risk-reason-bidi" hidden></p></div>
+  <div class="field"><label for="risk-reason">Reason <span class="req">required</span></label><textarea class="input" id="risk-reason" rows="2" maxlength="2000" placeholder="For example: break-glass account, reviewed quarterly (CHG0012345)"></textarea><p class="hint">Why it is accepted and who decided. It is shown with the finding in every report.</p><p class="hint risk-bidi" id="risk-reason-bidi" hidden></p></div>
   <div class="field narrow"><label for="risk-expires">Review by <span class="muted">(optional)</span></label><input class="input" type="date" id="risk-expires"><p class="hint">After this day (UTC) the finding counts as open again.</p></div>
   <div class="card-actions"><button type="submit" class="btn primary"><svg class="ic" aria-hidden="true"><use href='#i-check'/></svg> Save accepted risk</button><button type="button" class="btn" id="risk-cancel">Cancel</button><span class="save-status muted small" aria-live="polite"></span></div>
 </form>
@@ -1012,7 +1021,7 @@ fn risk_stamp(by: &Option<String>, on: &Option<String>, at: &Option<String>) -> 
 /// Who accepted a risk and its last change, under its reason.
 fn risk_who(s: &pathwarden_core::config::Suppression) -> String {
     match risk_stamp(&s.accepted_by, &s.accepted_on, &s.accepted_at) {
-        None => r#"<p class="risk-who unknown">Who accepted it and when wasn't recorded: it was added by hand or by Pathwarden 0.1.6 or earlier.</p>"#.to_string(),
+        None => r#"<p class="risk-who unknown">Who accepted it wasn't recorded.</p>"#.to_string(),
         Some(w) => {
             let changed = risk_stamp(&s.changed_by, &s.changed_on, &s.changed_at)
                 .map(|c| format!(r#"<span class="sep">·</span>changed {c}"#))
@@ -1113,10 +1122,11 @@ fn rules_view(r: &pathwarden_core::config::RulesConfig) -> serde_json::Value {
 
 /// The Tier Zero settings folders card: its line, its ⓘ, and the
 /// field's placeholder.
-pub const SETTINGS_FOLDERS_INTRO: &str = "Shared folders where your servers save their Tier Zero settings files. Pathwarden reads them on every analysis, scheduled run and retest.";
-pub const SETTINGS_FOLDERS_TIP: &str = "Pathwarden reads only the settings files in each folder, not other files or subfolders. If a folder can't be opened, the run goes ahead with a warning. Runs record file names, not folder paths. The folders are saved with your other settings, so teammates who share them read the same files.";
+pub const SETTINGS_FOLDERS_INTRO: &str =
+    "Shared folders where your servers save Tier Zero settings files.";
+pub const SETTINGS_FOLDERS_TIP: &str = "Read on every run, scheduled run and retest. Only the settings files are read. A folder that can't be opened gives a warning. Runs record file names, not folder paths.";
 /// The mark on a folder from the repository no one here reviewed.
-pub const FOLDER_WAITING: &str = "From the repository. Not used here yet.";
+pub const FOLDER_WAITING: &str = "Shared by a teammate. Choose Use to read it here.";
 /// The same for a folder written into the file by other means (a hand
 /// edit, a copied file).
 pub const FOLDER_WAITING_HERE: &str = "Not used here yet.";
@@ -1125,15 +1135,17 @@ const SETTINGS_FOLDERS_PLACEHOLDER: &str =
 
 /// The Accepted risks card's ⓘ.
 const RISKS_TIP: &str = "They stay in the report, marked with your reason. Each one keeps who \
-accepted it, on which computer and when, and the notes added since. The names are kept in this \
-environment's settings, and in the run history when settings are shared.";
+accepted it, on which computer and when, and the notes added since. Who accepted it is kept with \
+this environment's settings and, if shared, in the run history.";
+
+/// The Additional Tier Zero card's ⓘ.
+const T0_TIP: &str = "Built in: domain controllers, Domain Admins, Enterprise Admins, CA servers \
+and the other control points. Often added: Entra Connect servers and their sync accounts, PAM or \
+password vaults, servers that back up domain controllers, and the hypervisors that host them.";
 
 /// The Rules card's "Severity ⓘ".
 const SEVERITY_TIP: &str = "A set severity rates every finding of the rule, whatever its \
-exposure or the rule's own rating. It applies from the next analysis; earlier runs keep theirs. \
-Zone status follows it, except that a broad group (one holding nearly every account) with a path \
-to a zone keeps the zone Critical. Reports show it as set by your team, with the default beside \
-it. Finding IDs and accepted risks stay the same.";
+exposure or the rule's own rating. It applies from the next run; earlier runs keep theirs.";
 
 /// A rule's severity drop-down: its default first ("Default (exposure)"),
 /// then the levels. Its default for each way attack paths are rated is on
@@ -1180,7 +1192,7 @@ fn severity_who_text(s: &findings::SetSeverity) -> String {
         (Some(b), Some(a)) => format!("Set by {b} on {}.", day(a)),
         (Some(b), None) => format!("Set by {b}."),
         (None, Some(a)) => format!("Set on {}.", day(a)),
-        (None, None) => "Set in the settings file.".to_string(),
+        (None, None) => "Set outside the app.".to_string(),
     }
 }
 
@@ -1264,8 +1276,11 @@ pub fn stale_words(section: &str) -> String {
     )
 }
 
+/// The title of a section link whose settings differ from the shared ones.
+const SECTION_DIFFER: &str = "Settings differ from the shared settings";
+
 /// Why a save from a page of another environment is refused (409).
-pub const ENV_SWITCHED: &str = "You switched environment in another tab. Reload this page.";
+pub const ENV_SWITCHED: &str = "You switched environments in another tab. Reload this page.";
 
 /// The environment a page was loaded in (`<body data-env>`), sent with its
 /// saves and its news check.
@@ -1497,7 +1512,7 @@ async fn save_suppression(
 
 /// An edit of an accepted risk that doesn't say which finding or rule it
 /// was made for comes from a page loaded before this version.
-const OUT_OF_DATE: &str = "This page is out of date: reload it.";
+const OUT_OF_DATE: &str = "This page is out of date. Reload it.";
 
 #[derive(Deserialize)]
 struct NoteBody {
@@ -1566,7 +1581,10 @@ async fn add_suppression_note(
                 .into_response()
         }
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Saving failed."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't save. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -1730,7 +1748,7 @@ impl NewPlaceRefused {
 
 /// The message for a page session that tries to change where the run
 /// history is kept, or to start sharing full runs without encryption.
-pub const HISTORY_LOCKED: &str = "Moving the run history, or sharing full runs and settings without encryption, is turned off in this app. You can still sync it and encrypt it.";
+pub const HISTORY_LOCKED: &str = "Safety locks are on, so the run history can't be moved here, and full runs can't be shared without encryption. You can still sync and encrypt it.";
 
 /// What a page session may save to `[state]` with
 /// `--lock-destinations` ([`HISTORY_LOCKED`]): not another repository,
@@ -1790,7 +1808,7 @@ pub(crate) async fn history_lock_refusal(
         Ok(Err(e)) => Some(json_error(StatusCode::BAD_REQUEST, e)),
         Err(_) => Some(json_error(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Saving failed.",
+            "Couldn't save. Try again; if it keeps failing, see Settings › Logs.",
         )),
     }
 }
@@ -2086,7 +2104,7 @@ async fn search_findings(State(st): State<Shared>, Query(q): Query<SearchQuery>)
         Some(list) => Json(serde_json::json!({ "results": list })).into_response(),
         None => json_error(
             StatusCode::NOT_FOUND,
-            "No analysis to search yet. Analyze a collection or try the demo first.",
+            "No run yet. Analyze a collection or try the demo first.",
         ),
     }
 }

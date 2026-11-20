@@ -102,7 +102,7 @@ pub const GITHUB_HOLD_WORDS: &str =
 
 /// What larger files become, on History storage's card.
 pub const FILE_LIMIT_WORDS: &str =
-    "Larger files are left out of the full run and named on its page. The history point is always kept.";
+    "Larger files are left out of the full run and named on its page. Its numbers are always kept.";
 
 /// What `history storage show` says about the limit, under "Largest
 /// file": "75 MB. Larger files are left out ...".
@@ -116,9 +116,8 @@ pub fn file_limit_words(mb: u64, held: bool) -> String {
 
 /// What a run without a folder here (a schedule's `pathwarden run`) says
 /// when its full run is committed but not pushed.
-pub const NO_FOLDER_WORDS: &str = "This run keeps no folder here, so if that commit is lost \
-before it is pushed (another machine's push came first and it couldn't be added back, for \
-example after a passphrase change), its full run isn't made again; its point is kept either way.";
+pub const NO_FOLDER_WORDS: &str = "If this run's upload is lost before it is shared, its full \
+run can't be made again. Its numbers are kept.";
 
 /// Most runs a publish adds from this computer's backlog (full runs a
 /// crash or a failed build kept from going in).
@@ -532,7 +531,7 @@ impl Bundle {
         let id = self.run_id();
         anyhow::ensure!(
             !is_newer_bundle(store, id),
-            "A newer Pathwarden saved run {id}'s full run, so it is left as it is."
+            "Run {id} was saved by a newer Pathwarden, so it is left as it is."
         );
         for (name, bytes) in &self.files {
             store.write_bundle_file(id, name, bytes)?;
@@ -608,7 +607,7 @@ fn write_all(store: &Store, bundles: &[Bundle], keep: usize) -> anyhow::Result<W
         } else {
             skipped.push((
                 b.run_id().to_string(),
-                "its point isn't in the history".to_string(),
+                "its numbers aren't in the history".to_string(),
             ));
         }
     }
@@ -895,7 +894,7 @@ impl Waiting {
 
 /// A run's line on the Runs list and in `pathwarden runs list` when its
 /// full run is waiting.
-pub const WAITING_WORDS: &str = "Its full run is waiting to be pushed.";
+pub const WAITING_WORDS: &str = "Its full run is waiting to be shared.";
 
 /// The same, when it can't be made again from the run's folder.
 pub const CANT_SHARE_WORDS: &str =
@@ -1126,7 +1125,7 @@ pub fn push_waiting(
     };
     let still = |n: usize| {
         format!(
-            "{} still waiting to be pushed.",
+            "{} still waiting to be shared.",
             pathwarden_core::text::count(
                 n,
                 "full run recorded here is",
@@ -1182,7 +1181,7 @@ pub fn push_waiting(
 /// What a run left out of the history because this computer wasn't signed
 /// in says once a sync has worked.
 pub const SIGNED_OUT_THEN: &str =
-    "This computer wasn't signed in to the repository when this run was analyzed. Add it on History storage.";
+    "This run wasn't shared: the computer wasn't signed in. Sign in on History storage, then Sync now.";
 
 /// After a sync of the git history that worked: runs left out of it
 /// because this computer wasn't signed in no longer offer Sign in.
@@ -1773,7 +1772,7 @@ impl Mirrored {
     /// One line for the user, if there is something to say: "2 full runs
     /// loaded from the repository."
     pub fn words(&self, git: bool) -> Option<String> {
-        let place = if git { "repository" } else { "history folder" };
+        let place = if git { "repository" } else { "folder" };
         let mut parts = Vec::new();
         if let Some(why) = &self.unreadable {
             parts.push(format!(
@@ -1795,7 +1794,7 @@ impl Mirrored {
         }
         for (id, version) in &self.newer {
             parts.push(format!(
-                "Run {id} was recorded by Pathwarden {version}: update Pathwarden to open it."
+                "Run {id} was saved by Pathwarden {version}. Update Pathwarden to open it."
             ));
         }
         if let Some(w) = crate::workspace::newer_runs_words(self.newer_here) {
@@ -1818,7 +1817,7 @@ fn checked_file(store: &Store, id: &str, entry: &FileEntry, limit: u64) -> Resul
     }
     match store.bundle_file_len(id, &entry.name) {
         Ok(Some(n)) if n > pathwarden_core::store::max_on_disk(entry.bytes) => {
-            return Err(format!("{} doesn't match its manifest", entry.name))
+            return Err(format!("it is damaged: {} changed", entry.name))
         }
         Ok(Some(_)) => {}
         Ok(None) => return Err(format!("{} is missing", entry.name)),
@@ -1829,7 +1828,7 @@ fn checked_file(store: &Store, id: &str, entry: &FileEntry, limit: u64) -> Resul
         .map_err(|e| format!("{e:#}"))?
         .ok_or_else(|| format!("{} is missing", entry.name))?;
     if bytes.len() as u64 != entry.bytes || sha256_hex(&bytes) != entry.sha256 {
-        return Err(format!("{} doesn't match its manifest", entry.name));
+        return Err(format!("it is damaged: {} changed", entry.name));
     }
     Ok(bytes)
 }
@@ -1935,7 +1934,7 @@ fn load_one(
         // are, even one whose folder name happens to be the same.
         if !loaded_run_dir(&dir) {
             return Err(format!(
-                "run {id} wasn't loaded: folder {folder} holds a run made on this computer"
+                "a run made on this computer has the same ID ({folder})"
             ));
         }
         retests = std::fs::read(dir.join(crate::retest_ui::RETESTS_FILE)).ok();
@@ -2022,8 +2021,8 @@ pub fn mirror(ws: &Workspace, loc: &crate::history_ui::Location) -> Mirrored {
         let value: serde_json::Value = match serde_json::from_slice(&bytes) {
             Ok(v) => v,
             Err(e) => {
-                out.failed
-                    .push((id.clone(), format!("its run.json can't be read ({e})")));
+                pathwarden_core::logs::session_line(&format!("Full run {id}: run.json: {e}"));
+                out.failed.push((id.clone(), "it is damaged".into()));
                 continue;
             }
         };
@@ -2034,10 +2033,8 @@ pub fn mirror(ws: &Workspace, loc: &crate::history_ui::Location) -> Mirrored {
                 continue;
             }
             ManifestKind::Foreign => {
-                out.failed.push((
-                    id.clone(),
-                    "its run.json isn't a Pathwarden full run".into(),
-                ));
+                out.failed
+                    .push((id.clone(), "it isn't a Pathwarden full run".into()));
                 continue;
             }
         }
@@ -2045,12 +2042,12 @@ pub fn mirror(ws: &Workspace, loc: &crate::history_ui::Location) -> Mirrored {
             Ok(m) if m.run_id == *id => m,
             Ok(_) => {
                 out.failed
-                    .push((id.clone(), "its run.json names another run".into()));
+                    .push((id.clone(), "it is damaged (it names another run)".into()));
                 continue;
             }
             Err(e) => {
-                out.failed
-                    .push((id.clone(), format!("its run.json can't be read ({e})")));
+                pathwarden_core::logs::session_line(&format!("Full run {id}: run.json: {e}"));
+                out.failed.push((id.clone(), "it is damaged".into()));
                 continue;
             }
         };
@@ -2188,7 +2185,7 @@ mod tests {
         };
         let e = bundle().write(&store).unwrap_err();
         assert!(
-            e.to_string().contains("A newer Pathwarden saved run"),
+            e.to_string().contains("was saved by a newer Pathwarden"),
             "{e}"
         );
         let (shared, skipped, _, _) = write_all(&store, &[bundle()], 5).unwrap();
@@ -2291,7 +2288,7 @@ mod tests {
             &facts,
             true
         ));
-        assert_eq!(WAITING_WORDS, "Its full run is waiting to be pushed.");
+        assert_eq!(WAITING_WORDS, "Its full run is waiting to be shared.");
     }
 
     /// A run in the history in full, with files left out, may have
@@ -2389,8 +2386,8 @@ mod tests {
         assert_eq!(
             file_limit_words(95, true),
             "95 MB. GitHub refuses files over 100 MB, so a larger setting is held to 95 MB. \
-             Larger files are left out of the full run and named on its page. The history \
-             point is always kept."
+             Larger files are left out of the full run and named on its page. Its numbers \
+             are always kept."
         );
     }
 

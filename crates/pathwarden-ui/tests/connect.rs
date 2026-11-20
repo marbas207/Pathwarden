@@ -192,7 +192,7 @@ async fn the_page_looks_opens_and_connects() {
     assert!(home.contains(r#"href="/environments/connect""#), "{home}");
     assert!(home.contains("Connect to a run history"));
     let (_, envs) = a.get("/environments").await;
-    for want in ["Its history", "On this computer", "Start a new run history"] {
+    for want in ["Run history", "On this computer", "Start a new run history"] {
         assert!(envs.contains(want), "{want}");
     }
     let (s, loc) = a
@@ -205,8 +205,7 @@ async fn the_page_looks_opens_and_connects() {
     let (s, page) = a.get("/environments/connect").await;
     assert_eq!(s, StatusCode::OK);
     assert!(
-        page.contains("Where is it?")
-            && page.contains("Pathwarden only reads it. Nothing is pushed.")
+        page.contains("Where it is") && page.contains("Pathwarden only reads it. Nothing changes.")
     );
     let (s, r) = a
         .post(
@@ -259,12 +258,12 @@ async fn the_page_looks_opens_and_connects() {
     // Step 3.
     let (_, page) = a.get(&format!("/environments/connect?s={token}")).await;
     for want in [
-        "On this computer",
+        "Open and sync",
         "Your account can push to this repository.",
-        "Push runs from this computer",
+        "Share runs from this computer",
         "What it keeps and its encryption come from the run history.",
         "Encrypted. Your passphrase opens it.",
-        "Use this history and sync",
+        "Connect and sync",
     ] {
         assert!(page.contains(want), "{want}");
     }

@@ -169,6 +169,7 @@ async fn pages_render_without_a_config_or_a_run() {
     assert_eq!(s, StatusCode::NOT_FOUND);
     let (_, body) = a.get("/zones/new").await;
     assert!(body.contains("need one run first"));
+    assert!(body.contains("Search works after the first run"));
     let (s, v) = a
         .json(
             Method::POST,
@@ -281,7 +282,7 @@ async fn saves_keep_the_file_and_refuse_invalid_values() {
     std::fs::write(a.state.ws().config_path(), "tier_zero = [\n").unwrap();
     let (s, body) = a.get("/settings").await;
     assert_eq!(s, StatusCode::OK);
-    assert!(body.contains("can't be loaded"));
+    assert!(body.contains("Settings can't be read"));
     let (s, _) = a
         .json(
             Method::POST,
@@ -541,7 +542,7 @@ async fn accepted_risks_record_who_and_when() {
     ] {
         let (s, v) = a.json(method, uri, body).await;
         assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
-        assert_eq!(v["error"], "This page is out of date: reload it.", "{uri}");
+        assert_eq!(v["error"], "This page is out of date. Reload it.", "{uri}");
     }
     assert_eq!(a.config().unwrap(), before);
     // A stale page, an empty note: refused, nothing written.
@@ -643,7 +644,7 @@ async fn stale_settings_pages_are_refused() {
     ] {
         let (s, v) = a.json(Method::POST, uri, body).await;
         assert_eq!(s, StatusCode::BAD_REQUEST, "{uri}: {v}");
-        assert_eq!(v["error"], "This page is out of date: reload it.", "{uri}");
+        assert_eq!(v["error"], "This page is out of date. Reload it.", "{uri}");
     }
     assert_eq!(a.config(), before);
     // Reloaded, the same saves go through.
@@ -716,7 +717,7 @@ async fn saves_answer_with_what_the_file_holds() {
     assert_eq!(v["loaded"]["stale_days"], 45);
     let (s, v) = a.json(Method::POST, "/api/settings/rules", tab(60)).await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
-    assert_eq!(v["error"], "This page is out of date: reload it.");
+    assert_eq!(v["error"], "This page is out of date. Reload it.");
     assert!(a.config().unwrap().contains("stale_days = 45"));
 
     // A file that parses but doesn't load: refused, saying why.
@@ -735,7 +736,10 @@ async fn saves_answer_with_what_the_file_holds() {
         let (s, v) = a.json(Method::POST, uri, body).await;
         assert_eq!(s, StatusCode::BAD_REQUEST, "{uri}: {v}");
         assert!(
-            v["error"].as_str().unwrap().contains("can't be loaded"),
+            v["error"]
+                .as_str()
+                .unwrap()
+                .contains("Settings can't be read"),
             "{v}"
         );
     }
@@ -882,16 +886,16 @@ reason = "Trust \u202Ekept open"
         risks.contains("Accepted by an unknown user on <b>PW-SCHED01</b>"),
         "{risks}"
     );
-    assert!(risks.contains("Who accepted it and when wasn't recorded"));
+    assert!(risks.contains("Who accepted it wasn't recorded"));
     assert!(
-        risks.contains("pathwarden.toml has keys this version doesn't know, so they are ignored.")
+        risks.contains("Some settings come from a newer Pathwarden and are ignored here.")
             && risks.contains("<p>Accepted risk 1: <code>ticket</code></p>")
             && !risks.contains("[[suppress]]"),
         "{risks}"
     );
     assert!(risks.contains("data-note-risk") && risks.contains(r#"id="note-form""#));
     // Settings aren't shared through a repository yet (A3): no tag.
-    assert!(!risks.contains("From the repository"));
+    assert!(!risks.contains("From the run history"));
     // Plain words only: no commands on the page.
     assert!(!risks.contains("pathwarden config"), "{risks}");
     // Every risk's data reads as JSON, a bidi control in a reason included
@@ -1456,9 +1460,8 @@ async fn rule_severities_are_set_from_the_settings_page() {
     assert!(rules.contains(r#"data-show="all" aria-pressed="true""#));
     assert!(rules.contains(r#"data-show="changed" aria-pressed="false""#));
     assert!(rules.contains(r#"id="rules-reset""#));
-    assert!(rules.contains("Turn a rule off to skip it, or set its severity."));
+    assert!(rules.contains("Turn a rule off or set its severity."));
     assert!(rules.contains("About: Severity"));
-    assert!(rules.contains("keeps the zone Critical"));
     assert!(
         !rules.contains("pathwarden config"),
         "no commands on the page"
@@ -1547,7 +1550,7 @@ async fn tier_zero_settings_folders_are_saved_and_read() {
     assert!(t0 < sf && sf < rules);
     assert!(page.contains(r##"<a href="#tier-zero">Tier Zero</a><a href="#settings-folders">Tier Zero settings folders</a><a href="#rules">Rules</a>"##));
     assert!(page.contains("<h2 class=\"sub\">Tier Zero settings folders</h2>"));
-    assert!(page.contains("Shared folders where your servers save their Tier Zero settings files. Pathwarden reads them on every analysis, scheduled run and retest."));
+    assert!(page.contains("Shared folders where your servers save Tier Zero settings files."));
     assert!(page.contains("Runs record file names, not folder paths."));
     assert!(
         page.contains(r#"placeholder="Folder or share path, for example \\fs01\pathwarden-t0""#)

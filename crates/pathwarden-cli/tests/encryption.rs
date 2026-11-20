@@ -304,7 +304,7 @@ fn the_environment_variable_encrypts_and_opens_the_history() {
         &[],
         None,
     ));
-    assert!(text.contains("Off: the files are plain JSON."), "{text}");
+    assert!(text.contains("Off: the files are plain text."), "{text}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

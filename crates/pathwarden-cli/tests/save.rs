@@ -917,10 +917,14 @@ fn env_remove_asks_then_moves_everything_aside() {
     let said = String::from_utf8_lossy(&out.stdout);
     assert!(said.contains("Remove Lab?"), "{said}");
     assert!(
-        said.contains("- Goes: 1 run with its report and its settings, run history and labels ("),
+        said.contains("- Moves out: 1 run, its settings, its run history and its labels ("),
         "{said}"
     );
-    assert!(said.contains("task Pathwarden-lab"), "{said}");
+    assert!(
+        said.contains("Remove Pathwarden-lab there")
+            || said.contains("Remove pathwarden-lab there"),
+        "{said}"
+    );
     assert!(
         String::from_utf8_lossy(&out.stderr).contains("pass --yes"),
         "{}",
@@ -958,7 +962,7 @@ fn env_remove_asks_then_moves_everything_aside() {
             &w,
         ],
     ));
-    assert!(out.contains("It is the first environment"), "{out}");
+    assert!(out.contains("This is the Default environment"), "{out}");
     assert!(out.contains("Now showing No environment yet."), "{out}");
     assert!(runs(&ws).is_empty());
     assert!(!ws.join("pathwarden-state").exists());

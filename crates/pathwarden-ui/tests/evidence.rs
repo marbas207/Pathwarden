@@ -631,5 +631,5 @@ async fn a_run_loaded_from_the_history_gets_no_pack() {
     let err = evidence_ui::build_pack(ws, None, &r, &against, "SHA256:x", 0)
         .err()
         .expect("refused");
-    assert!(err.contains("was loaded from the shared history"), "{err}");
+    assert!(err.contains("made on another computer"), "{err}");
 }

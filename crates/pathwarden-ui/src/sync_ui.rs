@@ -262,7 +262,7 @@ pub fn sync_line(v: &View, page: &str) -> String {
         .map(|(_, href, name)| format!(r#" Choose on <a href="{href}">{name}</a>."#))
         .unwrap_or_default();
     format!(
-        r#"<div class="note warn sync-conflict dismissable" role="status">{}<div><p><strong>{}</strong> {}{elsewhere}</p></div><button type="button" class="linkish sync-dismiss" data-sync-dismiss="{}"{at} title="Hides the dot on Settings until something else has two values">Dismiss</button></div>{merged}"#,
+        r#"<div class="note warn sync-conflict dismissable" role="status">{}<div><p><strong>{}</strong> {}{elsewhere}</p></div><button type="button" class="linkish sync-dismiss" data-sync-dismiss="{}"{at} title="Hide this notice">Dismiss</button></div>{merged}"#,
         icon("i-alert"),
         esc(&first),
         tip(&format!("conf-{page}"), "Two values", &rows, false),
@@ -425,8 +425,8 @@ pub fn state_words(v: &View, c: Changed) -> &'static str {
     match c {
         Changed::Here if v.pushes => "Not shared yet",
         Changed::Here => "Only on this computer",
-        Changed::Repository => "Shared update: applied at the next sync",
-        Changed::Merge => "Shared update: merged at the next sync",
+        Changed::Repository => "Shared change, applies at the next sync",
+        Changed::Merge => "Shared change, applies at the next sync",
         Changed::Both => BOTH_TAG,
         Changed::InStep => "Up to date",
     }
@@ -525,7 +525,7 @@ pub fn conflict(v: &View, key: &str) -> Option<String> {
         })
         .unwrap_or_default();
     let mut b = format!(
-        r#"<div class="cmp"><div><h3>This computer <span class="muted">{here_when}</span></h3>{}</div><div><h3>Shared <span class="muted">{repo_who}</span></h3>{}</div></div><div class="cmp-actions"><span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{key}">Use shared settings</button><span class="act-help">Replaces local settings with the shared ones</span></span>"#,
+        r#"<div class="cmp"><div><h3>This computer <span class="muted">{here_when}</span></h3>{}</div><div><h3>Shared <span class="muted">{repo_who}</span></h3>{}</div></div><div class="cmp-actions"><span class="act"><button type="button" class="btn" data-sync-action="use_repo" data-sync-section="{key}">Use shared</button><span class="act-help">Replaces this computer's settings with the shared ones</span></span>"#,
         list(&d.here),
         list(&d.repository),
         key = esc(key),
@@ -533,7 +533,7 @@ pub fn conflict(v: &View, key: &str) -> Option<String> {
     if v.pushes {
         let _ = write!(
             b,
-            r#"<span class="act"><button type="button" class="btn primary" data-sync-action="keep_local" data-sync-section="{key}">Use local settings</button><span class="act-help">Overwrites the settings in the shared repository</span></span>"#,
+            r#"<span class="act"><button type="button" class="btn primary" data-sync-action="keep_local" data-sync-section="{key}">Keep this computer's</button><span class="act-help">Overwrites the shared settings for everyone</span></span>"#,
             key = esc(key),
         );
     }
@@ -644,7 +644,7 @@ pub fn storage_row(v: &View) -> String {
         rows.push(("Other settings".into(), "Up to date".into()));
     }
     let state = if s.unreadable.is_some() {
-        r#" · <span class="sync-chg">the repository's settings can't be read here</span> · <a href="/settings">Why</a>"#
+        r#" · <span class="sync-chg">the shared settings can't be read here</span> · <a href="/settings">Why</a>"#
             .to_string()
     } else if !both.is_empty() {
         let (_, href, _) = s
@@ -815,14 +815,17 @@ pub(crate) async fn dismiss(State(st): State<Shared>, Json(body): Json<DismissBo
             Some(k) if k == body.key => {
                 settings_sync::dismiss(&loc.store, &k, body.merged_at).map_err(|e| format!("{e:#}"))
             }
-            _ => Err("The settings changed since this page was loaded. Reload the page.".into()),
+            _ => Err("This page is out of date. Reload it.".into()),
         }
     })
     .await;
     match done {
         Ok(Ok(())) => Json(serde_json::json!({ "saved": true })).into_response(),
         Ok(Err(e)) => crate::settings::json_error(StatusCode::CONFLICT, e),
-        Err(_) => crate::settings::json_error(StatusCode::INTERNAL_SERVER_ERROR, "That failed."),
+        Err(_) => crate::settings::json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't save the choice. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -840,37 +843,43 @@ pub(crate) struct SyncBody {
 pub(crate) async fn sync_section(State(st): State<Shared>, Json(body): Json<SyncBody>) -> Response {
     let ws = st.ws();
     let flag = st.state_dir_for(&ws);
-    let done =
-        tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
-            let resolve = match body.action.as_str() {
-                "use_repo" => Resolve::UseRepo(vec![body.section.clone()]),
-                "keep_local" => Resolve::KeepLocal(vec![body.section.clone()]),
-                _ => return Err("Choose the shared settings or this computer's.".into()),
+    let done = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
+        let resolve = match body.action.as_str() {
+            "use_repo" => Resolve::UseRepo(vec![body.section.clone()]),
+            "keep_local" => Resolve::KeepLocal(vec![body.section.clone()]),
+            _ => return Err("Choose the shared settings or this computer's.".into()),
+        };
+        let loc = crate::history_ui::locate(&ws, flag.as_deref())?;
+        let _lock = loc
+            .store
+            .lock_waiting(settings_sync::lock_wait())
+            .map_err(|e| {
+                pathwarden_core::logs::session_line(&format!("The history is in use: {e:#}"));
+                "A run is saving to the history. Try again in a moment.".to_string()
+            })?;
+        pathwarden_core::store::non_interactive(|| {
+            loc.store.pull().map_err(|e| {
+                pathwarden_core::logs::session_line(&format!(
+                    "Couldn't get the latest from the repository: {e:#}"
+                ));
+                crate::history_ui::UNREACHABLE.to_string()
+            })?;
+            let name = ws.env_name();
+            let place = Place {
+                store: &loc.store,
+                config_path: &ws.config_path(),
+                pushes: loc.push,
+                env_name: Some(&name),
             };
-            let loc = crate::history_ui::locate(&ws, flag.as_deref())?;
-            let _lock = loc.store.lock_waiting(settings_sync::lock_wait()).map_err(|e| {
-            format!("The history is in use (a run is recording); try again in a moment. ({e:#})")
-        })?;
-            pathwarden_core::store::non_interactive(|| {
-                loc.store
-                    .pull()
-                    .map_err(|e| format!("Couldn't get the latest from the repository: {e:#}"))?;
-                let name = ws.env_name();
-                let place = Place {
-                    store: &loc.store,
-                    config_path: &ws.config_path(),
-                    pushes: loc.push,
-                    env_name: Some(&name),
-                };
-                let o = settings_sync::sync(&place, resolve).map_err(|e| format!("{e:#}"))?;
-                // Kept in the last sync's record.
-                crate::last_pull::set_conflict(&loc.store, o.conflict());
-                // Shown on this page now: the note about it isn't kept for later.
-                let _ = settings_sync::unseen_applied(&loc.store, true);
-                Ok(o.page_sentence())
-            })
+            let o = settings_sync::sync(&place, resolve).map_err(|e| format!("{e:#}"))?;
+            // Kept in the last sync's record.
+            crate::last_pull::set_conflict(&loc.store, o.conflict());
+            // Shown on this page now: the note about it isn't kept for later.
+            let _ = settings_sync::unseen_applied(&loc.store, true);
+            Ok(o.page_sentence())
         })
-        .await;
+    })
+    .await;
     match done {
         Ok(Ok(note)) => Json(serde_json::json!({ "saved": true, "note": note })).into_response(),
         Ok(Err(e)) => crate::settings::json_error(StatusCode::BAD_REQUEST, e),
