@@ -1337,7 +1337,7 @@ fn changed_damaged_and_newer_full_runs() {
     let said = get_latest(&reader).unwrap_or_default();
     assert!(
         said.contains(&format!(
-            "Couldn't load the full run of {id2}: graph.bin.gz doesn't match its manifest"
+            "Couldn't load the full run of {id2}: it is damaged: graph.bin.gz changed"
         )),
         "{said}"
     );
@@ -1361,7 +1361,7 @@ fn changed_damaged_and_newer_full_runs() {
     let said = get_latest(&reader).unwrap_or_default();
     assert!(
         said.contains(&format!(
-            "Run {id2} was recorded by Pathwarden 0.1.9: update Pathwarden to open it."
+            "Run {id2} was saved by Pathwarden 0.1.9. Update Pathwarden to open it."
         )),
         "{said}"
     );
@@ -1397,7 +1397,7 @@ fn changed_damaged_and_newer_full_runs() {
     let said = get_latest(&reader).unwrap_or_default();
     assert!(
         said.contains(&format!(
-            "Couldn't load the full run of {id2}: its run.json isn't a Pathwarden full run"
+            "Couldn't load the full run of {id2}: it isn't a Pathwarden full run"
         )),
         "{said}"
     );
@@ -2135,7 +2135,7 @@ fn the_limit_follows_the_setting_and_github_holds_it() {
     .unwrap();
     assert_eq!(
         get_latest(&ws).as_deref(),
-        Some("1 full run loaded from the history folder.")
+        Some("1 full run loaded from the folder.")
     );
     let r = ws.runs().remove(0);
     let kept = std::fs::metadata(ws.run_dir(&r.id).unwrap().join("retest.json.gz")).unwrap();
@@ -2255,7 +2255,7 @@ fn a_run_without_its_object_index_says_so() {
     let said = get_latest(&reader).unwrap_or_default();
     assert!(
         said.contains(&format!(
-            "Couldn't load the full run of {id}: graph.bin.gz doesn't match its manifest"
+            "Couldn't load the full run of {id}: it is damaged: graph.bin.gz changed"
         )),
         "{said}"
     );

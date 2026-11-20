@@ -584,18 +584,18 @@ async fn a_first_clone_that_fails_is_shown() {
     assert!(work.join(".pathwarden-last-pull.json").exists());
     let (_, page) = a.get("/automate/history").await;
     assert!(
-        page.contains("<strong>Couldn&#39;t sync with the repository.</strong>"),
+        page.contains("<strong>Couldn&#39;t reach the run history.</strong>"),
         "{page}"
     );
     assert!(
-        page.contains("Git said") && page.contains("nowhere.git"),
+        page.contains("What git said") && page.contains("nowhere.git"),
         "{page}"
     );
     assert!(page.contains("Not synced yet."), "{page}");
     let v = a.json("/api/history/pulled?since=0&page=runs").await;
     let foot = v["foot"].as_str().unwrap();
     assert!(
-        foot.contains("pull-foot warn") && foot.contains("Couldn&#39;t sync with the repository"),
+        foot.contains("pull-foot warn") && foot.contains("Couldn&#39;t reach the run history"),
         "{foot}"
     );
     // Once it can be reached, the record doesn't stand in the clone's way.

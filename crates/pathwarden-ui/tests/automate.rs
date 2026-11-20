@@ -534,7 +534,7 @@ async fn earlier_runs_stay_local_until_the_user_chooses() {
     );
     let (_, _, body) = a.get("/runs").await;
     assert!(body.contains("Local only"), "{body}");
-    assert!(body.contains("Import or keep local only"), "{body}");
+    assert!(body.contains("Import or keep on this computer only"), "{body}");
     let (_, _, body) = a.get("/automate/history").await;
     assert!(body.contains("Import them in order"), "{body}");
     let (_, _, body) = a.get("/progress").await;
@@ -548,7 +548,7 @@ async fn earlier_runs_stay_local_until_the_user_chooses() {
         .await;
     assert_eq!(s, StatusCode::OK, "{b}");
     let (_, _, body) = a.get("/runs").await;
-    assert!(!body.contains("Import or keep local only"), "{body}");
+    assert!(!body.contains("Import or keep on this computer only"), "{body}");
     let after =
         std::fs::read_to_string(a.state.ws().run_dir(&run).unwrap().join("summary.json")).unwrap();
     assert_eq!(before, after);

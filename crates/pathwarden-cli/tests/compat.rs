@@ -332,7 +332,7 @@ fn a_full_run_from_0_1_9_loads_out_of_older_versions_sight() {
     let dir = scratch("full-019");
     reader("0.1.9", &dir);
     let text = load_full_runs(&dir).unwrap_or_default();
-    assert_eq!(text, "1 full run loaded from the history folder.");
+    assert_eq!(text, "1 full run loaded from the folder.");
     let ws = Workspace::open(dir.join("ws")).unwrap();
     let runs = ws.runs();
     assert_eq!(runs.len(), 1);
@@ -580,7 +580,7 @@ fn a_newer_full_run_is_not_loaded() {
     let text = load_full_runs(&dir).unwrap_or_default();
     assert_eq!(
         text,
-        "Run 20261030T151733.132Z was recorded by Pathwarden 9.0.0: update Pathwarden to open it."
+        "Run 20261030T151733.132Z was saved by Pathwarden 9.0.0. Update Pathwarden to open it."
     );
     let ws = Workspace::open(dir.join("ws")).unwrap();
     assert!(ws.runs().iter().all(|r| r.shared.is_none()));

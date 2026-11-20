@@ -268,7 +268,7 @@ pub(crate) async fn edit_answering(
             Json(out).into_response()
         }
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Saving failed."),
+        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't save. Try again; if it keeps failing, see Settings › Logs."),
     }
 }
 
@@ -299,7 +299,7 @@ pub(crate) async fn edit_in(
             Json(serde_json::json!({ "saved": true, "sharing": sharing })).into_response()
         }
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Saving failed."),
+        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't save. Try again; if it keeps failing, see Settings › Logs."),
     }
 }
 
@@ -1566,7 +1566,7 @@ async fn add_suppression_note(
                 .into_response()
         }
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Saving failed."),
+        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't save. Try again; if it keeps failing, see Settings › Logs."),
     }
 }
 
@@ -1790,7 +1790,7 @@ pub(crate) async fn history_lock_refusal(
         Ok(Err(e)) => Some(json_error(StatusCode::BAD_REQUEST, e)),
         Err(_) => Some(json_error(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Saving failed.",
+            "Couldn't save. Try again; if it keeps failing, see Settings › Logs.",
         )),
     }
 }

@@ -52,7 +52,7 @@
         var j = null;
         try { j = text ? JSON.parse(text) : {}; } catch (e) {}
         if (!r.ok) {
-          var err = new Error((j && j.error) || "Pathwarden didn't answer (" + r.status + "). Is it still running?");
+          var err = new Error((j && j.error) || "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs.");
           err.data = j || {};
           throw err;
         }
@@ -60,7 +60,7 @@
         if (j && j.sharing) pollSharing(j.sharing);
         return j || {};
       });
-    }, function () { throw new Error("Pathwarden is not answering. Is it still running?"); });
+    }, function () { throw new Error("Pathwarden isn't answering. Is it still running?"); });
   }
 
   // "Oct 22, 2026" (PathwardenTime.date in app.js).
@@ -195,7 +195,7 @@
     sec.classList.toggle("is-dirty", dirty);
     var s = sec.querySelector(".save-status");
     if (!s) return;
-    if (dirty && (!s.textContent || s.textContent === "Saved")) {
+    if (dirty && (!s.textContent || s.textContent === "Saved.")) {
       s.textContent = UNSAVED;
       s.className = "save-status small unsaved";
     } else if (!dirty && s.textContent === UNSAVED) {
@@ -236,7 +236,7 @@
       var sec = sectionOf(section);
       markClean(sec);
       var others = stillUnsaved(sec);
-      status(section, others.length ? "Saved. Still unsaved: " + others.join(", ") + "." : "Saved", true);
+      status(section, others.length ? "Saved. Still unsaved: " + others.join(", ") + "." : "Saved.", true);
       showSaved();
       if (onDone) onDone(r);
     }, function (e) {
@@ -277,7 +277,7 @@
       if (!results.length) {
         list.appendChild(el("li", "none", source === "findings"
           ? "No finding matches " + q + "."
-          : "Nothing named like " + q + " in the latest analysis. Press Add to use it as typed."));
+          : "Nothing named like " + q + " in the latest run. Press Add to use it as typed."));
       }
       results.forEach(function (r, i) {
         var li = el("li");
@@ -437,7 +437,7 @@
       b.addEventListener("click", function () {
         var folder = b.getAttribute("data-use-folder");
         confirmBox("Use " + folder + " on this computer?",
-          "Every analysis here, and the scheduled runs, will connect to it and read its settings files. Use it only if you know the folder.",
+          "Every run here, scheduled ones too, reads its settings files. Use it only if you know the folder.",
           "Use folder", false)
           .then(function (yes) {
             if (!yes) return null;
@@ -451,7 +451,7 @@
           var tag = li.querySelector(".folder-waiting");
           if (tag) tag.remove();
           b.remove();
-          toast(folder + " is used on this computer from the next analysis.");
+          toast(folder + " is used on this computer from the next run.");
         }, function (e) {
           b.disabled = false;
           toast(e.message);
@@ -583,7 +583,7 @@
       if (bidiNote) {
         bidiNote.hidden = shown === ((risk && risk.reason) || "");
         bidiNote.textContent = bidiNote.hidden ? "" :
-          "This reason holds a character that changes the direction of text, so it may look reordered here. As saved: " + shown;
+          "This reason has a text-direction character and may look reordered. As saved: " + shown;
       }
       $("risk-expires").value = (risk && risk.expires) || "";
       // A day already over accepts nothing (the server says so too); an
@@ -608,7 +608,7 @@
       var risk = JSON.parse(row.getAttribute("data-risk"));
       row.querySelector("[data-edit-risk]").addEventListener("click", function () { open(risk); });
       row.querySelector("[data-remove-risk]").addEventListener("click", function () {
-        confirmBox("Remove this accepted risk?", "The finding counts as open again from the next analysis. Reason: " + visible(risk.reason), "Remove", true)
+        confirmBox("Remove this accepted risk?", "The finding counts as open again from the next run. Reason: " + visible(risk.reason), "Remove", true)
           .then(function (yes) {
             if (!yes) return;
             api("DELETE", "/api/settings/suppress/" + risk.index, { expect: risk.reason, expect_target: risk.fingerprint != null ? risk.fingerprint : risk.rule })
@@ -687,7 +687,7 @@
         go.disabled = false;
         addNote(row, j.note || { text: text });
         closeNote();
-        toast("Note added. The next analysis's report shows it with the finding.");
+        toast("Note added. The next report shows it with the finding.");
       }, function (err) {
         go.disabled = false;
         status(noteForm, err.message, false);
@@ -721,7 +721,7 @@
     var showBackend = function () {
       var b = backend();
       all("[data-when-backend]", state).forEach(function (f) { f.hidden = f.getAttribute("data-when-backend") !== b; });
-      $("state-path-label").textContent = b === "git" ? "Working copy folder" : "Folder";
+      $("state-path-label").textContent = b === "git" ? "Local folder for the repository" : "Folder";
     };
     all("input[name=backend]", state).forEach(function (r) { r.addEventListener("change", showBackend); });
     showBackend();
@@ -770,12 +770,12 @@
       var enc = $("enc");
       if (encrypting || (enc && enc.getAttribute("data-on") === "true")) {
         return confirmBox("Keep full runs and settings?",
-          "Each run in full and the shared settings and accepted risks, with who recorded or accepted them, go into the history encrypted: only those with the passphrase can read them. Anyone who can push to it can still change or remove them.",
+          "Full runs and settings go into the history, encrypted. Anyone who can change the history can still change or remove them.",
           "Keep full runs and settings");
       }
       return confirmBox("Keep full runs and settings, not encrypted?",
-        "The history is not encrypted: anyone who can read this folder or repository sees each run in full and the shared settings and accepted risks, with who recorded or accepted them. Anyone who can push to it can change them for every machine.",
-        "Keep them in plain text");
+        "Not encrypted: anyone who can read the history sees every run in full, and anyone who can change it changes them for every computer.",
+        "Save without encryption");
     }
     // The passphrase panel (enc.js) sends this form with the passphrase:
     // the server encrypts the history before anything is shared.
@@ -837,7 +837,7 @@
   all("[data-delete-zone]").forEach(function (b) {
     b.addEventListener("click", function () {
       var name = b.getAttribute("data-name");
-      confirmBox("Delete the zone " + name + "?", "It is removed from pathwarden.toml, and the next analysis no longer reports on it.", "Delete zone", true)
+      confirmBox("Delete the zone " + name + "?", "The next run no longer reports on it. Earlier runs keep it.", "Delete zone", true)
         .then(function (yes) {
           if (!yes) return;
           api("DELETE", "/api/zones/" + b.getAttribute("data-delete-zone"), { expect: name })
@@ -941,7 +941,7 @@
     var zp = new Picker(wiz.querySelector("[data-picker=zp]"), {
       kinds: kindFilter,
       onPick: function (r) {
-        if (r.tier_zero) toast(r.name + " is Tier Zero. Tier Zero is never part of a zone (it already sits above every zone), so it will be left out.");
+        if (r.tier_zero) toast(r.name + " is Tier Zero, so it is left out.");
         add(r.name, r.adds_as, r.kind);
       },
       onTyped: function (v) { add(v, /^(OU|CN)=/i.test(v) ? "ou" : "member", null); }
@@ -960,7 +960,7 @@
       head.appendChild(el("span", "pv-num", p.total.toLocaleString()));
       head.appendChild(el("span", "muted", p.total === 1 ? "object in the zone" : "objects in the zone"));
       target.appendChild(head);
-      target.appendChild(el("p", "muted small pv-env", "In " + j.environment + ", the latest analysis. Tier Zero objects are never counted."));
+      target.appendChild(el("p", "muted small pv-env", "In " + j.environment + ", the latest run. Tier Zero objects are never counted."));
       if (p.kinds.length) {
         var kinds = el("ul", "pv-kinds");
         var max = p.kinds[0][1];
@@ -1030,7 +1030,7 @@
       var box = el("div", "review-preview");
       r.appendChild(box);
       if (lastPreview) drawPreview(box, lastPreview, true);
-      else box.appendChild(el("p", "muted small", "No preview: the preview needs one analysis. The zone is still saved and applies to the next analysis."));
+      else box.appendChild(el("p", "muted small", "No preview yet. The zone applies from the next run."));
     };
 
     wiz.addEventListener("submit", function (e) {
@@ -1065,7 +1065,7 @@
       var name = b.getAttribute("data-name");
       var custom = b.getAttribute("data-custom") === "true";
       var ask = custom
-        ? confirmBox("Test " + name + "?", "Pathwarden asks the plugin for a dry run by adding dry_run = true to its settings. A script that ignores that setting would really send its alert or create its tickets. Run it only if yours honors dry_run.", "Run dry run", false)
+        ? confirmBox("Test " + name + "?", "Test asks the plugin not to send anything. A script that ignores this sends for real. Test it only if your script supports test runs.", "Test", false)
         : Promise.resolve(true);
       ask.then(function (yes) {
         if (!yes) return;
@@ -1073,20 +1073,20 @@
         var out = row.querySelector(".test-out");
         out.hidden = false;
         out.className = "test-out running";
-        row.querySelector(".test-title").textContent = "Running a dry run…";
+        row.querySelector(".test-title").textContent = "Testing…";
         row.querySelector(".test-sub").textContent = "";
         row.querySelector(".test-log").textContent = "";
         b.disabled = true;
         api("POST", "/api/plugins/" + b.getAttribute("data-test-plugin") + "/test", { expect: name }).then(function (j) {
           b.disabled = false;
           out.className = "test-out " + (j.ok ? "ok" : "bad");
-          row.querySelector(".test-title").textContent = j.ok ? "Dry run finished" : "The plugin reported a problem";
+          row.querySelector(".test-title").textContent = j.ok ? "Test finished" : "The plugin reported a problem";
           // The run's time in local time, as everywhere (app.js).
           var ran = typeof j.run_at === "number" && window.PathwardenTime
             ? j.run_env + ", analyzed " + window.PathwardenTime.local(j.run_at)
             : j.run;
           row.querySelector(".test-sub").textContent = j.status + " · " + ran;
-          row.querySelector(".test-log").textContent = j.output || "(no output)";
+          row.querySelector(".test-log").textContent = j.output || "The plugin printed nothing.";
         }, function (e) {
           b.disabled = false;
           out.className = "test-out bad";
@@ -1177,7 +1177,7 @@
           t.out.className = (t.chip ? "envchip " : "envstatus ") + (!known ? "bad" : set ? "set" : "unset");
           t.out.appendChild(el("span", "dot"));
           if (t.chip) t.out.appendChild(el("code", null, t.name));
-          t.out.appendChild(document.createTextNode(!known ? " not a valid variable name" : set ? " set in this environment" : " not set in this environment"));
+          t.out.appendChild(document.createTextNode(!known ? " not a valid variable name" : set ? " set for Pathwarden" : " not set for Pathwarden"));
         });
       }, function () {});
     }, 250);

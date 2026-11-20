@@ -246,7 +246,7 @@ impl Encryption {
 pub fn encryption_words(e: &Encryption) -> String {
     use pathwarden_core::keystore::Source;
     match e {
-        Encryption::Off => "Off: the files are plain JSON.".into(),
+        Encryption::Off => "Off: the files are plain text.".into(),
         Encryption::On(None) => "On (passphrase not stored here).".into(),
         Encryption::On(Some(Source::Env)) => format!(
             "On (passphrase from {}).",
@@ -337,13 +337,13 @@ pub fn sync_settings_detail(
 fn keep_sub(keep: pathwarden_core::config::Keep, git: bool) -> &'static str {
     match (keep, git) {
         (pathwarden_core::config::Keep::Names, _) => {
-            "IDs, rules, severities and dates, plus each finding's title (which names the accounts, groups and computers it is about) and its domain. No shared settings."
+            pathwarden_core::connect::keep_sub(pathwarden_core::config::Keep::Names)
         }
         (pathwarden_core::config::Keep::Full, true) => {
-            "Each run in full, with names, plus shared settings and accepted risks."
+            pathwarden_core::connect::keep_sub(pathwarden_core::config::Keep::Full)
         }
         (pathwarden_core::config::Keep::Full, false) => {
-            "Each run in full, with names. Settings are shared only through a git repository."
+            "Each run in full. Settings are shared only through a git repository."
         }
     }
 }
@@ -357,9 +357,9 @@ pub fn keep_words(keep: pathwarden_core::config::Keep) -> &'static str {
 /// CLI's for the command.
 pub fn origin_words(origin: Origin, cli: bool) -> &'static str {
     match (origin, cli) {
-        (Origin::Flag, false) => "The folder this session was started with. The form below changes `pathwarden.toml`, which scheduled runs use; this session keeps using its folder.",
+        (Origin::Flag, false) => "Set when Pathwarden was started. Changes here apply to scheduled runs, not to this session.",
         (Origin::Flag, true) => "`--state`, for this command. `pathwarden history storage set` changes `pathwarden.toml`, which scheduled runs and the app use.",
-        (Origin::Config, false) => "Set in this environment's settings. A relative folder is taken from Pathwarden's folder on this computer, and from the task's folder on a server.",
+        (Origin::Config, false) => "Set in this environment's settings.",
         (Origin::Config, true) => "`[state]` in `pathwarden.toml`. A relative folder is taken from the workspace here, and from the task's folder on a server.",
         (Origin::Default, false) => "The default: nothing is set, so the run history is kept in Pathwarden's folder on this computer.",
         (Origin::Default, true) => "The default: nothing is set in `pathwarden.toml`, so the history lives in the workspace.",
@@ -371,8 +371,18 @@ pub fn records_words(loc: &Location) -> &'static str {
     if loc.records() {
         "Recorded in this run history, like scheduled runs. The demo never is."
     } else {
-        "Kept on this computer only: syncing out is turned off, so this computer only reads the run history."
+        "Kept on this computer only: sharing is turned off, so this computer only reads the run history."
     }
+}
+
+/// A sync that couldn't get the latest history, in plain words (git's own
+/// words go to the log).
+pub const UNREACHABLE: &str = "Couldn't reach the run history. Check the network, then try again.";
+
+/// [`UNREACHABLE`], with what git said logged.
+fn unreachable(e: anyhow::Error) -> String {
+    pathwarden_core::logs::session_line(&format!("Couldn't get the latest history: {e:#}"));
+    UNREACHABLE.to_string()
 }
 
 /// How many runs the history has: "3 runs, the latest {when} · {by}";
@@ -385,7 +395,7 @@ pub fn recorded_words(h: &History, when: impl Fn(i64) -> String) -> String {
             when(p.at),
             recorded_by_words(p)
         ),
-        None => "None yet.".into(),
+        None => "No runs yet.".into(),
     }
 }
 
@@ -393,7 +403,7 @@ pub fn recorded_words(h: &History, when: impl Fn(i64) -> String) -> String {
 pub fn too_old_words(n: usize) -> String {
     let one = n == 1;
     format!(
-        "{} older {} from before the history's latest run can't be added in order, so {} local only. {} still {} from Runs.",
+        "{} older {} can't be added, so {} on this computer. {} still {} from Runs.",
         num(n),
         if one { "run" } else { "runs" },
         if one { "it stays" } else { "they stay" },
@@ -543,7 +553,7 @@ pub fn recorded_by_words(p: &HistoryPoint) -> String {
         Some(f @ (by::SCHEDULE | by::CLI | by::UI | by::IMPORT)) => {
             crate::shared_runs::capitalized(&crate::shared_runs::recorded_words(f, None, None))
         }
-        _ => "Recorded by a run".into(),
+        _ => "Source not recorded".into(),
     }
 }
 
@@ -745,7 +755,7 @@ fn record_only<P: RecordProgress>(
             return (
                 ev.finish(p),
                 not(format!(
-                    "Another run was recording in the history at the same time ({e:#}). Import this run from History storage when it has finished."
+                    "Another run was saving to the history. Import this run from History storage when it has finished."
                 )),
                 None,
             )
@@ -756,7 +766,10 @@ fn record_only<P: RecordProgress>(
         Ok(None) => {}
         Err(e) => {
             let said = format!("{e:#}");
-            let mut link = not(format!("Couldn't get the latest history: {said}"));
+            pathwarden_core::logs::session_line(&format!(
+                "Couldn't get the latest history: {said}"
+            ));
+            let mut link = not(UNREACHABLE.to_string());
             if pathwarden_core::connect::is_sign_in(&said) {
                 link.sign_in = true;
                 link.no_helper = pathwarden_core::connect::no_helper(&said, Some(&loc.store.dir));
@@ -926,10 +939,7 @@ pub fn forget(
         .store
         .lock_waiting(pathwarden_core::settings_sync::lock_wait())
         .map_err(|e| format!("{e:#}"))?;
-    let pulled = loc
-        .store
-        .pull()
-        .map_err(|e| format!("Couldn't get the latest history: {e:#}"))?;
+    let pulled = loc.store.pull().map_err(unreachable)?;
     let (removed, notes) = loc
         .store
         .forget_and_publish(run_id, loc.push)
@@ -1025,7 +1035,7 @@ pub fn import(ws: &Workspace, flag: Option<&Path>) -> Result<(usize, Vec<String>
     let mut notes: Vec<String> = loc
         .store
         .pull()
-        .map_err(|e| format!("Couldn't get the latest history: {e:#}"))?
+        .map_err(unreachable)?
         .into_iter()
         .collect();
     let runs = ws.runs();
@@ -1437,8 +1447,7 @@ pub fn refresh_detail_busy(
     };
     if loc.store.has_unpushed() {
         notes.push(
-            "Changes recorded here earlier are not pushed yet; they go with the next push from \
-             here."
+            "Changes made here are waiting to be shared; they go with the next sync."
                 .to_string(),
         );
     }
@@ -1560,7 +1569,7 @@ pub fn shared_left_out_words(left: &[crate::shared_runs::LeftOut]) -> String {
                 // Explore needs both.
                 "graph.bin.gz" | "objects.json.gz" => "Explore isn't available",
                 "event.json.gz" => "The findings list isn't available",
-                "retest.json.gz" => "Targeted retests aren't available",
+                "retest.json.gz" => "Retests aren't available",
                 _ => "Part of it isn't available",
             };
             format!(
@@ -1588,7 +1597,7 @@ pub fn run_rows(ws: &Workspace, runs: &[RunSummary], snap: &Snapshot) -> Vec<Str
 /// row.
 pub(crate) fn perf_link(run_id: &str) -> String {
     format!(
-        r#" <a class="tag rr-perf" href="/history/{}/performance" title="Collection performance of this run">Timings</a>"#,
+        r#" <a class="tag rr-perf" href="/history/{}/performance" title="Collection performance of this run">Performance</a>"#,
         esc(run_id)
     )
 }
@@ -1700,9 +1709,9 @@ fn exposed_cell(d: i64, which: Option<&str>, words: &mut Vec<String>) -> String 
     };
     words.push(format!("{} {dir} {what} can reach Tier Zero", num(n)));
     match which {
-        // The row's own link opens the run too: this one is for the mouse.
+        // The row's own link opens the run; this one goes to the accounts.
         Some(href) => format!(
-            r#"<a class="vs-expo {cls}" href="{}" title="Which accounts" tabindex="-1">{arrow} {} {what}</a>"#,
+            r#"<a class="vs-expo {cls}" href="{}" title="Which accounts">{arrow} {} {what}</a>"#,
             esc(href),
             num(n)
         ),
@@ -1831,7 +1840,7 @@ fn history_note(ws: &Workspace, runs: &[RunSummary], snap: &Snapshot) -> String 
                 return String::new();
             }
             format!(
-                r#"<div class="note">{}<p><strong>{} {} made here {} in the run history.</strong> Progress and the command line don't see {}. <a href="/automate/history#earlier">Import or keep local only</a></p></div>"#,
+                r#"<div class="note">{}<p><strong>{} {} made here {} in the run history.</strong> Progress leaves {} out. <a href="/automate/history#earlier">Import or keep on this computer only</a></p></div>"#,
                 icon("i-history"),
                 num(n),
                 if n == 1 { "run" } else { "runs" },
@@ -1961,7 +1970,7 @@ fn render(
     let own = q.own;
     let mut b = format!(
         r#"<div class="page-head"><div><p class="eyebrow">Automate</p><h1 class="panel-title">History storage</h1>
-<p class="lead">Where each run's numbers and findings are kept, so Progress can show what is new, fixed or back.</p></div></div>
+<p class="lead">Where each run's numbers and findings are kept.</p></div></div>
 {file}"#,
         file = crate::settings::file_line_if_there(st, loaded),
     );
@@ -2073,11 +2082,11 @@ fn render(
 
     // Earlier runs.
     if !lo.importable.is_empty() || !lo.too_old.is_empty() {
-        b.push_str(r#"<section class="card setting" id="earlier"><header><h2 class="sub">Runs not in the run history</h2><p class="muted">These runs were made here before the app recorded them, or while the run history couldn't be reached, so Progress doesn't include them. Nothing changes until you choose.</p></header>"#);
+        b.push_str(r#"<section class="card setting" id="earlier"><header><h2 class="sub">Runs not in the run history</h2><p class="muted">Made here before the history recorded them, or while it couldn't be reached, so Progress leaves them out.</p></header>"#);
         if !lo.importable.is_empty() {
             let _ = write!(
                 b,
-                r#"<p><strong>{n} can be added in order</strong>, oldest first, as if each had been recorded when it was analyzed:</p><ul class="hs-runs">"#,
+                r#"<p><strong>{n} can be added</strong>, oldest first:</p><ul class="hs-runs">"#,
                 n = num(lo.importable.len())
             );
             for r in lo.importable.iter().take(12) {
@@ -2100,7 +2109,7 @@ fn render(
             let ids: Vec<&str> = lo.importable.iter().map(|r| r.id.as_str()).collect();
             let _ = write!(
                 b,
-                r#"</ul><div class="card-actions"><button type="button" class="btn primary" data-history-action="import">{} Import them in order</button><button type="button" class="btn" data-history-action="keep-local" data-ids="{}">Keep them local only</button><span class="save-status muted small" aria-live="polite"></span></div>"#,
+                r#"</ul><div class="card-actions"><button type="button" class="btn primary" data-history-action="import">{} Import them in order</button><button type="button" class="btn" data-history-action="keep-local" data-ids="{}">Keep on this computer only</button><span class="save-status muted small" aria-live="polite"></span></div>"#,
                 icon("i-history"),
                 esc(&ids.join(",")),
             );
@@ -2157,20 +2166,20 @@ fn render(
 </fieldset>
 <div data-when-origin="connect" hidden>{connect_block}</div>
 <div data-when-origin="form">
-<p class="muted hs-where-lead" data-when-origin="shared">One place for every run's history. For a schedule on a server, choose a place both the server and this computer reach (a shared folder or a git repository) and copy <code>pathwarden.toml</code> to the server, so its runs show up here too.</p>
+<p class="muted hs-where-lead" data-when-origin="shared">One place for every run's history. For a schedule on a server, choose a place both the server and this computer reach (a shared folder or a git repository) and set the same place on the server, so its runs show up here too.</p>
 <fieldset class="choice" data-when-origin="shared"><legend class="sr-only">Where to keep the history</legend>
   <label class="option card"><input type="radio" name="backend" value="local"{local_on}><span><strong>A folder</strong><span class="muted">On this computer or a network share. Use it when this computer and the scheduled runs reach the same folder.</span></span></label>
   <label class="option card"><input type="radio" name="backend" value="git"{git_on}><span><strong>A git repository</strong><span class="muted">Synced before and after each run, so runs on different computers share one run history. Use a private repository.</span></span></label>
 </fieldset>
 <div class="fields2" data-when-origin="shared">
-  <div class="field"><label for="state-path" id="state-path-label">Folder</label><input class="input mono" id="state-path" value="{path}" placeholder="{DEFAULT_FOLDER}" autocomplete="off" spellcheck="false"><p class="hint" data-when-backend="local">A relative folder is taken from Pathwarden's folder on this computer, and from the folder a scheduled run starts in on a server. Default: <code>{DEFAULT_FOLDER}</code>.</p><p class="hint" data-when-backend="git">Where each computer checks the repository out. Pathwarden owns this folder. Default: <code>{DEFAULT_FOLDER}</code>.</p></div>
-  <div class="field" data-when-backend="git"><label for="state-remote">Repository URL</label><input class="input mono" id="state-remote" value="{remote}" placeholder="https://github.com/you/pathwarden-state.git" autocomplete="off" spellcheck="false"><p class="hint">Sign-in comes from git's own credential helper; never put a password in the URL.</p>{remote_warning}</div>
+  <div class="field"><label for="state-path" id="state-path-label">Folder</label><input class="input mono" id="state-path" value="{path}" placeholder="{DEFAULT_FOLDER}" autocomplete="off" spellcheck="false"><p class="hint" data-when-backend="local">On this computer or a network share. Default: <code>{DEFAULT_FOLDER}</code>.</p><p class="hint" data-when-backend="git">Where each computer checks the repository out. Pathwarden owns this folder. Default: <code>{DEFAULT_FOLDER}</code>.</p></div>
+  <div class="field" data-when-backend="git"><label for="state-remote">Repository URL</label><input class="input mono" id="state-remote" value="{remote}" placeholder="https://git.example.com/team/pathwarden-history.git" autocomplete="off" spellcheck="false"><p class="hint">Git on this computer signs you in. Never put a password in the URL.</p>{remote_warning}</div>
   <div class="field" data-when-backend="git"><label for="state-branch">Branch</label><input class="input mono" id="state-branch" value="{branch}" placeholder="main" autocomplete="off" spellcheck="false"><p class="hint">Letters, digits and <code>. _ / -</code>.</p></div>
   <div class="field refresh-field" data-when-backend="git"><label for="state-refresh">Sync every</label><div class="unit"><input class="input" type="number" id="state-refresh" min="1" max="{max_refresh}" step="1" value="{refresh}" inputmode="numeric"><span>minutes</span></div><p class="hint">While the app is open, and when it opens. {refresh_tip}</p></div>
 </div>
-<label class="check-row" data-when-backend="git"><input type="checkbox" id="state-push"{push}><span><strong>Push recorded runs to the repository</strong><span class="muted">On: every run, here or on a server, is committed and pushed, so everyone sees it. Off: this computer only reads the run history (runs started here stay on this computer), and runs from the command line here don't push either.</span></span></label>
-<fieldset class="choice keep-choice"><legend>What the history keeps</legend><label class="option card"><input type="radio" name="keep" value="names"{names_on}><span><strong>Numbers with names</strong><span class="muted">{names_words} The default.</span></span></label><label class="option card"><input type="radio" name="keep" value="full"{full_on}><span><strong>Full runs and settings</strong><span class="muted">Each run in full (report, Explore, findings, retest), plus shared settings and accepted risks with who accepted them.<span class="tip"><button type="button" class="tip-btn" aria-label="About: Full runs and settings" aria-describedby="tip-keep-full">{info}</button><span class="tip-text" role="tooltip" id="tip-keep-full">Each full run records the user and computer that recorded it. Each accepted risk records the computer it was accepted on, and when. Settings travel with a git repository.</span></span></span></span></label></fieldset><p class="hint keep-hint">The same for a folder or a git repository.</p>
-<div class="note warn keep-warn" role="alert"{warn_hidden}>{alert}<div><p><strong>Full runs show how to attack your directory:</strong> every account, group and computer, and the paths between them. Anyone who can read this folder or repository can see them, and a repository's history keeps them after removal. <span class="tip"><button type="button" class="tip-btn" aria-label="About: What full runs hold" aria-describedby="tip-warn">{info}</button><span class="tip-text wide" role="tooltip" id="tip-warn"><strong>Kept:</strong> the report, the graph for Explore, the object list, the findings and their paths, the retest data and the settings each run was analysed with, with the user and computer that recorded it.<br><strong>Never kept:</strong> the raw collection, where it was kept, folders on this computer, passwords and tokens, plugin settings.<br><strong>Readers</strong> need read access to the repository.<br>Only keep full runs in a private place whose readers you would hand the reports to.</span></span></p><p class="small muted keep-confirm">You'll be asked to confirm. Switching back stops new full runs: earlier ones stay in the repository's history.</p></div></div>
+<label class="check-row" data-when-backend="git"><input type="checkbox" id="state-push"{push}><span><strong>Share runs from this computer</strong><span class="muted">Off: this computer only reads the history; runs started here stay here.</span></span></label>
+<fieldset class="choice keep-choice"><legend>What the history keeps</legend><label class="option card"><input type="radio" name="keep" value="names"{names_on}><span><strong>Numbers with names</strong><span class="muted">{names_words} The default.</span></span></label><label class="option card"><input type="radio" name="keep" value="full"{full_on}><span><strong>Full runs and settings</strong><span class="muted">{full_words}<span class="tip"><button type="button" class="tip-btn" aria-label="About: Full runs and settings" aria-describedby="tip-keep-full">{info}</button><span class="tip-text" role="tooltip" id="tip-keep-full">Each full run records the user and computer that recorded it. Each accepted risk records the computer it was accepted on, and when. Settings travel with a git repository.</span></span></span></span></label></fieldset><p class="hint keep-hint">The same for a folder or a git repository.</p>
+<div class="note warn keep-warn" role="note"{warn_hidden}>{alert}<div><p><strong>Full runs show how to attack your directory.</strong> Anyone who can read the history can see them, even after removal. <span class="tip"><button type="button" class="tip-btn" aria-label="About: What full runs hold" aria-describedby="tip-warn">{info}</button><span class="tip-text wide" role="tooltip" id="tip-warn"><strong>Kept:</strong> the report, the graph for Explore, the object list, the findings and their paths, the retest data and the settings each run was analyzed with, with the user and computer that recorded it.<br><strong>Never kept:</strong> the raw collection, where it was kept, folders on this computer, passwords and tokens, plugin settings.<br><strong>Readers</strong> need read access to the repository.<br>Only keep full runs in a private place whose readers you would hand the reports to.</span></span></p><p class="small muted keep-confirm">You'll be asked to confirm. Switching back stops new full runs: earlier ones stay in the repository's history.</p></div></div>
 {enc}
 <div class="hs-found" id="hs-found" aria-live="polite"></div>
 <div class="card-actions"><button type="button" class="btn primary" data-save><svg class="ic" aria-hidden="true"><use href='#i-check'/></svg> Save</button><span class="save-status muted small" aria-live="polite"></span></div>
@@ -2189,9 +2198,12 @@ fn render(
         } else {
             "In a git repository or shared folder, for others to join."
         },
-        names_words = esc(pathwarden_core::config::NAMES_WORDS
-            .strip_prefix("Numbers with names: ")
-            .unwrap_or(pathwarden_core::config::NAMES_WORDS)),
+        names_words = esc(pathwarden_core::connect::keep_sub(
+            pathwarden_core::config::Keep::Names
+        )),
+        full_words = esc(pathwarden_core::connect::keep_sub(
+            pathwarden_core::config::Keep::Full
+        )),
         names_on = if s.keep() == pathwarden_core::config::Keep::Names {
             " checked"
         } else {
@@ -2225,7 +2237,7 @@ fn render(
             .as_deref()
             .is_some_and(pathwarden_core::config::remote_has_password)
         {
-            r#"<p class="hint"><strong>This URL contains a password or token, which git keeps in plain text in the working copy's <code>.git/config</code>.</strong> Remove it and sign in through a credential helper (Git Credential Manager on Windows) instead.</p>"#
+            r#"<p class="hint"><strong>This URL holds a password or token, which git stores in plain text.</strong> Remove it: git on this computer signs you in.</p>"#
         } else {
             ""
         },
@@ -2273,9 +2285,9 @@ fn render(
         let _ = write!(
             b,
             r#"<section class="card setting" id="full-runs" data-section="full-runs">
-<header><h2 class="sub">Full runs and settings</h2><p class="muted">These apply while the history keeps full runs and settings. Every computer that reads it can open each run in full and analyze with the same settings.</p></header>
+<header><h2 class="sub">Full runs and settings</h2><p class="muted">These apply while the history keeps full runs.</p></header>
 <div class="fr-grid">
-  <div class="field"><label for="full-runs-kept">Keep the latest</label><input class="input fr-kept" id="full-runs-kept" type="number" min="1" max="{max}" step="1" value="{kept}" inputmode="numeric"><p class="hint">full runs; older ones keep their numbers.</p></div>
+  <div class="field"><label for="full-runs-kept">Keep the latest</label><input class="input fr-kept" id="full-runs-kept" type="number" min="1" max="{max}" step="1" value="{kept}" inputmode="numeric"><p class="hint">Full runs. Older runs keep only their numbers.</p></div>
   <div class="field"><label for="full-run-file-mb">{limit_label}</label><input class="input fr-kept" id="full-run-file-mb" type="number" min="1" max="{max_mb}" step="1" value="{mb}" inputmode="numeric"><p class="hint">MB. {limit}</p>{held}</div>
 </div>
 <div class="card-actions"><button type="button" class="btn primary" data-save><svg class="ic" aria-hidden="true"><use href='#i-check'/></svg> Save</button><span class="save-status muted small" aria-live="polite"></span></div>
@@ -2307,7 +2319,7 @@ fn render(
     // Recent history.
     let pts = &snap.history.points;
     if !pts.is_empty() {
-        b.push_str(r#"<section class="card setting" id="recent"><header><h2 class="sub">Latest runs in the history</h2><p class="muted">Each run's numbers, for every environment.</p></header><div class="hs-table-wrap"><table class="hs-table"><thead><tr><th scope="col">Run</th><th scope="col">Recorded by</th><th scope="col">Exposure</th><th scope="col">Open</th><th scope="col">New</th><th scope="col">Fixed</th><th scope="col">Can't tell</th></tr></thead><tbody>"#);
+        b.push_str(r#"<section class="card setting" id="recent"><header><h2 class="sub">Latest runs in the history</h2><p class="muted">Each run's numbers, for every environment.</p></header><div class="hs-table-wrap"><table class="hs-table"><thead><tr><th scope="col">Run</th><th scope="col">Recorded by</th><th scope="col">Exposure</th><th scope="col">Still open</th><th scope="col">New</th><th scope="col">Fixed</th><th scope="col">Can't tell</th></tr></thead><tbody>"#);
         let timed = |id: &str| {
             snap.location
                 .as_ref()
@@ -2367,7 +2379,7 @@ async fn import_api(State(st): State<Shared>) -> Response {
         }))
         .into_response(),
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "The import failed."),
+        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "The import didn't finish. Try again; if it keeps failing, see Settings › Logs."),
     }
 }
 
@@ -2387,7 +2399,7 @@ async fn keep_local_api(State(st): State<Shared>, Json(body): Json<KeepBody>) ->
     match tokio::task::spawn_blocking(move || keep_local(&ws, &ids)).await {
         Ok(Ok(())) => Json(serde_json::json!({ "saved": true })).into_response(),
         Ok(Err(e)) => json_error(StatusCode::INTERNAL_SERVER_ERROR, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Saving failed."),
+        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't save. Try again; if it keeps failing, see Settings › Logs."),
     }
 }
 
@@ -2455,7 +2467,7 @@ async fn refresh_api(State(st): State<Shared>) -> Response {
             if let Some(l) = &log {
                 l.end(Outcome::Failed, "the sync stopped unexpectedly");
             }
-            json_error(StatusCode::INTERNAL_SERVER_ERROR, "Refreshing failed.")
+            json_error(StatusCode::INTERNAL_SERVER_ERROR, "The sync didn't finish. Try again; if it keeps failing, see Settings › Logs.")
         }
     }
 }
@@ -2526,7 +2538,7 @@ async fn accept_api(State(st): State<Shared>, Json(body): Json<AcceptBody>) -> R
         Ok(Err((status, e))) => json_error(status, e),
         Err(_) => json_error(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Accepting the history failed.",
+            "Couldn't accept the history. Try again; if it keeps failing, see Settings › Logs.",
         ),
     }
 }
@@ -2541,13 +2553,13 @@ async fn since_api(State(st): State<Shared>) -> Response {
             Ok(v) => Json(v).into_response(),
             Err(_) => json_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Reading the history failed.",
+                "Couldn't read the history. Try again; if it keeps failing, see Settings › Logs.",
             ),
         },
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
         Err(_) => json_error(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "Reading the history failed.",
+            "Couldn't read the history. Try again; if it keeps failing, see Settings › Logs.",
         ),
     }
 }
@@ -2644,7 +2656,7 @@ mod tests {
         // A run with its account lists: the change links to which accounts.
         let h = worse.html_to(Some("/runs/20261028-020000-abcdef#since-tier-zero"));
         assert!(
-            h.contains(r#"<a class="vs-expo bad" href="/runs/20261028-020000-abcdef#since-tier-zero" title="Which accounts" tabindex="-1">↑ 1 account</a>"#),
+            h.contains(r#"<a class="vs-expo bad" href="/runs/20261028-020000-abcdef#since-tier-zero" title="Which accounts">↑ 1 account</a>"#),
             "{h}"
         );
         // No change, or no run to compare with: nothing to link.
