@@ -4091,12 +4091,7 @@ fn run_cmd(
         num(c.resolved),
         num(c.open),
         count(c.suppressed, "accepted risk", "accepted risks"),
-        if c.held > 0 && rec.not_targeted.is_some() {
-            format!(
-                ", {} can't tell (not collected or not read this run)",
-                c.held
-            )
-        } else if c.held > 0 {
+        if c.held > 0 {
             format!(
                 ", {} can't tell (not collected or not read this run)",
                 c.held
