@@ -168,7 +168,7 @@ async fn pages_render_without_a_config_or_a_run() {
     let (s, _) = a.get("/zones/0/edit").await;
     assert_eq!(s, StatusCode::NOT_FOUND);
     let (_, body) = a.get("/zones/new").await;
-    assert!(body.contains("needs one analysis first"));
+    assert!(body.contains("Search works after the first run"));
     let (s, v) = a
         .json(
             Method::POST,
@@ -735,7 +735,10 @@ async fn saves_answer_with_what_the_file_holds() {
         let (s, v) = a.json(Method::POST, uri, body).await;
         assert_eq!(s, StatusCode::BAD_REQUEST, "{uri}: {v}");
         assert!(
-            v["error"].as_str().unwrap().contains("Settings can't be read"),
+            v["error"]
+                .as_str()
+                .unwrap()
+                .contains("Settings can't be read"),
             "{v}"
         );
     }
@@ -1455,7 +1458,6 @@ async fn rule_severities_are_set_from_the_settings_page() {
     assert!(rules.contains(r#"id="rules-reset""#));
     assert!(rules.contains("Turn a rule off or set its severity."));
     assert!(rules.contains("About: Severity"));
-    assert!(rules.contains("keeps the zone Critical"));
     assert!(
         !rules.contains("pathwarden config"),
         "no commands on the page"

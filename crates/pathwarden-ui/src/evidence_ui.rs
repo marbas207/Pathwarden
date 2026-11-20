@@ -402,9 +402,7 @@ fn pick_baseline(
                     .into_iter()
                     .any(|x| x.shared.is_some() && (x.id == a || x.run_id() == a));
                 if loaded {
-                    format!(
-                        "Run {a} was made on another computer. Compare with a run made here."
-                    )
+                    format!("Run {a} was made on another computer. Compare with a run made here.")
                 } else {
                     format!("Run {a} isn't an earlier run of this environment with saved findings.")
                 }
@@ -1243,12 +1241,18 @@ async fn verify_upload(mut form: Multipart) -> Response {
             Ok(Some(f)) => f,
             Ok(None) => break,
             Err(_) => {
-                return json_error(StatusCode::BAD_REQUEST, "The upload was cut off. Try again.")
+                return json_error(
+                    StatusCode::BAD_REQUEST,
+                    "The upload was cut off. Try again.",
+                )
             }
         };
         let name = field.name().unwrap_or_default().to_string();
         let Ok(bytes) = field.bytes().await else {
-            return json_error(StatusCode::BAD_REQUEST, "The upload was cut off. Try again.");
+            return json_error(
+                StatusCode::BAD_REQUEST,
+                "The upload was cut off. Try again.",
+            );
         };
         match name.as_str() {
             "pack" => zip = Some(bytes.to_vec()),

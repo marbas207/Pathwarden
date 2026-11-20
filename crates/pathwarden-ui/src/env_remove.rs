@@ -158,7 +158,7 @@ impl Plan {
         out.extend(self.kept.iter().cloned());
         out.extend(link_lines(&self.links));
         if self.default {
-            out.push("This is the Default environment: it stays in the list, empty.".into());
+            out.push("This is the Default environment: it starts over, empty.".into());
         }
         if self.demo {
             out.push("This is the demo environment. Try the demo brings it back.".into());
@@ -1722,9 +1722,8 @@ mod tests {
         assert_eq!(p.next, DEFAULT_ENV);
         assert!(p.bytes > 0);
         assert!(
-            p.lines()[0].starts_with(
-                "Moves out: 2 runs, its settings, its run history and its labels ("
-            ),
+            p.lines()[0]
+                .starts_with("Moves out: 2 runs, its settings, its run history and its labels ("),
             "{:?}",
             p.lines()
         );
@@ -1826,7 +1825,7 @@ mod tests {
         add_run(&d, 1, DEFAULT_ENV, "CONTOSO.LOCAL");
         let p = plan(&d, DEFAULT_ENV, None).unwrap();
         assert_eq!(p.next_name, NO_ENV_YET);
-        assert!(p.lines().iter().any(|l| l.contains("the last one")));
+        assert!(p.lines().iter().any(|l| l.contains("the only environment")));
         let r = remove(&d, DEFAULT_ENV, None, Some(&p.runs_key)).unwrap();
         assert_eq!(r.now_current_name, NO_ENV_YET);
         let ws = Workspace::existing(&d).unwrap();
@@ -1908,8 +1907,7 @@ mod tests {
         add_run(&d, 5, &id, "R.LOCAL");
         let p = plan(&d, &id, None).unwrap();
         assert!(
-            p.lines()[1].contains("a new folder in")
-                && !p.lines()[1].contains("free the space"),
+            p.lines()[1].contains("a new folder in") && !p.lines()[1].contains("free the space"),
             "{:?}",
             p.lines()
         );
@@ -2118,7 +2116,7 @@ mod tests {
             .ends_with("move it to C:\\a; b\\removed-2; and change it."));
         assert!(s
             .lead()
-            .starts_with("The environment \"removed\" still has"));
+            .starts_with("The environment \"removed\" has an ID"));
         #[cfg(windows)]
         assert_eq!(
             tidy(Path::new("C:/ws/x\\environments"))

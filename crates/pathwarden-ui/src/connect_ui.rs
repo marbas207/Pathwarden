@@ -687,7 +687,10 @@ async fn probe_api(State(st): State<Shared>, Json(body): Json<ProbeBody>) -> Res
             })),
         )
             .into_response(),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't check the run history. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't check the run history. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -716,7 +719,10 @@ async fn open_api(State(st): State<Shared>, SecretJson(body): SecretJson<OpenBod
     match done {
         Ok(Ok(())) => Json(serde_json::json!({ "opened": true })).into_response(),
         Ok(Err(e)) => error(StatusCode::BAD_REQUEST, e),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't open the history. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't open the history. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -790,7 +796,10 @@ async fn go_api(State(st): State<Shared>, Json(body): Json<GoBody>) -> Response 
         )
             .into_response(),
         Ok(Err(e)) => error(StatusCode::BAD_REQUEST, e),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't connect. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't connect. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 

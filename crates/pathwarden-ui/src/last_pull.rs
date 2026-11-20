@@ -565,7 +565,10 @@ impl Status {
                     "Shares".into(),
                     "Runs recorded here that are waiting, unless an analysis is running.".into(),
                 ),
-                ("Your page".into(), "Stays as it is: a sync never reloads it.".into()),
+                (
+                    "Your page".into(),
+                    "Stays as it is: a sync never reloads it.".into(),
+                ),
                 (
                     "Change".into(),
                     "Change it in Sync every on History storage.".into(),
@@ -678,10 +681,7 @@ impl Status {
                     "Loads".into(),
                     "No runs, numbers or settings until the passphrase is entered.".into(),
                 ),
-                (
-                    "Passphrase".into(),
-                    "Enter it on Runs.".into(),
-                ),
+                ("Passphrase".into(), "Enter it on Runs.".into()),
             ],
             false,
         )
@@ -838,7 +838,7 @@ mod tests {
             line.contains("Runs recorded here that are waiting"),
             "{line}"
         );
-        assert!(line.contains("Set Sync every"), "{line}");
+        assert!(line.contains("Change it in Sync every"), "{line}");
         assert!(!line.contains("Sign in"), "{line}");
         assert!(s.text().starts_with("Up to date · synced 2 min ago"));
 

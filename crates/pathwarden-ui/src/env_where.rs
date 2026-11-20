@@ -146,7 +146,9 @@ async fn where_api(State(st): State<Shared>, mut form: Multipart) -> Response {
     .await;
     match view {
         Some(v) => Json(v).into_response(),
-        None => bad("Couldn't read the files. Check they are a collection zip or folder, then try again."),
+        None => bad(
+            "Couldn't read the files. Check they are a collection zip or folder, then try again.",
+        ),
     }
 }
 

@@ -749,16 +749,21 @@ fn record_only<P: RecordProgress>(
         );
     }
     // Kept until what follows the point is in ([`Held`]).
-    let _lock = match loc.store.lock_waiting(pathwarden_core::settings_sync::lock_wait()) {
+    let _lock = match loc
+        .store
+        .lock_waiting(pathwarden_core::settings_sync::lock_wait())
+    {
         Ok(l) => l,
         Err(e) => {
+            pathwarden_core::logs::session_line(&format!("The history is in use: {e:#}"));
             return (
                 ev.finish(p),
-                not(format!(
+                not(
                     "Another run was saving to the history. Import this run from History storage when it has finished."
-                )),
+                        .to_string(),
+                ),
                 None,
-            )
+            );
         }
     };
     match loc.store.pull() {
@@ -1032,12 +1037,7 @@ pub fn import(ws: &Workspace, flag: Option<&Path>) -> Result<(usize, Vec<String>
         .store
         .lock_waiting(pathwarden_core::settings_sync::lock_wait())
         .map_err(|e| format!("{e:#}"))?;
-    let mut notes: Vec<String> = loc
-        .store
-        .pull()
-        .map_err(unreachable)?
-        .into_iter()
-        .collect();
+    let mut notes: Vec<String> = loc.store.pull().map_err(unreachable)?.into_iter().collect();
     let runs = ws.runs();
     let snap = Snapshot {
         history: read(&loc),
@@ -1447,8 +1447,7 @@ pub fn refresh_detail_busy(
     };
     if loc.store.has_unpushed() {
         notes.push(
-            "Changes made here are waiting to be shared; they go with the next sync."
-                .to_string(),
+            "Changes made here are waiting to be shared; they go with the next sync.".to_string(),
         );
     }
     // What still waits, noted for the pages (once per sync), and the
@@ -2379,7 +2378,10 @@ async fn import_api(State(st): State<Shared>) -> Response {
         }))
         .into_response(),
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "The import didn't finish. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "The import didn't finish. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -2399,7 +2401,10 @@ async fn keep_local_api(State(st): State<Shared>, Json(body): Json<KeepBody>) ->
     match tokio::task::spawn_blocking(move || keep_local(&ws, &ids)).await {
         Ok(Ok(())) => Json(serde_json::json!({ "saved": true })).into_response(),
         Ok(Err(e)) => json_error(StatusCode::INTERNAL_SERVER_ERROR, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't save. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't save. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -2467,7 +2472,10 @@ async fn refresh_api(State(st): State<Shared>) -> Response {
             if let Some(l) = &log {
                 l.end(Outcome::Failed, "the sync stopped unexpectedly");
             }
-            json_error(StatusCode::INTERNAL_SERVER_ERROR, "The sync didn't finish. Try again; if it keeps failing, see Settings › Logs.")
+            json_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "The sync didn't finish. Try again; if it keeps failing, see Settings › Logs.",
+            )
         }
     }
 }

@@ -2185,7 +2185,7 @@ mod tests {
         };
         let e = bundle().write(&store).unwrap_err();
         assert!(
-            e.to_string().contains("A newer Pathwarden saved run"),
+            e.to_string().contains("was saved by a newer Pathwarden"),
             "{e}"
         );
         let (shared, skipped, _, _) = write_all(&store, &[bundle()], 5).unwrap();
@@ -2386,8 +2386,8 @@ mod tests {
         assert_eq!(
             file_limit_words(95, true),
             "95 MB. GitHub refuses files over 100 MB, so a larger setting is held to 95 MB. \
-             Larger files are left out of the full run and named on its page. The history \
-             point is always kept."
+             Larger files are left out of the full run and named on its page. Its numbers \
+             are always kept."
         );
     }
 

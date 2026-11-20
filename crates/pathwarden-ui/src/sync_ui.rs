@@ -843,43 +843,43 @@ pub(crate) struct SyncBody {
 pub(crate) async fn sync_section(State(st): State<Shared>, Json(body): Json<SyncBody>) -> Response {
     let ws = st.ws();
     let flag = st.state_dir_for(&ws);
-    let done =
-        tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
-            let resolve = match body.action.as_str() {
-                "use_repo" => Resolve::UseRepo(vec![body.section.clone()]),
-                "keep_local" => Resolve::KeepLocal(vec![body.section.clone()]),
-                _ => return Err("Choose the shared settings or this computer's.".into()),
+    let done = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
+        let resolve = match body.action.as_str() {
+            "use_repo" => Resolve::UseRepo(vec![body.section.clone()]),
+            "keep_local" => Resolve::KeepLocal(vec![body.section.clone()]),
+            _ => return Err("Choose the shared settings or this computer's.".into()),
+        };
+        let loc = crate::history_ui::locate(&ws, flag.as_deref())?;
+        let _lock = loc
+            .store
+            .lock_waiting(settings_sync::lock_wait())
+            .map_err(|e| {
+                pathwarden_core::logs::session_line(&format!("The history is in use: {e:#}"));
+                "A run is saving to the history. Try again in a moment.".to_string()
+            })?;
+        pathwarden_core::store::non_interactive(|| {
+            loc.store.pull().map_err(|e| {
+                pathwarden_core::logs::session_line(&format!(
+                    "Couldn't get the latest from the repository: {e:#}"
+                ));
+                crate::history_ui::UNREACHABLE.to_string()
+            })?;
+            let name = ws.env_name();
+            let place = Place {
+                store: &loc.store,
+                config_path: &ws.config_path(),
+                pushes: loc.push,
+                env_name: Some(&name),
             };
-            let loc = crate::history_ui::locate(&ws, flag.as_deref())?;
-            let _lock = loc.store.lock_waiting(settings_sync::lock_wait()).map_err(|e| {
-            pathwarden_core::logs::session_line(&format!("The history is in use: {e:#}"));
-            "A run is saving to the history. Try again in a moment.".to_string()
-        })?;
-            pathwarden_core::store::non_interactive(|| {
-                loc.store
-                    .pull()
-                    .map_err(|e| {
-                        pathwarden_core::logs::session_line(&format!(
-                            "Couldn't get the latest from the repository: {e:#}"
-                        ));
-                        crate::history_ui::UNREACHABLE.to_string()
-                    })?;
-                let name = ws.env_name();
-                let place = Place {
-                    store: &loc.store,
-                    config_path: &ws.config_path(),
-                    pushes: loc.push,
-                    env_name: Some(&name),
-                };
-                let o = settings_sync::sync(&place, resolve).map_err(|e| format!("{e:#}"))?;
-                // Kept in the last sync's record.
-                crate::last_pull::set_conflict(&loc.store, o.conflict());
-                // Shown on this page now: the note about it isn't kept for later.
-                let _ = settings_sync::unseen_applied(&loc.store, true);
-                Ok(o.page_sentence())
-            })
+            let o = settings_sync::sync(&place, resolve).map_err(|e| format!("{e:#}"))?;
+            // Kept in the last sync's record.
+            crate::last_pull::set_conflict(&loc.store, o.conflict());
+            // Shown on this page now: the note about it isn't kept for later.
+            let _ = settings_sync::unseen_applied(&loc.store, true);
+            Ok(o.page_sentence())
         })
-        .await;
+    })
+    .await;
     match done {
         Ok(Ok(note)) => Json(serde_json::json!({ "saved": true, "note": note })).into_response(),
         Ok(Err(e)) => crate::settings::json_error(StatusCode::BAD_REQUEST, e),

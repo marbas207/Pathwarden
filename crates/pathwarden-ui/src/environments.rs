@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::pages::{self, esc, icon, num};
 use crate::server::AppState;
-use crate::workspace::{RunSummary, Workspace, CONFIG_FILE};
+use crate::workspace::{RunSummary, Workspace};
 
 type Shared = Arc<AppState>;
 
@@ -1698,7 +1698,12 @@ async fn create(State(st): State<Shared>, Form(f): Form<EnvForm>) -> Response {
         Ok(format!("env-{id}"))
     })
     .await
-    .unwrap_or_else(|_| Err("Couldn't create the environment. Try again; if it keeps failing, see Settings › Logs.".into()));
+    .unwrap_or_else(|_| {
+        Err(
+            "Couldn't create the environment. Try again; if it keeps failing, see Settings › Logs."
+                .into(),
+        )
+    });
     if shared && result.is_ok() {
         return Redirect::to("/automate/history?origin=new-shared#state").into_response();
     }

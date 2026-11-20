@@ -512,7 +512,8 @@ pub fn clear_cookie(state: &AppState) -> String {
     )
 }
 
-const NEW_LINK: &str = "Press Enter in the Pathwarden window for a new link, or start Pathwarden again.";
+const NEW_LINK: &str =
+    "Press Enter in the Pathwarden window for a new link, or start Pathwarden again.";
 
 /// What pages ask in the background ([`crate::auto_pull::pulled_api`]).
 const BACKGROUND_PATH: &str = "/api/history/pulled";

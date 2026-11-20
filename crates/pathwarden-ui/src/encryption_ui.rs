@@ -244,7 +244,8 @@ pub fn gate(loc: &Location) -> Option<String> {
 
 /// The gate's line under its heading on Runs (and in `pathwarden runs
 /// list`).
-pub const GATE_LEAD: &str = "Enter the passphrase to open its runs. Runs from this computer are below.";
+pub const GATE_LEAD: &str =
+    "Enter the passphrase to open its runs. Runs from this computer are below.";
 
 /// The terminal's lead for the same (`pathwarden runs`): no "below" and
 /// no field to type into; the command then says how to store it.
@@ -336,7 +337,10 @@ async fn with_location(
     match done {
         Ok(Ok(v)) => Json(v).into_response(),
         Ok(Err((status, message))) => error(status, message),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -444,7 +448,10 @@ async fn save_and_encrypt(
             Json(notes_json(&notes)).into_response()
         }
         Ok(Err((status, message))) => error(status, message),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't change the encryption. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't change the encryption. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 

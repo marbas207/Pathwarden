@@ -205,8 +205,7 @@ async fn the_page_looks_opens_and_connects() {
     let (s, page) = a.get("/environments/connect").await;
     assert_eq!(s, StatusCode::OK);
     assert!(
-        page.contains("Where it is")
-            && page.contains("Pathwarden only reads it. Nothing changes.")
+        page.contains("Where it is") && page.contains("Pathwarden only reads it. Nothing changes.")
     );
     let (s, r) = a
         .post(

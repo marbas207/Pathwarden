@@ -548,12 +548,15 @@ async fn the_first_and_the_last_environment_can_be_removed() {
         "{page}"
     );
     assert!(
-        page.contains("It is the first environment")
-            || page.contains("It is the first environment:"),
+        page.contains("This is the Default environment: it starts over, empty."),
         "{page}"
     );
     assert!(page.contains("the app switches to Lab"), "{page}");
-    assert!(page.contains("task Pathwarden,"), "{page}");
+    assert!(
+        page.contains("Remove Pathwarden there to stop it.")
+            || page.contains("Remove pathwarden there to stop it."),
+        "{page}"
+    );
     // The runs changed since the page was shown: not removed.
     let (s, _, b) = a
         .form(
@@ -584,7 +587,7 @@ async fn the_first_and_the_last_environment_can_be_removed() {
     // The last one.
     let (_, page) = a.get(&format!("/environments/{lab}/remove")).await;
     assert!(
-        page.contains("the app then shows No environment yet"),
+        page.contains("It is the only environment: the next collection makes a new one."),
         "{page}"
     );
     let (s, _, _) = a
@@ -647,9 +650,7 @@ async fn settings_never_cross_environments() {
     // The run page (viewed from Default) shows Client A's settings: the
     // finding is not "already accepted" there.
     let (_, page) = a.get(&format!("/runs/{client_run}")).await;
-    assert!(page.contains(
-        "This run is in <strong>Client A</strong> and uses its settings."
-    ));
+    assert!(page.contains("This run is in <strong>Client A</strong> and uses its settings."));
     // What the next analysis applies is on its Run details tab.
     let (_, details) = a.get(&format!("/runs/{client_run}/report?embed=1")).await;
     assert!(details.contains("The next analysis applies (Client A): the default settings"));
@@ -816,7 +817,9 @@ async fn the_environments_page_says_when_an_old_removed_id_is_stuck() {
     let (s, page) = a.get("/environments").await;
     assert_eq!(s, StatusCode::OK);
     assert!(
-        page.contains(r#"role="status"><p><strong>Old removed has an ID Pathwarden now uses itself"#),
+        page.contains(
+            r#"role="status"><p><strong>Old removed has an ID Pathwarden now uses itself"#
+        ),
         "{page}"
     );
     assert!(page.contains("<summary>What to do</summary>"), "{page}");

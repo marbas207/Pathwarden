@@ -268,7 +268,10 @@ pub(crate) async fn edit_answering(
             Json(out).into_response()
         }
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't save. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't save. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -299,7 +302,10 @@ pub(crate) async fn edit_in(
             Json(serde_json::json!({ "saved": true, "sharing": sharing })).into_response()
         }
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't save. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't save. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -364,9 +370,7 @@ pub(crate) fn applies_note(text: &str) -> String {
 pub(crate) fn applies_words_in(ws: &Workspace, lead: &str) -> Result<String, String> {
     let loaded = load_ws(ws);
     if loaded.error.is_some() {
-        return Err(format!(
-            "Settings can't be read, so runs fail until they are fixed."
-        ));
+        return Err("Settings can't be read, so runs fail until they are fixed.".to_string());
     }
     let what = applies_parts(&loaded.config).unwrap_or_else(|| {
         "the default settings (no zones, accepted risks or extra Tier Zero objects)".to_string()
@@ -830,7 +834,10 @@ fn render(
             i_edit = icon("i-edit"),
             i_trash = icon("i-trash"),
             target_label = crate::pages::attr(
-                s.fingerprint.as_deref().or(s.rule.as_deref()).unwrap_or_default()
+                s.fingerprint
+                    .as_deref()
+                    .or(s.rule.as_deref())
+                    .unwrap_or_default()
             ),
         );
     }
@@ -861,10 +868,9 @@ fn render(
         let heading = if keys.is_empty() {
             String::new()
         } else {
-            format!(
-                "<p><strong>Some settings come from a newer Pathwarden and are ignored \
-                 here.</strong> They are kept as they are.</p>"
-            )
+            "<p><strong>Some settings come from a newer Pathwarden and are ignored \
+             here.</strong> They are kept as they are.</p>"
+                .to_string()
         };
         format!(
             r#"<div class="risk-warn" role="note">{}<div>{heading}{keys}{notices}</div></div>"#,
@@ -1116,8 +1122,9 @@ fn rules_view(r: &pathwarden_core::config::RulesConfig) -> serde_json::Value {
 
 /// The Tier Zero settings folders card: its line, its ⓘ, and the
 /// field's placeholder.
-pub const SETTINGS_FOLDERS_INTRO: &str = "Shared folders where your servers save Tier Zero settings files.";
-pub const SETTINGS_FOLDERS_TIP: &str = "Read on every run, scheduled run and retest. Only the settings files are read. A folder that can't be opened gives a warning.";
+pub const SETTINGS_FOLDERS_INTRO: &str =
+    "Shared folders where your servers save Tier Zero settings files.";
+pub const SETTINGS_FOLDERS_TIP: &str = "Read on every run, scheduled run and retest. Only the settings files are read. A folder that can't be opened gives a warning. Runs record file names, not folder paths.";
 /// The mark on a folder from the repository no one here reviewed.
 pub const FOLDER_WAITING: &str = "Shared by a teammate. Choose Use to read it here.";
 /// The same for a folder written into the file by other means (a hand
@@ -1270,7 +1277,7 @@ pub fn stale_words(section: &str) -> String {
 }
 
 /// The title of a section link whose settings differ from the shared ones.
-const SECTION_DIFFER: &str = "Differs from the shared settings";
+const SECTION_DIFFER: &str = "Settings differ from the shared settings";
 
 /// Why a save from a page of another environment is refused (409).
 pub const ENV_SWITCHED: &str = "You switched environments in another tab. Reload this page.";
@@ -1574,7 +1581,10 @@ async fn add_suppression_note(
                 .into_response()
         }
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't save. Try again; if it keeps failing, see Settings › Logs."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't save. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 

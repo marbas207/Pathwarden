@@ -454,7 +454,8 @@ fn a_full_run_the_remote_refuses_fails_every_recording_command() {
     refused(&out, "run");
     // A schedule's run says it can't make it again.
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("If this run's upload is lost before it is shared"),
+        String::from_utf8_lossy(&out.stderr)
+            .contains("If this run's upload is lost before it is shared"),
         "{out:?}"
     );
     // Each from a working copy of its own: one that holds the refused
@@ -531,7 +532,7 @@ fn history_storage_show_names_the_full_run_settings() {
         ),
         "{text}"
     );
-    assert!(text.contains("The history point is always kept."), "{text}");
+    assert!(text.contains("Its numbers are always kept."), "{text}");
     let json: serde_json::Value = serde_json::from_str(&ok(&pw(
         &dir,
         &["history", "storage", "show", "--workspace", "ws", "--json"],
