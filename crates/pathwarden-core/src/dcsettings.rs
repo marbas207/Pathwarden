@@ -879,7 +879,8 @@ fn opens(name: &str, setting: DcSetting, build: Option<OsBuild>) -> bool {
 
 /// The note on a settings folder's file its server or a Tier Zero account
 /// didn't write.
-pub const UNVERIFIED_NOTE: &str = "from a settings folder, and its owner or permissions don't show that only the server or a Tier Zero account wrote it: it can only show a weakness, not clear one";
+pub const UNVERIFIED_NOTE: &str =
+    "its file is of unknown origin, so it can show a weakness but not clear one";
 
 /// Slack for clocks before a read time counts as in the future.
 const FUTURE_SLACK: i64 = 86_400;

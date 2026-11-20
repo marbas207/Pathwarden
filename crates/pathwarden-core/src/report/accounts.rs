@@ -22,10 +22,10 @@ use crate::model::NodeKind;
 use crate::since::SinceLast;
 
 /// What a step's (i) says.
-const STEP_TIP: &str = "Accounts with an attack path to Tier Zero through this step. Some also have other paths, which other steps cut. New: no path to Tier Zero in the last run that targeted the same.";
+const STEP_TIP: &str = "Accounts with an attack path to Tier Zero through this step. Some also have other paths, which other steps cut. New: had no path in the last comparable run.";
 
 /// What the (i) beside "Now reach Tier Zero" says.
-const CHANGE_TIP: &str = "Now reach: accounts with an attack path to Tier Zero that had none in the last run that targeted the same. No longer reach: the reverse, with why, and each one's path then when that run is kept in full.";
+const CHANGE_TIP: &str = "Now reach: no path in the last comparable run. No longer reach: had a path then; the reason and the old path are shown.";
 
 /// The anchor of What changed's Tier Zero accounts.
 pub const CHANGE_ID: &str = "since-tier-zero";

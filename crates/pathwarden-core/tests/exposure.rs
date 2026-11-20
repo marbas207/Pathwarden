@@ -453,12 +453,12 @@ fn grade_follows_paths_and_findings_not_the_share() {
     );
     let (grade, why) = g(509, &[], 2, 108);
     assert_eq!(grade, Critical);
-    assert_eq!(why, "2 critical findings are open");
+    assert_eq!(why, "2 Critical findings are open");
     let (grade, why) = g(3, &["DOMAIN USERS@CORP.LOCAL"], 1, 0);
     assert_eq!(grade, Critical);
     assert_eq!(
         why,
-        "DOMAIN USERS@CORP.LOCAL, which holds nearly every account, can reach Tier Zero; 1 critical finding is open"
+        "DOMAIN USERS@CORP.LOCAL, which holds nearly every account, can reach Tier Zero; 1 Critical finding is open"
     );
     assert!(g(3, &["A", "B", "C"], 0, 0)
         .1
@@ -568,7 +568,7 @@ fn status_reason_says_what_an_attacker_can_do() {
         kerberoastable: 1,
         ..GradeInputs::default()
     });
-    assert_eq!(r.text, "2 critical findings are open.");
+    assert_eq!(r.text, "2 Critical findings are open.");
     assert!(r.link.is_none());
     let r = reason(GradeInputs {
         exposed: 509,

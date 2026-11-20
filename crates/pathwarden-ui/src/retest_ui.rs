@@ -615,13 +615,14 @@ pub const EARLIER_REPORT_SCRIPTS: &[&str] = &[
     "KUQ9qAmctZuO6WKtzQLSb5E6ck/b3stgi8XU+RvnNng=",
     "lXJbStW1yOKg02kmMsyEXLKKEq48frcwW0swkENLVTw=",
     "BaJqGQMyfGUD4uGLGHtGjUjW1YZCJxRmr9Jk2oW+LaY=",
+    "MlCUNENbgU13e0VaRlD4GESD7HYvDWOlgOyiVhSIMNw=",
 ];
 
 /// The hash of today's `report.js`. A test holds it to the script, so a
 /// change to the script can't go in without its old hash in
 /// [`EARLIER_REPORT_SCRIPTS`] and this one updated.
 #[cfg(test)]
-const REPORT_SCRIPT: &str = "MlCUNENbgU13e0VaRlD4GESD7HYvDWOlgOyiVhSIMNw=";
+const REPORT_SCRIPT: &str = "3QaDwkiDyxUw1/F0/blVt8DBZMVdrZ8Fh86IDLmyVSM=";
 
 /// The CSP hash of a report's own script: its last `<script>`.
 fn own_script_hash(html: &str) -> Option<String> {

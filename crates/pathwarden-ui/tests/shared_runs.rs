@@ -1800,7 +1800,7 @@ fn home_shows_a_loaded_run_s_overview_from_its_data() {
     assert!(home.contains(r#"<div class="hero card"#), "{home}");
     assert!(home.contains("have an attack path to Tier"), "{home}");
     assert!(home.contains(r#"<div class="ov-cards">"#), "{home}");
-    assert!(home.contains("Plan steps"), "{home}");
+    assert!(home.contains("Remediation path"), "{home}");
     // The trend and What changed, from the history.
     assert!(home.contains(r#"<div class="hero-trend">"#), "{home}");
     assert!(home.contains("What changed since"), "{home}");
@@ -1911,11 +1911,11 @@ fn home_shows_a_loaded_quick_run_as_not_targeted() {
     let (_, _, home) = page(&reader, "/");
     assert!(home.contains(r#"<div class="hero card"#), "{home}");
     assert!(
-        home.contains(r#"<span class="ov-num">Not targeted</span>"#),
+        home.contains(r#"<span class="ov-num">Not collected</span>"#),
         "{home}"
     );
     assert!(
-        home.contains("Sessions and local groups were not targeted this run, so its counts are not compared with the last run."),
+        home.contains("Sessions and local groups weren&#39;t collected in this run, so this run&#39;s counts aren&#39;t compared with the last run."),
         "{home}"
     );
     assert!(!home.contains("hero-change"), "{home}");

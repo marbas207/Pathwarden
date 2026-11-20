@@ -1497,7 +1497,7 @@ impl Cut {
         match self {
             Cut::Removes(n) => format!("step {n} removes it"),
             Cut::Before(n) => format!("step {n} cuts the way to it"),
-            Cut::Upstream => "no single step; see the plan".into(),
+            Cut::Upstream => "no single step; see the remediation path".into(),
         }
     }
 }
@@ -1865,14 +1865,14 @@ pub fn runs_of(points: &[HistoryPoint], domains: Option<&[String]>) -> (Option<i
 /// `tracked_since`.
 pub fn tracking_note(tracked_since: Option<i64>, runs: &Runs, latest: i64) -> String {
     match tracked_since {
-        None => "Objects and paths are not dated yet: the next run starts dating them. Until then only whole findings are.".to_string(),
+        None => "Objects and paths get first-seen dates from the next run on; until then only findings do.".to_string(),
         Some(t) => {
             let run = runs
                 .number(t)
                 .map(|n| format!(" (run {n})"))
                 .unwrap_or_default();
             format!(
-                "Objects and paths are dated from {}{run} on; before that, only whole findings are.",
+                "Objects and paths have first-seen dates from {}{run} on; before that, only findings do.",
                 day(t, latest)
             )
         }
@@ -2456,7 +2456,7 @@ impl Introduced {
                 tier_zero: false,
                 tone: Tone::Better,
                 text: format!(
-                    "{} path{} into {} gone",
+                    "{} path{} into {} removed",
                     thousands(z.resolved),
                     s(z.resolved),
                     z.zone
@@ -2634,7 +2634,7 @@ fn new_and_back(
 }
 
 /// The first [`NAMED`] of `names`, the same name said once with how many
-/// times ("critical PW-006 Kerberoastable account ×3"), then "and N more".
+/// times ("Critical PW-006 Kerberoastable account ×3"), then "and N more".
 fn name_items(names: impl Iterator<Item = String>) -> Vec<String> {
     let mut groups: Vec<(String, usize)> = Vec::new();
     for n in names {
@@ -2666,7 +2666,7 @@ pub fn member_words(m: &MemberName, label: &str) -> String {
     }
 }
 
-/// "critical PW-003 JDOE has GenericAll on DC01", or the rule's own title
+/// "Critical PW-003 JDOE has GenericAll on DC01", or the rule's own title
 /// when no name is known; as what changed since the last run names them.
 fn finding_name(rule: &str, severity: Severity, title: Option<&str>) -> String {
     let title = title.map(str::to_string).or_else(|| {
@@ -2676,8 +2676,8 @@ fn finding_name(rule: &str, severity: Severity, title: Option<&str>) -> String {
             .map(|r| r.title.to_string())
     });
     match title {
-        Some(t) => format!("{} {rule} {t}", severity.as_str()),
-        None => format!("{} {rule}", severity.as_str()),
+        Some(t) => format!("{} {rule} {t}", severity.label()),
+        None => format!("{} {rule}", severity.label()),
     }
 }
 
@@ -3088,7 +3088,7 @@ mod tests {
         assert_eq!(line.text, "1 older finding gained 1 object");
         assert_eq!(
             line.items,
-            vec!["high PW-011 finding A: +1 object (CAROL@CONTOSO.LOCAL)"]
+            vec!["High PW-011 finding A: +1 object (CAROL@CONTOSO.LOCAL)"]
         );
         assert_eq!(
             line.next.unwrap().0,
@@ -3099,7 +3099,7 @@ mod tests {
         assert!(all.predates);
         assert_eq!(
             all.note(&runs, 300).unwrap(),
-            "Objects and paths are dated from Jan 1 (run 1) on; before that, only whole findings are."
+            "Objects and paths have first-seen dates from Jan 1 (run 1) on; before that, only findings do."
         );
     }
 
@@ -3145,7 +3145,7 @@ mod tests {
         let none = period(&state, Period::All, 50, &Runs::default());
         assert_eq!(
             none.note(&Runs::default(), 50).unwrap(),
-            "Objects and paths are not dated yet: the next run starts dating them. Until then only whole findings are."
+            "Objects and paths get first-seen dates from the next run on; until then only findings do."
         );
         let r = crate::state::reconcile(&state, &[obs("A", &["S-1", "S-2"])], 100, false);
         assert_eq!(r.state.tracked_since, Some(100));

@@ -190,13 +190,13 @@ fn a_quick_collection_is_not_targeted_not_short() {
     assert_eq!(u.words(), Some("sessions and local groups"));
     assert_eq!(
         u.posture_line().unwrap(),
-        "Not targeted: this collection read the directory only, so paths through logged-on \
+        "Not collected: this collection read the directory only, so paths through \
          sessions and local administrator rights are not in this run."
     );
     assert_eq!(
         u.summary_note().unwrap(),
-        "Note: Sessions and local groups were not targeted in this collection. Paths through \
-         logged-on sessions and local administrator rights are not in this run."
+        "Note: Sessions and local groups weren't collected in this run. Paths through \
+         sessions and local administrator rights are not in this run."
     );
     // The JSON adds the two fields, and an older posture without them
     // reads as targeted.
@@ -386,7 +386,7 @@ fn sharphound_methods_say_what_was_targeted() {
         assert!(c.sessions_targeted && !c.local_groups_targeted, "bit {bit}");
         assert!(c.is_low(), "sessions asked and not read");
         let u = posture::Untargeted::of(&c);
-        assert_eq!(u.chip().unwrap(), "local groups not targeted");
+        assert_eq!(u.chip().unwrap(), "local groups not collected");
     }
     // LocalAdmin, RDP, DCOM or PSRemote: local groups only.
     for bit in [1, 8, 12, 14] {
@@ -394,7 +394,7 @@ fn sharphound_methods_say_what_was_targeted() {
         assert!(!c.sessions_targeted && c.local_groups_targeted, "bit {bit}");
         assert_eq!(
             posture::Untargeted::of(&c).posture_line().unwrap(),
-            "Not targeted: this collection did not read sessions, so paths through logged-on \
+            "Not collected: this collection did not read sessions, so paths through \
              sessions are not in this run."
         );
     }

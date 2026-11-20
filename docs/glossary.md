@@ -13,7 +13,7 @@ configuration key or JSON field keeps an older name, the entry says so.
 
 **Accounts with an attack path to Tier Zero.** The headline count: enabled users and computers outside Tier Zero that can reach it.
 
-**Tier Zero exposure.** The share of active users and computers outside Tier Zero (logged on within `stale_days`) that have an attack path to it.
+**Tier Zero exposure.** The share of active users and computers outside Tier Zero (signed in within `stale_days`) that have an attack path to it.
 
 **Tier Zero protected.** The Tier Zero objects no open attack path finding leads to, as a count and a percentage ("53 of 59 objects (89.83%)"); **Protected** in a zone's row; the JSON key is `protected_percent` (`protection_score` until 2.0).
 
@@ -31,11 +31,11 @@ configuration key or JSON field keeps an older name, the entry says so.
 
 **Severity.** A finding's Critical, High, Medium, Low or Info; attack paths are rated by exposure, with a floor of High for direct control of the domain.
 
-**Remediation path.** The smallest set of changes that leaves no attack path to Tier Zero (a minimum cut); `pathwarden plan --zone` works one out for a zone.
+**Remediation path.** The smallest set of steps that leaves no attack path to Tier Zero (a minimum cut); `pathwarden plan --zone` works one out for a zone.
 
-**Plan step.** One change in the remediation path, with the findings it closes and the attack paths it cuts.
+**Step.** One change in the remediation path, with the findings it closes and the attack paths it cuts.
 
-**Fix directly.** A finding no plan step closes or cuts, such as a hygiene finding; it needs its own fix.
+**Fix directly.** A finding no step closes or cuts, such as a hygiene finding; it needs its own fix.
 
 **Choke point.** One relationship that many attack paths cross (`pathwarden choke-points`).
 
@@ -57,7 +57,7 @@ configuration key or JSON field keeps an older name, the entry says so.
 
 **Full collection.** A collection that also reads sessions and local groups from every computer (`--scope all`).
 
-**Collection completeness.** The share of active computers whose sessions and local groups were collected; **Not targeted** means they weren't asked for.
+**Collection completeness.** The share of active computers whose sessions and local groups were collected (active: signed in within 14 days of collection); **Not collected** means the collection didn't ask for them.
 
 **Explore.** The app's page for looking around a run; `reach`, `search`, `zones suggest` and `query` do the same on the command line.
 
@@ -65,9 +65,9 @@ configuration key or JSON field keeps an older name, the entry says so.
 
 **New, open, back, fixed.** How a finding changed since the last run (JSON `regressed` for back, `resolved` for fixed).
 
-**Since the last run.** What changed between the latest run and the one before it, one line per change.
+**What changed.** The change from the last comparable run of the environment, one line per change: the counts, and what they don't show (findings that gained or lost objects, new members of Tier Zero and the zones, paths into them that appeared or went). A run is compared with the last run that collected the same sessions and local groups; when there is none, with the run just before, and its counts aren't compared. Counts made with an older counting method aren't compared either.
 
-**Introduced.** Net new over a period: new and back findings, findings that gained objects, new members and new paths.
+**Introduced.** New in a period: new and back findings, findings that gained objects, new members and new paths.
 
 **First seen.** The date of the run that first found a finding, object, member or path.
 

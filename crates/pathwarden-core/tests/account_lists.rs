@@ -125,7 +125,7 @@ fn the_report_lists_who_now_reaches_tier_zero_and_each_step_s_accounts() {
 
     // The hero's change links to What changed's accounts.
     assert!(
-        html.contains(r##"<p class="hero-change"><a class="delta-link" href="#since-tier-zero" title="Which accounts">"##),
+        html.contains(r##"<p class="hero-change"><a class="delta-link" href="#since-tier-zero" title="Show which accounts changed">"##),
         "{html:.2000}"
     );
     // The Tier Zero row opens to them: two now, three no longer.

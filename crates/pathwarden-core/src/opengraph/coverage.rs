@@ -1122,7 +1122,7 @@ impl RunSources {
                 .words()
                 .map(|w| {
                     format!(
-                        "{w} were not targeted in this collection, and the finding may rest on them"
+                        "{w} weren't collected in this run, and the finding may depend on them"
                     )
                 })
             }

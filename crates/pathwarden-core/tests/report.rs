@@ -144,7 +144,7 @@ fn report_has_every_section_and_guide_link_targets() {
             "guide {rule} missing"
         );
     }
-    assert!(html.contains("Tier Zero exposure"));
+    assert!(html.contains("The share of active accounts with a path"));
     // Dark by default, with a button to switch to light.
     assert!(html.contains(r#"<html lang="en" data-theme="dark">"#));
     assert!(html.contains(r#"id="theme-toggle""#));
@@ -390,7 +390,7 @@ fn overview_without_history_is_this_run_alone() {
     // Four cards, each with its definition; the count has one too.
     assert_eq!(o.matches(r#"<div class="card ov-card">"#).count(), 4);
     for label in [
-        "Plan steps",
+        "Remediation path",
         "Open findings",
         "Tier Zero protected",
         "Collection",
@@ -401,7 +401,7 @@ fn overview_without_history_is_this_run_alone() {
         );
     }
     assert!(o.contains(r#"aria-label="About: Accounts with an attack path to Tier Zero""#));
-    assert_eq!(o.matches(r#"role="tooltip""#).count(), 6);
+    assert_eq!(o.matches(r#"role="tooltip""#).count(), 7);
     // The first step, linked; the plan's rows stay on the Remediation tab.
     assert!(o.contains(r##"href="#step-1""##));
     assert!(!o.contains(r#"class="row step"#));
@@ -486,7 +486,7 @@ fn overview_with_history_shows_the_trend_and_changes() {
         vec![old]
     });
     let o = overview(&html);
-    assert!(o.contains("counted these another way"));
+    assert!(o.contains("counted these with an older method"));
     assert!(
         o.contains(r#"<div class="hero card solo">"#),
         "no trend from one other-basis run"
@@ -1036,7 +1036,7 @@ fn what_changed_says_when_findings_cant_be_named() {
     let o = overview(&html);
     assert!(o.contains("What changed since"), "{o}");
     assert!(
-        o.contains("No run recorded this data, so which findings opened or closed isn't known"),
+        o.contains("The last run didn't keep its findings, so only the counts are compared."),
         "{o}"
     );
     // A run that recorded it names them, so it says nothing of the kind.
@@ -1159,7 +1159,7 @@ fn the_trusts_table_carries_the_forest_flags() {
     assert!(ext.contains("SID history abuse"), "{ext}");
     assert!(
         ext.contains("FABRIKAM.COM into CONTOSO.LOCAL: off (collector&#x27;s flag)")
-            || ext.contains("FABRIKAM.COM into CONTOSO.LOCAL: off (collector's flag)"),
+            || ext.contains("FABRIKAM.COM into CONTOSO.LOCAL: off (from the collector)"),
         "{ext}"
     );
     assert!(!ext.contains("Forest takeover"), "{ext}");
@@ -1184,7 +1184,10 @@ fn the_sid_filtering_column_agrees_with_risk_on_goad() {
     assert!(forest.contains("SID filtering unknown"), "{forest}");
     let cells: Vec<&str> = forest.split("<td>").collect();
     let sid = cells[5];
-    assert!(sid.contains("unknown (flag only)"), "{forest}");
+    assert!(
+        sid.contains("unknown (the collected data doesn't say)"),
+        "{forest}"
+    );
     assert!(!sid.contains(": off") && !sid.contains(": on"), "{forest}");
 }
 
@@ -1258,13 +1261,13 @@ fn a_quick_report_says_not_targeted_and_compares_nothing_with_a_full_run() {
     let o = overview(&html);
     // The Collection card.
     assert!(
-        o.contains(r#"<span class="ov-num">Not targeted</span><span class="ov-sub">This run read the directory only.</span>"#),
+        o.contains(r#"<span class="ov-num">Not collected</span><span class="ov-sub">This run read the directory only.</span>"#),
         "{o}"
     );
-    assert!(o.contains("Not targeted means the collector was not asked to read them."));
+    assert!(o.contains("Not collected: this collection didn&#39;t ask for them."));
     // The note under the tiers: muted, no warning.
     assert!(
-        o.contains("from the directory only: sessions and local groups were not targeted. Paths through logged-on sessions and local administrator rights are not in this run.</p>"),
+        o.contains("from the directory only: sessions and local groups weren&#39;t collected. Paths through sessions and local administrator rights are not in this run.</p>"),
         "{o}"
     );
     assert!(!o.contains("Incomplete collection."), "{o}");
@@ -1273,7 +1276,7 @@ fn a_quick_report_says_not_targeted_and_compares_nothing_with_a_full_run() {
         .split(r#"<div class="ov-since""#)
         .nth(1)
         .expect("What changed");
-    assert!(list.contains("Sessions and local groups were not targeted this run, so its counts are not compared with the last run."), "{list}");
+    assert!(list.contains("Sessions and local groups weren&#39;t collected in this run, so this run&#39;s counts aren&#39;t compared with the last run."), "{list}");
     assert!(!list.contains("fewer accounts"), "{list}");
     assert!(!o.contains("since the last run"), "no delta: {o}");
     assert!(!o.contains("hero-change"), "{o}");
@@ -1286,15 +1289,15 @@ fn a_quick_report_says_not_targeted_and_compares_nothing_with_a_full_run() {
         .next()
         .unwrap();
     assert!(
-        env.starts_with(r#"<span class="aside">sessions and local groups not targeted</span>"#),
+        env.starts_with(r#"<span class="aside">sessions and local groups not collected</span>"#),
         "{env}"
     );
     assert!(
-        env.contains(r#"<td class="muted">Not targeted</td><td class="muted">Not targeted</td>"#),
+        env.contains(r#"<td class="muted">Not collected</td><td class="muted">Not collected</td>"#),
         "{env}"
     );
     assert!(!env.contains("cmeter"), "{env}");
-    assert!(env.contains("Not targeted means the collector was not asked to read them."));
+    assert!(env.contains("Not collected: this collection didn't ask for them."));
 }
 
 /// Home's Overview of a run loaded from the history is the report's own

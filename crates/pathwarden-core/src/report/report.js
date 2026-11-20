@@ -8,7 +8,6 @@
     if (button) {
       var label = button.querySelector(".tt-label") || button;
       label.textContent = theme === "dark" ? "Light mode" : "Dark mode";
-      button.setAttribute("aria-pressed", theme === "light");
       // The icon of the theme it switches to: a sun in dark mode.
       var use = button.querySelector("use");
       if (use) use.setAttribute("href", theme === "dark" ? "#i-sun" : "#i-theme");
@@ -57,6 +56,7 @@
     var f = fmt(t.getAttribute("data-fmt"));
     if (f && !isNaN(d.getTime())) t.textContent = f.format(d).replace(/[  ]/g, " ");
   });
+  document.querySelectorAll("[data-local-note]").forEach(function (n) { n.hidden = false; });
 })();
 
 // Tabs: one section at a time, remembered in the URL hash. Without this
@@ -215,7 +215,7 @@
     if (v !== "range") return null;
     var f = Date.parse(introFrom.value), t = Date.parse(introTo.value);
     if (isNaN(f) && isNaN(t)) return null;
-    if (!isNaN(f) && !isNaN(t) && t < f) return { bad: "The To day is before the From day." };
+    if (!isNaN(f) && !isNaN(t) && t < f) return { bad: "The To date is before the From date." };
     var from = isNaN(f) ? -Infinity : f / 1000;
     var to = isNaN(t) ? at : t / 1000 + DAY - 1;
     var words = isNaN(t) ? "since " + day(from, at)
@@ -312,10 +312,10 @@
       (data(k[0]) || []).forEach(function (g) { if (within(g[0])) by[g[1]] = (by[g[1]] || 0) + g[2]; });
       zones.forEach(function (z) {
         if (!by[z]) return;
-        out.push(k[3] ? plural(by[z], k[1], k[2]) + k[3] + z : plural(by[z], k[1], k[2]) + " into " + z + " gone");
+        out.push(k[3] ? plural(by[z], k[1], k[2]) + k[3] + z : plural(by[z], k[1], k[2]) + " into " + z + " removed");
       });
     });
-    if (!out.length) out.push("Nothing new, and nothing fixed");
+    if (!out.length) out.push("Nothing new or fixed");
     return out;
   }
 
@@ -492,7 +492,7 @@
       }
     });
     count.textContent = shown + " of " + cards.length + " findings " + (fix
-      ? "under " + fixShown + (fixShown === 1 ? " change" : " changes")
+      ? "under " + fixShown + (fixShown === 1 ? " step" : " steps")
       : "in " + groupsShown + (groupsShown === 1 ? " rule" : " rules"));
   }
 
@@ -641,7 +641,7 @@ window.addEventListener("beforeprint", function () {
   document.querySelectorAll("details:not(.guide)").forEach(function (d) { d.open = true; d.hidden = false; });
 });
 
-// "Copy all names": every name listed for a finding, one per line, for a
+// "Copy names": every name listed for a finding, one per line, for a
 // script or a change ticket.
 document.addEventListener("click", function (e) {
   var button = e.target.closest && e.target.closest("button.copy-names");
@@ -667,7 +667,7 @@ document.addEventListener("click", function (e) {
     var ok = false;
     try { ok = document.execCommand("copy"); } catch (err) {}
     document.body.removeChild(area);
-    done(ok ? "Copied" : "Select and copy the list by hand");
+    done(ok ? "Copied" : "Couldn't copy. Select the names in the list and copy them.");
   }
   try {
     navigator.clipboard.writeText(names).then(function () { done("Copied"); }, fallback);

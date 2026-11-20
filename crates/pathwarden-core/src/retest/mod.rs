@@ -746,9 +746,7 @@ pub fn absent(b: &FindingView, coverage: &Coverage) -> (Verdict, Vec<String>) {
             }
             .words()
             .unwrap_or("sessions and local groups");
-            format!(
-                "{words} were not targeted in this collection, and the finding may rest on them"
-            )
+            format!("{words} weren't collected in this run, and the finding may depend on them")
         } else {
             format!(
                 "computers the baseline had data from weren't read again, \
@@ -771,7 +769,7 @@ pub fn absent(b: &FindingView, coverage: &Coverage) -> (Verdict, Vec<String>) {
         (
             Verdict::CantTell,
             vec![format!(
-                "{words} were not targeted in this collection, and the finding may rest \
+                "{words} weren't collected in this run, and the finding may depend \
                      on them"
             )],
         )
@@ -1009,7 +1007,7 @@ mod tests {
         assert_eq!(get("PW-003-a").verdict, Verdict::CantTell);
         assert_eq!(
             get("PW-003-a").details,
-            ["sessions and local groups were not targeted in this collection, and the finding may rest on them"]
+            ["sessions and local groups weren't collected in this run, and the finding may depend on them"]
         );
         assert_eq!(get("PW-003-q").verdict, Verdict::Fixed);
         assert_eq!(get("PW-011-h").verdict, Verdict::Fixed);

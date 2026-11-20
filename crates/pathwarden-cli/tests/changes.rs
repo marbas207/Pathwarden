@@ -184,7 +184,8 @@ fn changes_and_findings_introduced_say_what_is_net_new() {
         "{tier_zero}"
     );
     assert!(
-        tier_zero.contains(" · step ") || tier_zero.contains(" · no single step; see the plan"),
+        tier_zero.contains(" · step ")
+            || tier_zero.contains(" · no single step; see the remediation path"),
         "{tier_zero}"
     );
     assert!(tier_zero.contains("\n    member  "), "{tier_zero}");
@@ -195,7 +196,8 @@ fn changes_and_findings_introduced_say_what_is_net_new() {
     // The whole history reaches back to the run tracking began in.
     let all = ok(&dir, &["changes", "--state", "state", "--since", "all"]);
     assert!(
-        all.contains("Objects and paths are dated from ") && all.contains(" (run 1) on;"),
+        all.contains("Objects and paths have first-seen dates from ")
+            && all.contains(" (run 1) on;"),
         "{all}"
     );
 

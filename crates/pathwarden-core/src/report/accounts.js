@@ -70,12 +70,12 @@
     return c;
   }
 
-  // "3 hops MemberOf ADMINS AdminTo SRV HasSession DA"; past three hops,
+  // "3 steps MemberOf ADMINS AdminTo SRV HasSession DA"; past three hops,
   // the first two, "…" and the last.
   function path(d, r) {
     var span = el("span", "acc-path");
     var h = r.h || 0;
-    span.appendChild(el("span", "hops", h === 1 ? "1 hop" : fmt(h) + " hops"));
+    span.appendChild(el("span", "hops", h === 1 ? "1 step" : fmt(h) + " steps"));
     var p = r.p || [];
     p.forEach(function (hop, i) {
       if (i === p.length - 1 && h > p.length) span.appendChild(el("span", "muted", " … "));
@@ -109,7 +109,7 @@
         end.appendChild(a);
       } else {
         end.className = "acc-end muted";
-        end.textContent = "No step cuts it off";
+        end.textContent = "No step cuts it";
       }
       li.appendChild(end);
     } else {
@@ -224,7 +224,7 @@
       var ok = false;
       try { ok = document.execCommand("copy"); } catch (err) {}
       document.body.removeChild(area);
-      done(ok ? "Copied" : "Select and copy the list by hand");
+      done(ok ? "Copied" : "Couldn't copy. Select the names in the list and copy them.");
     }
     try {
       navigator.clipboard.writeText(names).then(function () { done("Copied"); }, fallback);

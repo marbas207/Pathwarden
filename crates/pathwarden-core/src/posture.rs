@@ -125,7 +125,7 @@ impl ExposureGrade {
         }
         if i.critical > 0 {
             why.push(format!(
-                "{} critical finding{} {} open",
+                "{} Critical finding{} {} open",
                 thousands(i.critical),
                 s(i.critical),
                 are(i.critical)
@@ -668,7 +668,7 @@ pub struct Completeness {
 /// What the services count of [`Completeness::stored_credentials_collected`]
 /// means, for the CLI and the report.
 pub const STORED_CREDENTIALS_DEF: &str = "Services read: computers whose services were read in \
-     full for the accounts they run as; one not read holds the findings that rest on it.";
+     full for the accounts they run as; findings that depend on one stay open until it is read.";
 
 /// What the report's services cell says when the reads were turned off.
 pub const STORED_CREDENTIALS_OFF: &str = "Off for this collection";
@@ -680,8 +680,8 @@ pub const STORED_CREDENTIALS_OFF_DEF: &str = "Service reads were turned off for 
 /// What the tasks count of [`Completeness::task_credentials_collected`]
 /// means, for the CLI and the report.
 pub const TASK_CREDENTIALS_DEF: &str = "Tasks read: computers whose scheduled tasks were read in \
-     full for the accounts whose passwords they store; one not read holds the findings that rest \
-     on it.";
+     full for the accounts whose passwords they store; findings that depend on one stay open \
+     until it is read.";
 
 /// The sentence the CLI and the report add when the task reads were
 /// turned off. The cell says [`STORED_CREDENTIALS_OFF`].
@@ -888,7 +888,7 @@ pub fn is_reach_rule(rule: &str) -> bool {
 }
 
 /// The definition the completeness views add.
-pub const NOT_TARGETED_DEF: &str = "Not targeted means the collector was not asked to read them.";
+pub const NOT_TARGETED_DEF: &str = "Not collected: this collection didn't ask for them.";
 
 impl Untargeted {
     /// Of one domain.
@@ -930,8 +930,8 @@ impl Untargeted {
     /// The paths a run without them lacks.
     pub fn paths(self) -> Option<&'static str> {
         match (self.sessions, self.local_groups) {
-            (true, true) => Some("logged-on sessions and local administrator rights"),
-            (true, false) => Some("logged-on sessions"),
+            (true, true) => Some("sessions and local administrator rights"),
+            (true, false) => Some("sessions"),
             (false, true) => Some("local administrator rights"),
             (false, false) => None,
         }
@@ -1032,7 +1032,7 @@ impl Untargeted {
             (false, false) => return None,
         };
         Some(format!(
-            "Not targeted: {what}, so paths through {} are not in this run.",
+            "Not collected: {what}, so paths through {} are not in this run.",
             self.paths()?
         ))
     }
@@ -1051,15 +1051,15 @@ impl Untargeted {
         let mut chars = words.chars();
         let first = chars.next()?.to_uppercase().collect::<String>();
         Some(format!(
-            "Note: {first}{} were not targeted in this collection. {}",
+            "Note: {first}{} weren't collected in this run. {}",
             chars.as_str(),
             self.paths_sentence()?
         ))
     }
 
-    /// "Sessions and local groups not targeted": a chip or an aside.
+    /// "Sessions and local groups not collected": a chip or an aside.
     pub fn chip(self) -> Option<String> {
-        Some(format!("{} not targeted", self.words()?))
+        Some(format!("{} not collected", self.words()?))
     }
 }
 

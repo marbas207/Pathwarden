@@ -613,7 +613,7 @@ pub fn exposure_basis(recorded: u8, relevant: usize) -> u8 {
 }
 
 /// What a change of exposure basis is called wherever a trend crosses one.
-pub const BASIS_CHANGED: &str = "new exposure basis · not comparable";
+pub const BASIS_CHANGED: &str = "counted a new way · not compared";
 
 /// One point of trend data. Small on purpose: it is written every run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2715,7 +2715,7 @@ mod tests {
         });
         assert_eq!(
             default.1.hold_reason(&f.sources, &f.requires).as_deref(),
-            Some("sessions were not targeted in this collection, and the finding may rest on them")
+            Some("sessions weren't collected in this run, and the finding may depend on them")
         );
         let mut runs = Runs::default();
         runs.run(&full);

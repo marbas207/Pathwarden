@@ -324,7 +324,7 @@ async fn a_quick_run_is_not_targeted_not_a_dip() {
     assert!(body.contains("Sessions not targeted"), "{body}");
     assert!(body.contains("Local groups not targeted"), "{body}");
     assert!(
-        body.contains("Sessions and local groups not targeted"),
+        body.contains("Sessions and local groups not collected"),
         "{body}"
     );
     assert_eq!(
@@ -338,7 +338,7 @@ async fn a_quick_run_is_not_targeted_not_a_dip() {
     assert!(body.contains("not compared with the last run"), "{body}");
     assert!(!body.contains("since the last run</span>"), "{body}");
     assert!(
-        body.contains("Sessions and local groups were not targeted this run, so its counts are not compared with the last run."),
+        body.contains("Sessions and local groups weren&#39;t collected in this run, so this run&#39;s counts aren&#39;t compared with the last run."),
         "{body}"
     );
 }
@@ -582,7 +582,7 @@ async fn what_changed_over_a_period() {
     // The whole history reaches back to the run tracking began in (run 2).
     let (_, body) = a.get("/progress?range=all&changes=range").await;
     assert!(
-        body.contains("Objects and paths are dated from Sep 8 (run 2) on; before that, only whole findings are."),
+        body.contains("Objects and paths have first-seen dates from Sep 8 (run 2) on; before that, only findings do."),
         "{body}"
     );
 
