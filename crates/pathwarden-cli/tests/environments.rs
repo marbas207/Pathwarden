@@ -330,7 +330,7 @@ fn env_list_says_when_an_old_removed_id_is_stuck() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
         err.contains("Warning:")
-            && err.contains("Old removed still has the reserved ID")
+            && err.contains("Old removed has an ID Pathwarden now uses itself")
             && err.contains("also holds earlier removals")
             && err.contains("summary.json")
             && !err.contains("Nothing was removed"),
@@ -351,7 +351,7 @@ fn env_list_says_when_an_old_removed_id_is_stuck() {
     let out = run(&ws, &["env", "list", "--workspace", &w]);
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
-        err.contains("Old removed still has the reserved ID")
+        err.contains("Old removed has an ID Pathwarden now uses itself")
             && err.contains("a run summary could not be changed (locked)")
             && err.contains("tries again")
             && !err.contains("gives it another"),

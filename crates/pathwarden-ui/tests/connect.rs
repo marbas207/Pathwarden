@@ -192,7 +192,7 @@ async fn the_page_looks_opens_and_connects() {
     assert!(home.contains(r#"href="/environments/connect""#), "{home}");
     assert!(home.contains("Connect to a run history"));
     let (_, envs) = a.get("/environments").await;
-    for want in ["Its history", "On this computer", "Start a new run history"] {
+    for want in ["Run history", "On this computer", "Start a new run history"] {
         assert!(envs.contains(want), "{want}");
     }
     let (s, loc) = a

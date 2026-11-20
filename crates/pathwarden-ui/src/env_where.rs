@@ -146,7 +146,7 @@ async fn where_api(State(st): State<Shared>, mut form: Multipart) -> Response {
     .await;
     match view {
         Some(v) => Json(v).into_response(),
-        None => bad("Reading the files failed."),
+        None => bad("Couldn't read the files. Check they are a collection zip or folder, then try again."),
     }
 }
 
@@ -319,7 +319,7 @@ fn cards(
 fn found_box(collected: &[String], trusted: &[String]) -> String {
     if collected.is_empty() {
         return format!(
-            r#"<section class="detected card" aria-live="polite"><p class="d-head">{i}Domains not read yet</p><p class="hint">These files have no collector domains file Pathwarden can read before the analysis. It decides where the run goes from the data, and asks if it must.</p></section>"#,
+            r#"<section class="detected card" aria-live="polite"><p class="d-head">{i}Domains not read yet</p><p class="hint">The domains aren't known yet. Pathwarden picks the environment from the data and asks if it must.</p></section>"#,
             i = icon("i-info"),
         );
     }
@@ -407,7 +407,7 @@ fn block(
             };
             let _ = write!(
                 b,
-                r#"<p class="env-save" id="ew-line">{i}<span>Saving to <strong>{name}</strong></span><span class="sep">·</span><span class="sv-why">{why}</span><span class="sep">·</span><button type="button" class="linkish" data-ew-change>change</button></p>"#,
+                r#"<p class="env-save" id="ew-line">{i}<span>Saving to <strong>{name}</strong></span><span class="sep">·</span><span class="sv-why">{why}</span><span class="sep">·</span><button type="button" class="linkish" data-ew-change>Change</button></p>"#,
                 i = icon("i-layers"),
                 name = esc(&reg.name_of(id)),
             );
@@ -417,7 +417,7 @@ fn block(
             // (`Registry::default_unused`), so it starts empty too.
             let _ = write!(
                 b,
-                r#"<p class="env-save" id="ew-line">{i}<span>Saving to a new environment <strong>{name}</strong></span><span class="sep">·</span><button type="button" class="linkish" data-ew-change>change</button></p><p class="hint sv-hint" id="ew-hint">No environment lists {domain_words} yet, so the run starts its own, with empty settings. Rename it later on Environments.</p>"#,
+                r#"<p class="env-save" id="ew-line">{i}<span>Saving to a new environment <strong>{name}</strong></span><span class="sep">·</span><button type="button" class="linkish" data-ew-change>Change</button></p><p class="hint sv-hint" id="ew-hint">No environment has {domain_words} yet, so a new one is made, with the default settings. Rename it any time.</p>"#,
                 i = icon("i-layers"),
                 name = esc(&new_name),
             );
@@ -425,19 +425,19 @@ fn block(
     }
     let intro = match decision {
         Some(Decision::Match { id, how }) if *how == environments::Assigned::Joined => format!(
-            "{} was picked because it has some of {domain_words}, and no other environment has any. The others join it. Its settings apply, and its history compares this run with the ones before it.",
+            "{} has some of {domain_words}; the others join it.",
             esc(&reg.name_of(id)),
         ),
         Some(Decision::Match { id, how }) => format!(
-            "{} was picked because {} {domain_words}. Its settings apply, and its history compares this run with the ones before it.",
+            "{} {} {domain_words}.",
             esc(&reg.name_of(id)),
             if *how == environments::Assigned::ByRuns {
-                "it has earlier runs of"
+                "has earlier runs of"
             } else {
-                "it lists"
+                "lists"
             }
         ),
-        Some(Decision::Ask(_)) => "Nothing is chosen for you. The run is saved in the one you pick, and compared with that environment's earlier runs.".to_string(),
+        Some(Decision::Ask(_)) => "Nothing is chosen for you. The run is saved in the one you pick, with its settings, and compared with its earlier runs.".to_string(),
         _ => format!("No environment has {domain_words} yet. Pick one to compare this run with its runs, or keep the new one."),
     };
     // The match first, then the ones that have some of the domains, the
@@ -496,7 +496,7 @@ fn block(
     let new_checked = matches!(decision, Some(Decision::New { .. }));
     let _ = write!(
         items,
-        r#"<label class="choice ew-new"><input type="radio" name="ew-pick" value="new"{checked}><span class="c-mark" aria-hidden="true"></span><span class="c-body"><strong>New environment</strong><span class="c-meta">Its own settings, history and schedule, starting empty. Rename it any time.</span><span class="new-name"><span class="sr-only">Name of the new environment</span><input type="text" name="ew-name" value="{name}" maxlength="{max}" autocomplete="off" spellcheck="false" aria-label="Name of the new environment"></span></span></label>"#,
+        r#"<label class="choice ew-new"><input type="radio" name="ew-pick" value="new"{checked}><span class="c-mark" aria-hidden="true"></span><span class="c-body"><strong>New environment</strong><span class="c-meta">Its own settings, history and schedule, starting empty. Rename it any time.</span><span class="new-name"><input type="text" name="ew-name" value="{name}" maxlength="{max}" autocomplete="off" spellcheck="false" aria-label="Name of the new environment"></span></span></label>"#,
         checked = if new_checked { " checked" } else { "" },
         name = crate::pages::attr(&new_name),
         max = environments::MAX_NAME,
@@ -510,7 +510,7 @@ fn block(
 /// Analyze before the domains are known.
 fn unknown_block(cards: &[Card]) -> String {
     format!(
-        r#"<p class="env-save" id="ew-line">{i}<span>Saving to the environment of the domains in the data</span><span class="sep">·</span><button type="button" class="linkish" data-ew-change>choose now</button></p><p class="hint sv-hint" id="ew-hint">Pathwarden reads the domains when the analysis starts. It asks if they match more than one environment.</p>{cards}"#,
+        r#"<p class="env-save" id="ew-line">{i}<span>Saving to the environment that matches the domains</span><span class="sep">·</span><button type="button" class="linkish" data-ew-change>Choose now</button></p><p class="hint sv-hint" id="ew-hint">Pathwarden asks if the domains match more than one environment.</p>{cards}"#,
         i = icon("i-layers"),
         cards = plain_cards(cards, None),
     )
@@ -525,7 +525,7 @@ fn current_block(reg: &Registry, cards: &[Card], current: &str) -> String {
         format!("<strong>{}</strong>", esc(&name))
     };
     format!(
-        r#"<p class="env-save" id="ew-line">{i}<span>Saving to {name}</span><span class="sep">·</span><button type="button" class="linkish" data-ew-change>change</button></p>{cards}"#,
+        r#"<p class="env-save" id="ew-line">{i}<span>Saving to {name}</span><span class="sep">·</span><button type="button" class="linkish" data-ew-change>Change</button></p>{cards}"#,
         i = icon("i-layers"),
         cards = plain_cards(cards, Some(current)),
     )
@@ -567,7 +567,7 @@ fn plain_cards(cards: &[Card], checked: Option<&str>) -> String {
 /// label replaces once the domains are known.
 pub fn label_field() -> String {
     format!(
-        r#"<div class="run-label"><label for="run-label">Run label <span class="opt">(optional)</span></label><input type="text" id="run-label" name="label" maxlength="{max}" autocomplete="off" placeholder="e.g. baseline, after GPO fix"><p class="hint">What this run was. Shown in the run list, the run page, history and the report title, instead of <span id="label-instead">the domain name</span>. Up to {max} characters; you can change it later.</p></div>"#,
+        r#"<div class="run-label"><label for="run-label">Run label <span class="opt">(optional)</span></label><input type="text" id="run-label" name="label" maxlength="{max}" autocomplete="off" placeholder="For example baseline, after GPO fix"><p class="hint">Shown instead of <span id="label-instead">the domain name</span>. You can change it later.</p></div>"#,
         max = crate::workspace::MAX_LABEL,
     )
 }

@@ -480,7 +480,7 @@ async fn the_switcher_scopes_every_page() {
     assert_eq!(s, StatusCode::OK);
     assert!(page.contains("Remove Lab 2?"), "{page}");
     assert!(
-        page.contains("Goes: no runs and its settings, run history and labels ("),
+        page.contains("Moves out: no runs, its settings, its run history and its labels ("),
         "{page}"
     );
     assert!(page.contains("Type Lab 2 to confirm"), "{page}");
@@ -563,7 +563,7 @@ async fn the_first_and_the_last_environment_can_be_removed() {
         )
         .await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    assert!(b.contains("changed since you confirmed"), "{b}");
+    assert!(b.contains("Check the list and confirm again"), "{b}");
     let (s, _, b) = a
         .form(
             "/environments/default/remove",
@@ -648,7 +648,7 @@ async fn settings_never_cross_environments() {
     // finding is not "already accepted" there.
     let (_, page) = a.get(&format!("/runs/{client_run}")).await;
     assert!(page.contains(
-        "This run is in <strong>Client A</strong>, so its retests and accepted risks use the settings of Client A."
+        "This run is in <strong>Client A</strong> and uses its settings."
     ));
     // What the next analysis applies is on its Run details tab.
     let (_, details) = a.get(&format!("/runs/{client_run}/report?embed=1")).await;
@@ -816,7 +816,7 @@ async fn the_environments_page_says_when_an_old_removed_id_is_stuck() {
     let (s, page) = a.get("/environments").await;
     assert_eq!(s, StatusCode::OK);
     assert!(
-        page.contains(r#"role="status"><p><strong>Old removed still has the reserved ID"#),
+        page.contains(r#"role="status"><p><strong>Old removed has an ID Pathwarden now uses itself"#),
         "{page}"
     );
     assert!(page.contains("<summary>What to do</summary>"), "{page}");
