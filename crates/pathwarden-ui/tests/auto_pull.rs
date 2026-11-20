@@ -262,7 +262,7 @@ async fn a_pull_tells_the_pages_it_changes_and_refuses_stale_saves() {
         note.contains("<strong>Tier Zero</strong> changed in the shared settings"),
         "{note}"
     );
-    assert!(note.contains("From the next analysis"), "{note}");
+    assert!(note.contains("From the next run"), "{note}");
     assert!(note.contains("data-repo-reload"), "{note}");
     let v = a
         .json("/api/history/pulled?since=1&page=settings&editing=true")

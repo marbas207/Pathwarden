@@ -656,7 +656,7 @@ fn changed_tip(ws: &Workspace, flag: Option<&std::path::Path>) -> String {
             ));
         }
     }
-    rows.push(("Applies".to_string(), "From the next analysis".to_string()));
+    rows.push(("Applies".to_string(), "From the next run".to_string()));
     crate::sync_ui::tip("rn", "What came from the run history", &rows, false)
 }
 

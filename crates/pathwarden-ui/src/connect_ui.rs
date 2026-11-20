@@ -746,7 +746,7 @@ async fn go_api(State(st): State<Shared>, Json(body): Json<GoBody>) -> Response 
     if st.jobs.running().is_some() {
         return error(
             StatusCode::CONFLICT,
-            "An analysis is running. Try again when it has finished.",
+            "A collection or analysis is running. Try again when it finishes.",
         );
     }
     let root = st.workspace.root().to_path_buf();
