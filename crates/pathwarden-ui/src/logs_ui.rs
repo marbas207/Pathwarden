@@ -76,7 +76,7 @@ async fn open_api(State(st): State<Shared>, Json(body): Json<OpenBody>) -> Respo
     let Some(dir) = st.jobs.logs_dir() else {
         return json_error(
             StatusCode::CONFLICT,
-            "This computer has no logs folder: its account has no profile folder.",
+            "No logs folder: this Windows account has no profile folder.",
         );
     };
     let target = match body.file.as_deref() {
@@ -101,7 +101,7 @@ async fn open_api(State(st): State<Shared>, Json(body): Json<OpenBody>) -> Respo
     if opened {
         StatusCode::NO_CONTENT.into_response()
     } else {
-        json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't open it.")
+        json_error(StatusCode::INTERNAL_SERVER_ERROR, "Couldn't open the log.")
     }
 }
 
@@ -116,7 +116,7 @@ async fn dismiss_api(State(st): State<Shared>, body: Option<Json<DismissBody>>) 
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => json_error(
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Couldn't save that: {e}"),
+            format!("Couldn't dismiss the crash report: {e}"),
         ),
     }
 }

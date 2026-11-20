@@ -512,7 +512,7 @@ pub fn clear_cookie(state: &AppState) -> String {
     )
 }
 
-const NEW_LINK: &str = "Press Enter in the window where Pathwarden is running to get a new link, or start Pathwarden again.";
+const NEW_LINK: &str = "Press Enter in the Pathwarden window for a new link, or start Pathwarden again.";
 
 /// What pages ask in the background ([`crate::auto_pull::pulled_api`]).
 const BACKGROUND_PATH: &str = "/api/history/pulled";
@@ -531,7 +531,7 @@ pub async fn guard(State(state): State<Arc<AppState>>, req: Request, next: Next)
         return bare(
             StatusCode::MISDIRECTED_REQUEST,
             "Wrong address",
-            "Pathwarden only answers on 127.0.0.1. Open the link printed in the terminal.",
+            "Open the link Pathwarden printed in the Pathwarden window.",
         );
     }
 
@@ -606,7 +606,7 @@ pub async fn guard(State(state): State<Arc<AppState>>, req: Request, next: Next)
                 StatusCode::UNAUTHORIZED,
                 "Your session has ended",
                 &format!(
-                    "Pathwarden signs you out after {} without use, after {} in any case, and when it is stopped. {NEW_LINK}",
+                    "You were signed out: sessions end after {} without use, or after {}. {NEW_LINK}",
                     human(p.idle),
                     human(p.absolute)
                 ),
@@ -619,8 +619,8 @@ pub async fn guard(State(state): State<Arc<AppState>>, req: Request, next: Next)
         Check::Unknown => {
             return bare(
                 StatusCode::UNAUTHORIZED,
-                "Open Pathwarden from the terminal",
-                "For your safety this page only opens from the link Pathwarden printed when it started. Copy that link into this browser, or press Enter in the Pathwarden window for a new one.",
+                "Open Pathwarden from its window",
+                "This page opens only from the link Pathwarden printed. Press Enter in the Pathwarden window for a new one.",
             );
         }
     }
@@ -661,7 +661,7 @@ async fn embedded_guard(origin: &str, req: Request, next: Next) -> Response {
         return bare(
             StatusCode::MISDIRECTED_REQUEST,
             "Wrong address",
-            "Pathwarden's window only answers its own pages.",
+            "This address isn't a Pathwarden page.",
         );
     }
     if !matches!(*req.method(), Method::GET | Method::HEAD) {

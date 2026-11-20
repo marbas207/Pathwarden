@@ -175,7 +175,7 @@ fn install_key(ws: &Workspace, key: &SecretKey, replace: bool) -> Result<KeyInfo
                 let still = perms::readable_by_others(&dir);
                 if !still.is_empty() {
                     return Err(format!(
-                        "{} can read {}, and it couldn't be made private.",
+                        "Others ({}) can read the key folder {}, and Pathwarden couldn't make it private. Fix its permissions, then try again.",
                         still.join(", "),
                         dir.display()
                     ));
@@ -223,7 +223,7 @@ pub fn key_exposure(ws: &Workspace) -> Option<String> {
 }
 
 /// Creates this computer's signing key (`replace`: in place of the one it
-/// has). The app's "Create a key" and "Replace with a new key", and
+/// has). The app's "Create a key" and "Replace key", and
 /// `pathwarden evidence key new [--replace]`.
 pub fn create_key(ws: &Workspace, replace: bool) -> Result<KeyInfo, String> {
     let key = SecretKey::generate().map_err(|e| format!("{e:#}"))?;
@@ -278,8 +278,7 @@ pub fn earlier_runs(ws: &Workspace, r: &RunSummary) -> Vec<RunSummary> {
 /// Why a run loaded from the shared history gets no pack: its findings
 /// and report came from whoever can write the history, and a pack signed
 /// with this computer's key would vouch for them.
-pub const LOADED_RUN: &str = "This run was loaded from the shared history, not made on this \
-     computer, so this computer can't sign for it. Make the pack on the computer that recorded it.";
+pub const LOADED_RUN: &str = "Made on another computer: make the pack there.";
 
 /// Why a pack of `r` can't be made, if it can't.
 pub fn pack_blocked(ws: &Workspace, r: &RunSummary) -> Option<&'static str> {
@@ -404,8 +403,7 @@ fn pick_baseline(
                     .any(|x| x.shared.is_some() && (x.id == a || x.run_id() == a));
                 if loaded {
                     format!(
-                        "Run {a} was loaded from the shared history, not made on this computer, \
-                         so a pack can't compare with it. Compare with a run made here."
+                        "Run {a} was made on another computer. Compare with a run made here."
                     )
                 } else {
                     format!("Run {a} isn't an earlier run of this environment with saved findings.")
@@ -424,7 +422,7 @@ pub fn baseline_open(
     let b = pick_baseline(ws, r, against)?;
     let dir = ws
         .run_dir(&b.id)
-        .ok_or_else(|| "That run is gone.".to_string())?;
+        .ok_or_else(|| "That run no longer exists.".to_string())?;
     let ev = views(&event_json(&dir)?)?;
     let open = ev.findings.into_iter().filter(|f| !f.suppressed).collect();
     Ok((b, open))
@@ -446,7 +444,7 @@ pub fn build_pack(
     }
     let dir = ws
         .run_dir(&r.id)
-        .ok_or_else(|| "That run is gone.".to_string())?;
+        .ok_or_else(|| "That run no longer exists.".to_string())?;
     let b = pick_baseline(ws, r, opts.against.as_deref())?;
     let bdir = ws
         .run_dir(&b.id)
@@ -616,7 +614,7 @@ pub fn findings_doc(
 ) -> Result<pathwarden_export::Doc, String> {
     let dir = ws
         .run_dir(&r.id)
-        .ok_or_else(|| "That run is gone.".to_string())?;
+        .ok_or_else(|| "That run no longer exists.".to_string())?;
     let bytes = run_data::read_event(&dir).map_err(run_data::event_error)?;
     let text = String::from_utf8_lossy(&bytes);
     let mut doc = pathwarden_export::Doc::from_event(&text).map_err(|e| format!("{e:#}"))?;
@@ -669,7 +667,7 @@ pub fn download_menu(r: &RunSummary, blocked: Option<&str>) -> String {
     let chev = r#"<svg class="ic chev" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>"#;
     let pack = match blocked {
         None => format!(
-            r#"<li><button type="button" class="menu-item" data-ev-open>{i}<span><strong>Evidence pack…</strong><span class="muted small">Signed proof of what this run shows fixed.</span></span></button></li>"#,
+            r#"<li><button type="button" class="menu-item" data-ev-open>{i}<span><strong>Evidence pack…</strong><span class="muted small">Signed proof of which findings this run shows fixed.</span></span></button></li>"#,
             i = icon("i-lock")
         ),
         Some(why) => format!(
@@ -703,7 +701,7 @@ pub fn dialogs(r: &RunSummary) -> String {
   <p class="eyebrow">Evidence pack</p>
   <h2 class="sub" id="ev-title">{heading}</h2>
   <div id="ev-make">
-  <p class="muted small lead-line">A signed zip that shows which findings this run found fixed.</p>
+  <p class="muted small lead-line">Signed proof of which findings this run shows fixed.</p>
   <form class="ev-form" id="ev-form" autocomplete="off">
     <div class="field"><label for="ev-base">Compared with</label>
       <select class="input" id="ev-base"></select></div>
@@ -797,7 +795,7 @@ pub fn settings_sections(ws: &Workspace) -> String {
   <div><dt>Kept in</dt><dd><code>{dir}</code></dd></div>
 </dl>
 <p class="hint key-hint">Publish the fingerprint where auditors find it without the packs: your website, the contract, or a signed email.</p>
-<div class="card-actions"><button type="button" class="btn" data-key-use>Use another key file</button><button type="button" class="btn danger" data-key-replace>Replace with a new key</button><span class="save-status muted small" id="key-status" aria-live="polite"></span></div>"##,
+<div class="card-actions"><button type="button" class="btn" data-key-use>Use another key file</button><button type="button" class="btn danger" data-key-replace>Replace key</button><span class="save-status muted small" id="key-status" aria-live="polite"></span></div>"##,
             tip = tip_key(),
             i_dl = icon("i-download"),
             fp = esc(&k.fingerprint),
@@ -820,7 +818,7 @@ pub fn settings_sections(ws: &Workspace) -> String {
         Err(e) => format!(
             r##"<header><h2 class="sub">Evidence signing key</h2></header>
 <p class="rt-limit">{i_alert}<span>The signing key can't be read: {e}</span></p>
-<div class="card-actions"><button type="button" class="btn" data-key-use>Use another key file</button><button type="button" class="btn danger" data-key-replace>Replace with a new key</button><span class="save-status muted small" id="key-status" aria-live="polite"></span></div>"##,
+<div class="card-actions"><button type="button" class="btn" data-key-use>Use another key file</button><button type="button" class="btn danger" data-key-replace>Replace key</button><span class="save-status muted small" id="key-status" aria-live="polite"></span></div>"##,
             i_alert = icon("i-alert"),
             e = esc(&e),
         ),
@@ -833,7 +831,7 @@ pub fn settings_sections(ws: &Workspace) -> String {
 <dialog id="key-replace" class="card">
   <form method="dialog">
     <h2 class="sub">Replace the signing key?</h2>
-    <p>Packs from now on are signed with a new key, so auditors need its new fingerprint. Packs made before still check against the old one.</p>
+    <p>New packs are signed with a new key, so auditors need its fingerprint. The old key is deleted; packs made before still check against its fingerprint.</p>
     <div class="dialog-actions"><button class="btn" value="cancel">Cancel</button><button class="btn danger" value="replace">Replace key</button></div>
   </form>
 </dialog>
@@ -911,7 +909,7 @@ fn run_of(st: &Shared, id: &str) -> Result<RunSummary, Box<Response>> {
     if !workspace::valid_run_id(id) {
         return Err(Box::new(json_error(
             StatusCode::BAD_REQUEST,
-            "Invalid run.",
+            "That run no longer exists.",
         )));
     }
     st.workspace.run(id).ok_or_else(|| {
@@ -1066,7 +1064,7 @@ async fn make_pack(
         let sha = pack::sha256_hex(&bytes);
         let t = token().ok_or((
             StatusCode::INTERNAL_SERVER_ERROR,
-            "No secure random numbers.".to_string(),
+            "Couldn't make a key: Windows gave no secure random numbers. Try again.".to_string(),
         ))?;
         let now = pathwarden_core::analyze::now();
         {
@@ -1166,7 +1164,7 @@ async fn findings_file_download(
     let format = match q.format.as_deref() {
         Some("defectdojo") => pathwarden_export::Format::Defectdojo,
         Some("sarif") | None => pathwarden_export::Format::Sarif,
-        Some(_) => return (StatusCode::BAD_REQUEST, "Unknown format.").into_response(),
+        Some(_) => return (StatusCode::BAD_REQUEST, "Choose SARIF or DefectDojo.").into_response(),
     };
     let r = match run_of(&st, &id) {
         Ok(r) => r,
@@ -1210,7 +1208,7 @@ async fn key_action(State(st): State<Shared>, Json(req): Json<KeyRequest>) -> Re
             "create" => create_key(ws, false),
             "replace" => create_key(ws, true),
             "use" => use_key(ws, &text),
-            _ => Err("Unknown action.".to_string()),
+            _ => Err("Pathwarden couldn't do that. Reload the page and try again.".to_string()),
         }
     })
     .await;
@@ -1245,12 +1243,12 @@ async fn verify_upload(mut form: Multipart) -> Response {
             Ok(Some(f)) => f,
             Ok(None) => break,
             Err(_) => {
-                return json_error(StatusCode::BAD_REQUEST, "The upload didn't arrive whole.")
+                return json_error(StatusCode::BAD_REQUEST, "The upload was cut off. Try again.")
             }
         };
         let name = field.name().unwrap_or_default().to_string();
         let Ok(bytes) = field.bytes().await else {
-            return json_error(StatusCode::BAD_REQUEST, "The upload didn't arrive whole.");
+            return json_error(StatusCode::BAD_REQUEST, "The upload was cut off. Try again.");
         };
         match name.as_str() {
             "pack" => zip = Some(bytes.to_vec()),

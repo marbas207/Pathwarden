@@ -169,7 +169,7 @@ async fn requests_without_the_cookie_are_rejected() {
             .unwrap();
         let (s, h, body) = a.send(req).await;
         assert_eq!(s, StatusCode::UNAUTHORIZED, "{uri}");
-        assert!(body.contains("Open Pathwarden from the terminal"), "{uri}");
+        assert!(body.contains("Open Pathwarden from its window"), "{uri}");
         assert!(h.get(header::SET_COOKIE).is_none());
     }
     // A wrong cookie value is no better.
