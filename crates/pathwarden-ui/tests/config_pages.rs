@@ -168,7 +168,7 @@ async fn pages_render_without_a_config_or_a_run() {
     let (s, _) = a.get("/zones/0/edit").await;
     assert_eq!(s, StatusCode::NOT_FOUND);
     let (_, body) = a.get("/zones/new").await;
-    assert!(body.contains("needs one analysis first"));
+    assert!(body.contains("need one run first"));
     let (s, v) = a
         .json(
             Method::POST,
