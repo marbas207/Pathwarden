@@ -49,9 +49,9 @@ fn env_chips(names: &[String]) -> String {
             r#"<span class="envchip {cls}" title="{title}"><span class="dot" aria-hidden="true"></span><code>{name}</code> {state}</span>"#,
             cls = if set { "set" } else { "unset" },
             title = if set {
-                "Set in the environment Pathwarden was started from"
+                "Environment variable set for Pathwarden"
             } else {
-                "Not set in the environment Pathwarden was started from"
+                "Environment variable not set for Pathwarden"
             },
             name = esc(n),
             state = if set { "set" } else { "not set" },
@@ -111,8 +111,7 @@ fn where_note() -> String {
         .collect::<Vec<_>>()
         .join(", ");
     let about = format!(
-        "A plugin named x is the program pathwarden-output-x{} in {}. A script or program you choose must be given by its full path, or run through powershell, pwsh, python, node, bash, sh or cmd, which are only taken from system folders (System32, Program Files, or folders only root can change). Pathwarden never runs plugins from the current folder or from a PATH folder you can write to, so nobody can plant one there.",
-        std::env::consts::EXE_SUFFIX,
+        "Plugins are taken only from {}. A script or program must be given by its full path.",
         dirs.join(" or "),
     );
     format!(
@@ -130,6 +129,10 @@ fn env_help() -> String {
     )
 }
 
+/// The Program field's hint, on the plugin and the finding action forms.
+pub const PROGRAM_HINT: &str =
+    "A full path, or powershell, pwsh, python, node, bash, sh or cmd. Not a network path.";
+
 /// The page's title and rail entry: the output plugins (After each run)
 /// and finding actions.
 pub const PAGE_TITLE: &str = "Plugins and actions";
@@ -143,7 +146,7 @@ pub(crate) async fn list_page(State(st): State<Shared>) -> Html<String> {
     let latest = run_data::latest_with(&st.ws(), run_data::EVENT_FILE);
     let mut b = format!(
         r#"<div class="page-head"><div><p class="eyebrow">Automate</p><h1 class="panel-title">{PAGE_TITLE}</h1>
-<p class="lead">Hand each scheduled run's results to other systems (set up on <a href="/automate/schedule">Schedule</a>), and add your own buttons to findings.</p></div></div>
+<p class="lead">Send scheduled run results to other systems, and add your own buttons to findings.</p></div></div>
 {file}
 <div class="ac-sect" id="after-each-run"><div><h2 class="sub">After each run</h2><p class="muted">A ticket per finding in ServiceNow or Jira, or a plugin of your own.</p></div>
 <div class="rh-actions"><a class="btn primary" href="/plugins/new?kind=servicenow">{plus} Add ServiceNow</a><a class="btn primary" href="/plugins/new?kind=jira">{plus} Add Jira</a><a class="btn" href="/plugins/new?kind=command">{plus} {other}</a></div></div>"#,
@@ -168,7 +171,7 @@ pub(crate) async fn list_page(State(st): State<Shared>) -> Html<String> {
                 r#"<div class="plugrow" id="plugin-{i}">
 <span class="zr-icon">{ic}</span>
 <div class="zr-main"><a class="zr-name" href="/plugins/{i}/edit">{name}</a><span class="zr-rules">{kind}</span>{program}{env}</div>
-<div class="zr-actions"><button type="button" class="btn small-btn" data-test-plugin="{i}" data-name="{name}" data-custom="{custom}"{disabled}>{i_play} Test</button><a class="btn small-btn" href="/plugins/{i}/edit">{i_edit} Edit</a><button type="button" class="btn small-btn danger" data-delete-plugin="{i}" data-name="{name}" aria-label="Delete {name}">{i_trash}</button></div>
+<div class="zr-actions"><button type="button" class="btn small-btn" data-test-plugin="{i}" data-name="{name}" data-custom="{custom}"{disabled}>{i_play} Test</button><a class="btn small-btn" href="/plugins/{i}/edit">{i_edit} Edit</a><button type="button" class="btn small-btn danger" data-delete-plugin="{i}" data-name="{name}" aria-label="Remove {name}">{i_trash}</button></div>
 <div class="test-out" hidden><div class="test-head"><strong class="test-title"></strong><span class="muted small test-sub"></span></div><pre class="code test-log"></pre></div>
 </div>"#,
                 ic = icon("i-plug"),
@@ -192,11 +195,11 @@ pub(crate) async fn list_page(State(st): State<Shared>) -> Html<String> {
             r#"<p class="muted small after-list">{}</p>"#,
             match &latest {
                 Some((r, _)) => format!(
-                    "<strong>Test</strong> runs the plugin as a dry run on the latest analysis ({}, {}): it reports what it would do and changes nothing. Every finding counts as new, as on a first scheduled run.",
+                    "<strong>Test</strong> shows what the plugin would do with the latest run ({}, {}), as if every finding were new. Nothing changes.",
                     esc(&r.environment()),
                     pages::time(r.created_at)
                 ),
-                None => "Testing needs one analysis first: <a href=\"/analyze\">analyze a collection</a> or try the demo.".into(),
+                None => "Testing needs one run first. <a href=\"/analyze\">Analyze a collection</a> or try the demo.".into(),
             }
         );
     }
@@ -337,7 +340,7 @@ fn form_page(st: &AppState, index: Option<usize>, o: &OutputConfig, kind: Kind) 
     };
     let page = format!(
         r#"{head}<form class="card setting plugin-form" id="plugin-form" data-plugin="{meta}" novalidate>{body}
-<div class="card-actions"><button type="submit" class="btn primary">{check} Save plugin</button><a class="btn" href="/automate/ticketing">Cancel</a><span class="save-status muted small" aria-live="polite"></span></div>
+<div class="card-actions"><button type="submit" class="btn primary">{check} Save</button><a class="btn" href="/automate/ticketing">Cancel</a><span class="save-status muted small" aria-live="polite"></span></div>
 </form>
 {help}{saved}<script src="/static/config.js" defer></script>"#,
         meta = crate::pages::json_attr(&meta.to_string()),
@@ -416,14 +419,14 @@ fn servicenow_form(o: &OutputConfig, locked: bool) -> String {
         .collect();
     format!(
         r#"<input type="hidden" id="pl-name" value="servicenow">{lock}
-<p class="muted">One ticket per finding: new findings get a ticket, fixed ones are resolved, and findings that come back reopen theirs. {docs} lists every option.</p>
+<p class="muted">One ticket per finding, resolved when fixed and reopened if it comes back. {docs}</p>
 <div class="fields2">
   <div class="field"><label for="sn-instance">Instance URL</label><input class="input mono" id="sn-instance" value="{instance}" placeholder="https://example.service-now.com" autocomplete="off" spellcheck="false" required><p class="hint">Must start with <code>https://</code>: credentials are sent to it.</p></div>
   <div class="field"><label for="sn-table">Create</label><select class="input" id="sn-table">{tables}</select></div>
   <div class="field"><label for="sn-min">Open tickets for</label><select class="input" id="sn-min">{sevs}</select><p class="hint">Findings below this get no ticket. Existing tickets are still kept up to date.</p></div>
-  <div class="field"><label for="sn-scope">Scope <span class="muted">(optional)</span></label><input class="input mono" id="sn-scope" value="{scope}" placeholder="prod" maxlength="40" autocomplete="off" spellcheck="false"><p class="hint">Only when two deployments share one instance. Pick it once: changing it later orphans existing tickets.</p></div>
+  <div class="field"><label for="sn-scope">Scope <span class="muted">(optional)</span></label><input class="input mono" id="sn-scope" value="{scope}" placeholder="prod" maxlength="40" autocomplete="off" spellcheck="false"><p class="hint">Only when two deployments share one instance. Set it once: changing it later loses track of existing tickets.</p></div>
 </div>
-<fieldset class="choice"><legend>Sign-in</legend>
+<fieldset class="choice"><legend>Sign in with</legend>
   <label class="option card"><input type="radio" name="sn-auth" value="basic"{basic_on}><span><strong>User name and password</strong><span class="muted">Basic authentication with an integration account.</span></span></label>
   <label class="option card"><input type="radio" name="sn-auth" value="bearer"{bearer_on}><span><strong>Bearer token</strong><span class="muted">An OAuth access token.</span></span></label>
 </fieldset>
@@ -432,7 +435,7 @@ fn servicenow_form(o: &OutputConfig, locked: bool) -> String {
   <div class="field" data-when-auth="basic"><label for="sn-pass-env">Password: environment variable</label><input class="input mono" id="sn-pass-env" data-env value="{pass_env}" autocomplete="off" spellcheck="false"><span class="envstatus"></span></div>
   <div class="field" data-when-auth="bearer"><label for="sn-token-env">Token: environment variable</label><input class="input mono" id="sn-token-env" data-env value="{token_env}" autocomplete="off" spellcheck="false"><span class="envstatus"></span></div>
 </div>
-<p class="hint">Only the <em>names</em> of the variables are saved. Whether each is set is checked in the environment Pathwarden was started from.</p>
+<p class="hint">Only the <em>names</em> of the variables are saved. Each shows whether it is set for Pathwarden.</p>
 <h3 class="form-title">Fields on new tickets</h3>
 <p class="hint">For example <code>assignment_group</code>, <code>category</code>, <code>caller_id</code> or <code>cmdb_ci</code>, with the value as ServiceNow expects it.</p>
 <div class="kvs" id="sn-fields">{fields}</div>
@@ -497,7 +500,7 @@ fn severity_options(o: &OutputConfig) -> String {
         ("high", "High and above"),
         ("medium", "Medium and above (default)"),
         ("low", "Low and above"),
-        ("info", "Everything"),
+        ("info", "All findings"),
     ] {
         let _ = write!(
             sevs,
@@ -530,8 +533,8 @@ fn limits_html(o: &OutputConfig, noun: &str, locked: bool) -> String {
     format!(
         r#"<h3 class="form-title">Safety limits</h3>
 <div class="fields2">
-  <div class="field"><label for="pl-max-create">Most new {noun} in one run</label><input class="input" id="pl-max-create" type="number" min="1" max="100000" step="1" value="{create}" placeholder="100" inputmode="numeric"><p class="hint">A run that would open more opens none of them and says why, so a first run on a big domain can't flood the queue. Default 100.</p></div>
-  <div class="field"><label for="pl-max-resolve">Most open {noun} closed in one run (%)</label><input class="input" id="pl-max-resolve" type="number" min="1" max="100" step="1" value="{resolve}" placeholder="50" inputmode="numeric"><p class="hint">A run that would close more closes none of them and says why, for example after a collection that missed a domain. Default 50; 100 turns this off.</p></div>
+  <div class="field"><label for="pl-max-create">Most new {noun} in one run</label><input class="input" id="pl-max-create" type="number" min="1" max="100000" step="1" value="{create}" placeholder="100" inputmode="numeric"><p class="hint">Above this, the run opens none and says why. Default 100.</p></div>
+  <div class="field"><label for="pl-max-resolve">Most open {noun} closed in one run (%)</label><input class="input" id="pl-max-resolve" type="number" min="1" max="100" step="1" value="{resolve}" placeholder="50" inputmode="numeric"><p class="hint">Above this, the run closes none and says why. Default 50. 100 means no limit.</p></div>
 </div>{guard}"#,
         create = crate::pages::attr(&number_text(o, "max_create", "100")),
         resolve = crate::pages::attr(&number_text(o, "max_resolve_percent", "50")),
@@ -617,16 +620,16 @@ fn jira_form(o: &OutputConfig, locked: bool) -> String {
     let attr = |s: &str| crate::pages::attr(s);
     format!(
         r#"<input type="hidden" id="pl-name" value="jira">{lock}
-<p class="muted">One issue per finding: new findings get an issue, fixed ones are closed, and findings that come back reopen theirs. {docs} lists every option.</p>
+<p class="muted">One issue per finding, closed when fixed and reopened if it comes back. {docs}</p>
 <div class="fields2">
   <div class="field"><label for="j-instance">Instance URL</label><input class="input mono" id="j-instance" value="{instance}" placeholder="https://example.atlassian.net" autocomplete="off" spellcheck="false" required><p class="hint">Must start with <code>https://</code>: credentials are sent to it.</p></div>
   <div class="field"><label for="j-deployment">Jira</label><select class="input" id="j-deployment"><option value="cloud"{cloud_sel}>Jira Cloud (default)</option><option value="data_center"{dc_sel}>Jira Data Center or Server</option></select></div>
   <div class="field"><label for="j-project">Project key</label><input class="input mono" id="j-project" value="{project}" placeholder="SEC" maxlength="30" autocomplete="off" spellcheck="false" required></div>
   <div class="field"><label for="j-type">Issue type</label><input class="input" id="j-type" value="{issue_type}" placeholder="Task" maxlength="100" autocomplete="off" spellcheck="false"><p class="hint">As it's named in the project, like Task, Bug or Story.</p></div>
   <div class="field"><label for="j-min">Open issues for</label><select class="input" id="j-min">{sevs}</select><p class="hint">Findings below this get no issue. Existing issues are still kept up to date.</p></div>
-  <div class="field"><label for="j-scope">Scope <span class="muted">(optional)</span></label><input class="input mono" id="j-scope" value="{scope}" placeholder="prod" maxlength="40" autocomplete="off" spellcheck="false"><p class="hint">Only when two deployments share one project. Pick it once: changing it later orphans existing issues.</p></div>
+  <div class="field"><label for="j-scope">Scope <span class="muted">(optional)</span></label><input class="input mono" id="j-scope" value="{scope}" placeholder="prod" maxlength="40" autocomplete="off" spellcheck="false"><p class="hint">Only when two deployments share one project. Set it once: changing it later loses track of existing issues.</p></div>
 </div>
-<fieldset class="choice"><legend>Sign-in</legend>
+<fieldset class="choice"><legend>Sign in with</legend>
   <label class="option card"><input type="radio" name="j-auth" value="basic"{basic_on}><span><strong>Email and API token</strong><span class="muted">Jira Cloud. On Data Center: a user name and password.</span></span></label>
   <label class="option card"><input type="radio" name="j-auth" value="pat"{pat_on}><span><strong>Personal access token</strong><span class="muted">Jira Data Center only.</span></span></label>
 </fieldset>
@@ -635,7 +638,7 @@ fn jira_form(o: &OutputConfig, locked: bool) -> String {
   <div class="field" data-when-auth="basic"><label for="j-token-env">API token or password: environment variable</label><input class="input mono" id="j-token-env" data-env value="{token_env}" autocomplete="off" spellcheck="false"><span class="envstatus"></span></div>
   <div class="field" data-when-auth="pat"><label for="j-pat-env">Personal access token: environment variable</label><input class="input mono" id="j-pat-env" data-env value="{pat_env}" autocomplete="off" spellcheck="false"><span class="envstatus"></span></div>
 </div>
-<p class="hint">Only the <em>names</em> of the variables are saved. Whether each is set is checked in the environment Pathwarden was started from.</p>
+<p class="hint">Only the <em>names</em> of the variables are saved. Each shows whether it is set for Pathwarden.</p>
 <div class="fields2">
   <div class="field"><label for="j-priority">Priority</label><select class="input" id="j-priority"><option value="true"{prio_on}>Set from the severity (default)</option><option value="false"{prio_off}>Leave it to Jira</option></select><p class="hint">Critical is Highest, High is High, and so on. Leave it to Jira if Priority isn't on the project's create screen.</p></div>
   <div class="field"><label for="j-closed">When a closed issue's finding is still there</label><select class="input" id="j-closed">{closed_opts}</select><p class="hint">Issues closed as Won't Do, Won't Fix, Duplicate or Risk Accepted are never reopened.</p></div>
@@ -646,7 +649,7 @@ fn jira_form(o: &OutputConfig, locked: bool) -> String {
 <button type="button" class="btn small-btn" data-add-kv="j-fields">{plus} Add a field</button>
 {limits}
 <details class="help card j-advanced"{adv_open}><summary>Closing and reopening <span class="muted">(optional)</span></summary><div class="help-body">
-<p class="hint">Leave these empty and Pathwarden uses the first transition to a Done status to close, and to a To Do status to reopen. Fill them in when your workflow needs a particular one.</p>
+<p class="hint">Empty: the first transition to Done closes, the first to To Do reopens.</p>
 <div class="fields2">
   <div class="field"><label for="j-close-tr">Close with transition</label><input class="input" id="j-close-tr" value="{close_tr}" placeholder="Done" maxlength="100" autocomplete="off"></div>
   <div class="field"><label for="j-reopen-tr">Reopen with transition</label><input class="input" id="j-reopen-tr" value="{reopen_tr}" placeholder="Reopen" maxlength="100" autocomplete="off"></div>
@@ -713,22 +716,24 @@ fn command_form(o: &OutputConfig, allow_commands: bool) -> String {
         "/opt/pathwarden/plugins/teams.sh"
     };
     format!(
-        r#"<div class="field"><label for="pl-name">Name</label><input class="input mono" id="pl-name" value="{name}" placeholder="teams" maxlength="64" autocomplete="off" spellcheck="false" required><p class="hint">Lowercase letters, digits and dashes. Shown in run output as <code>[name]</code>.</p></div>
+        r#"<div class="field"><label for="pl-name">Name</label><input class="input mono" id="pl-name" value="{name}" placeholder="teams" maxlength="64" autocomplete="off" spellcheck="false" required><p class="hint">Lowercase letters, digits and dashes.</p></div>
 {locked_note}<fieldset class="choice"><legend>What to run</legend>
   <label class="option card{cmd_off}"><input type="radio" name="pl-how" value="command"{cmd_on}{cmd_disabled}><span><strong>A script or program</strong><span class="muted">PowerShell, Python or any program, with its arguments.</span></span></label>
-  <label class="option card"><input type="radio" name="pl-how" value="named"{named_on}><span><strong>A plugin program</strong><span class="muted"><code>pathwarden-output-&lt;name&gt;</code> from the plugins folder.</span></span></label>
+  <label class="option card"><input type="radio" name="pl-how" value="named"{named_on}><span><strong>A plugin program</strong><span class="muted">A plugin from the plugins folder.</span></span></label>
 </fieldset>
 <div class="fields2" data-when-how="command">
-  <div class="field"><label for="pl-program">Program</label><input class="input mono" id="pl-program" value="{program}" placeholder="powershell" autocomplete="off" spellcheck="false"{readonly}><p class="hint">A full path, or one of: powershell, pwsh, python, python3, node, bash, sh, cmd (found only in system folders such as System32 or Program Files, never on a PATH folder you can write to). Not a network path.</p></div>
+  <div class="field"><label for="pl-program">Program</label><input class="input mono" id="pl-program" value="{program}" placeholder="powershell" autocomplete="off" spellcheck="false"{readonly}><p class="hint">{program_hint}</p></div>
   <div class="field"><label for="pl-args">Arguments, one per line</label><textarea class="input mono" id="pl-args" rows="4" placeholder="-NoProfile&#10;-File&#10;{example}" spellcheck="false"{readonly}>{args}</textarea><p class="hint">Give scripts by their full path.</p></div>
 </div>
 <h3 class="form-title">Settings</h3>
-<p class="hint">Passed to the plugin as JSON in <code>PATHWARDEN_OUTPUT_SETTINGS</code>. For a secret, add a setting ending in <code>_env</code> whose value is the <em>name</em> of an environment variable, such as <code>webhook_env = PATHWARDEN_TEAMS_WEBHOOK</code>; only those variables reach the plugin. Whole numbers and true/false are saved as such. <code>timeout_seconds</code> limits how long it may run (default 600).</p>
+<p class="hint">Sent to the plugin. For a secret, give the name of an environment variable (a setting ending in _env). {settings_docs}</p>
 <div class="kvs" id="pl-settings">{rows}</div>
 <button type="button" class="btn small-btn" data-add-kv="pl-settings">{plus} Add a setting</button>
 <div class="envs" id="pl-envs"></div>
 {kept}"#,
         name = crate::pages::attr(&o.plugin),
+        program_hint = esc(PROGRAM_HINT),
+        settings_docs = pages::repo_link("docs/plugins.md#on-the-command-line", "Every setting"),
         cmd_on = if by_name { "" } else { " checked" },
         named_on = if by_name { " checked" } else { "" },
         locked_note = if locked {
@@ -809,7 +814,7 @@ async fn test(
     let Some(output) = loaded.config.outputs.get(index).cloned() else {
         return json_error(
             StatusCode::NOT_FOUND,
-            format!("No plugin {index}: reload the page, pathwarden.toml may have changed."),
+            "That plugin isn't in the settings any more. Reload the page.",
         );
     };
     if output.plugin != body.expect {
@@ -818,11 +823,12 @@ async fn test(
     let Some((run, dir)) = run_data::latest_with(&st.ws(), run_data::EVENT_FILE) else {
         return json_error(
             StatusCode::NOT_FOUND,
-            "Testing needs one analysis first. Analyze a collection or try the demo.",
+            "Testing needs one run first. Analyze a collection or try the demo.",
         );
     };
     let result = tokio::task::spawn_blocking(move || {
-        let event = run_data::event_text(&dir).ok_or("The latest run's event couldn't be read.")?;
+        let event =
+            run_data::event_text(&dir).ok_or("The latest run's findings couldn't be read.")?;
         plugin_form::dry_run(&output, &event)
     })
     .await;
@@ -832,7 +838,7 @@ async fn test(
         Err(_) => {
             return json_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "The test stopped. Try again.",
+                "The test stopped unexpectedly. Try again.",
             )
         }
     };

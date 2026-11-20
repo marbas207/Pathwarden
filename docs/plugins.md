@@ -25,8 +25,8 @@ example, leave out findings that already have a ticket.
 2. Under **After each run**, click **Add ServiceNow**, **Add Jira**, or **Add a plugin program**
    (**Add a script or program** unless the app was started with
    `--lock-destinations`).
-3. Fill in the form and click **Save plugin**.
-4. Click **Test** to run the plugin as a dry run on the latest analysis.
+3. Fill in the form and click **Save**.
+4. Click **Test** to see what the plugin would do with the latest run (a dry run).
 
 The ServiceNow and Jira forms have **Safety limits**: the most new tickets
 one run may open (default 100) and the most open tickets one run may close,
@@ -36,7 +36,7 @@ collection that missed a domain can't flood or empty the queue.
 
 Some changes are turned off in an app started with `pathwarden ui
 --lock-destinations` ([Safety locks](ui.md#safety-locks)); the page then
-says the change is turned off in this app:
+says safety locks are on:
 
 - adding a script or program;
 - a plugin's instance, its Jira `project` or ServiceNow `table`,

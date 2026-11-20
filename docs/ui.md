@@ -74,7 +74,7 @@ evidence pack.
 
 **Explore** opens on the run's first finding. **Previous** and **Next** page
 through the findings. Search for an object and double-click it to expand
-it. **Path to Tier Zero** draws its shortest path, **Who can reach this**
+it. **Path to Tier Zero** draws its shortest path, **Who can reach it**
 lists everything with a path to it, and **Query** runs **Prepared** queries
 or your own **Cypher**. **Suggested zones** proposes Tier 1 and Tier 2
 objects for a zone.
@@ -146,7 +146,7 @@ while that record is open.
    request the program gets, with your inputs.
 2. Turn on **Test only** for a dry run: the program is asked to change
    nothing, and nothing is saved.
-3. Click **Run**. The program's lines show as it writes them, with the
+3. Click **Start**. The program's lines show as it writes them, with the
    time so far; **Cancel** stops it.
 4. The result shows each record it made (`RITM10816190 · Open`) with
    **Open** and **Copy**; a failure has **Show details** with the
@@ -196,8 +196,8 @@ to ServiceNow, Jira or a script. ServiceNow and Jira each have a form, with
 name of an environment variable for each secret, never the secret.
 **Finding actions** lists each action program, its actions with their
 inputs, what they send and which findings they apply to, and **Test** (a
-dry run on the first matching finding of the latest analysis). **Add an
-action program** and **Remove** are turned off with `--lock-destinations`
+dry run on the first matching finding of the latest analysis). **Add a
+finding action** and **Remove** are turned off with `--lock-destinations`
 ([Safety locks](#safety-locks)); the name, time limit and filters can
 still change.
 
@@ -251,8 +251,8 @@ shares them.
 
 Some changes let a page choose a program for Pathwarden to run, or where
 findings and runs go. The app makes them unless it was started with
-`pathwarden ui --lock-destinations`. Then the page says the change is
-turned off in this app, with an (i) that links here:
+`pathwarden ui --lock-destinations`. Then the page
+says safety locks are on, with an (i) that links here:
 
 - adding or changing a plugin's program;
 - a plugin's destination: its instance, Jira `project`, ServiceNow
