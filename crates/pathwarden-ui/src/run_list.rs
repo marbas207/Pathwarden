@@ -76,11 +76,11 @@ impl Tag {
     pub fn words(self) -> &'static str {
         match self {
             Tag::Demo => "Demo",
-            Tag::LocalOnly => "Local only",
+            Tag::LocalOnly => "This computer only",
             Tag::Scheduled => "Scheduled",
             Tag::Recorded => "Recorded",
-            Tag::NumbersWithNames => "Numbers with names",
-            Tag::FromRepository => "From the repository",
+            Tag::NumbersWithNames => "Numbers only",
+            Tag::FromRepository => "From the run history",
             Tag::Newer => "Needs a newer Pathwarden",
         }
     }
@@ -218,9 +218,10 @@ impl NoFull {
     /// What its row says after where it came from.
     pub fn note(self) -> &'static str {
         match self {
-            NoFull::NumbersKept => "no full run",
-            NoFull::Before => "recorded before full runs were kept",
-            NoFull::NotHere => "no full run on this computer",
+            // The tag says it ([`Tag::NumbersWithNames`]).
+            NoFull::NumbersKept => "",
+            NoFull::Before => "recorded before reports were kept",
+            NoFull::NotHere => "report not on this computer",
             NoFull::Newer => NEWER_NOTE,
         }
     }
@@ -229,18 +230,16 @@ impl NoFull {
     pub fn line(self) -> &'static str {
         match self {
             NoFull::NumbersKept => "Only its numbers are kept, so there's no report or graph.",
-            NoFull::Before => "Recorded before full runs were kept, so there's no report or graph.",
-            NoFull::NotHere => "No full run on this computer, so there's no report or graph.",
-            NoFull::Newer => {
-                "Its full run was recorded by a newer Pathwarden: update Pathwarden to open it."
-            }
+            NoFull::Before => "Recorded before reports were kept, so there's no report or graph.",
+            NoFull::NotHere => "Its report and graph aren't on this computer.",
+            NoFull::Newer => "Recorded by a newer Pathwarden. Update Pathwarden to open it.",
         }
     }
 }
 
 /// The ⓘ beside a numbers-only row's note.
 const NO_FULL_TIP: &str =
-    "The history has its numbers, finding titles and domain names, but no report or graph to open.";
+    "The run history has its numbers, finding titles and domain names, but no report or graph to open.";
 
 const SCHEDULE_REPORT_NOTE: &str = "opens the schedule's report";
 
@@ -399,7 +398,8 @@ pub fn run_list_with(
                 .location
                 .as_ref()
                 .is_ok_and(|l| pathwarden_core::store::has_run_timings(&l.dir, &p.run_id)),
-            note: Some(note),
+            // "Numbers only" is the tag: no note repeats it.
+            note: (!note.is_empty()).then_some(note),
             no_full,
         });
     }
@@ -425,18 +425,20 @@ pub fn row_html(r: &RunRow) -> String {
         tags.push_str(&history_ui::perf_link(&r.id));
     }
     let extra = match (r.source, r.note) {
-        (Source::NumbersOnly, Some(n)) => format!(
-            " · {} {}",
-            esc(n),
-            pages::tip(
+        (Source::NumbersOnly, n) => {
+            let tip = pages::tip(
                 &format!(
                     "tip-nf-{}",
                     r.id.replace(|c: char| !c.is_ascii_alphanumeric(), "")
                 ),
-                "No full run",
-                NO_FULL_TIP
-            )
-        ),
+                "Numbers only",
+                NO_FULL_TIP,
+            );
+            match n {
+                Some(n) => format!(" · {} {tip}", esc(n)),
+                None => format!(" {tip}"),
+            }
+        }
         (_, Some(n)) => format!(" · {}", esc(n)),
         (_, None) => String::new(),
     };
@@ -609,7 +611,7 @@ pub fn full_runs_words(f: &FullRuns, locked: bool) -> String {
     }
     let total = f.total();
     if total == 0 {
-        return "None yet.".to_string();
+        return "None yet".to_string();
     }
     let mut s = format!(
         "{} of {} open in full on this computer",
@@ -650,7 +652,7 @@ pub fn report_for(ws: &Workspace, snap: &Snapshot, r: &RunRow) -> Result<String,
         Source::Local | Source::Shared => {
             let dir = ws
                 .run_dir(&r.id)
-                .ok_or_else(|| format!("Run {} isn't on this computer.", r.id))?;
+                .ok_or_else(|| format!("Run {} isn't on this computer. Reload the page.", r.id))?;
             let html = std::fs::read_to_string(dir.join(crate::workspace::REPORT_FILE))
                 .map_err(|_| "This run has no saved report.".to_string())?;
             Ok(report_as_now(html, Some(&r.summary)))
@@ -661,8 +663,12 @@ pub fn report_for(ws: &Workspace, snap: &Snapshot, r: &RunRow) -> Result<String,
                 .as_ref()
                 .ok()
                 .and_then(|l| history_ui::scheduled_report(l, &snap.history))
-                .ok_or_else(|| "The schedule's report is gone.".to_string())?;
-            std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))
+                .ok_or_else(|| {
+                    "The schedule's report isn't there any more. Wait for the next scheduled run."
+                        .to_string()
+                })?;
+            std::fs::read_to_string(&path)
+                .map_err(|_| "The schedule's report couldn't be read. Try again.".to_string())
         }
         Source::NumbersOnly => Err(r.no_full.unwrap_or(NoFull::NotHere).line().to_string()),
     }
@@ -724,11 +730,11 @@ pub const MAX_LISTED: usize = 200;
 
 /// What a list without the run's open findings says
 /// ([`PointFindings::complete`] false).
-pub const PARTIAL_WORDS: &str =
-    "The findings still open in this run aren't named: the history can't tell them apart.";
+pub const PARTIAL_WORDS: &str = "Open findings aren't listed for this run.";
 
 /// The ⓘ of [`PARTIAL_WORDS`].
-pub const PARTIAL_TIP: &str = "The history keeps one record per finding with the latest of each date (first and last seen, fixed, back), not every run in between.";
+pub const PARTIAL_TIP: &str =
+    "The run history keeps only each finding's latest dates, not every run in between.";
 
 /// The ⓘ beside "Findings": where titles and severities come from.
 pub const FINDINGS_TIP: &str =
@@ -762,7 +768,7 @@ pub fn severity_words(s: pathwarden_core::findings::Severity) -> &'static str {
     }
 }
 
-/// "3 new, 2 fixed (not named)": the run's own counts, and which of them
+/// "3 new, 2 fixed (not listed)": the run's own counts, and which of them
 /// the list names.
 pub fn findings_counts_words(f: &PointFindings) -> String {
     let mut parts = Vec::new();
@@ -771,7 +777,7 @@ pub fn findings_counts_words(f: &PointFindings) -> String {
             parts.push(format!(
                 "{} {w}{}",
                 num(k.count),
-                if k.named { "" } else { " (not named)" }
+                if k.named { "" } else { " (not listed)" }
             ));
         }
     }
@@ -787,7 +793,7 @@ pub fn point_page_html(pg: &PointPage, env: (&str, &str)) -> String {
     }
     let collected = r
         .collected_at
-        .map(|t| format!(" · Data collected {}", pages::collected_time(t)))
+        .map(|t| format!(" · Collected {}", pages::collected_time(t)))
         .unwrap_or_default();
     let dom = if r.label.is_some() {
         format!(
@@ -805,7 +811,7 @@ pub fn point_page_html(pg: &PointPage, env: (&str, &str)) -> String {
     let mut b = format!(
         r#"<div class="page-head run-head nf-head">
   <div class="rh-text">
-    <div class="eyebrow"><a class="rh-env" href="/environments#env-{env_id}" title="Its environment">{i_layers}{env_name}</a></div>
+    <div class="eyebrow"><a class="rh-env" href="/environments#env-{env_id}" title="Open this environment">{i_layers}{env_name}</a></div>
     <div class="rh-title"><h1 class="panel-title">{title}</h1>{tags}</div>
     <p class="muted small">{dom}{when} · {source}{collected} · <span class="run-id" title="The run history's ID for this run.">Run <code>{run_id}</code></span></p>
     <p class="nf-line">{i_info}<span>{line}</span></p>
@@ -850,7 +856,7 @@ pub fn point_page_html(pg: &PointPage, env: (&str, &str)) -> String {
         Err(e) => {
             let _ = write!(
                 b,
-                r#"</header><p class="field-error" role="alert">{}</p>"#,
+                r#"</header><p class="field-error" role="alert">The findings for this run couldn't be read: {}</p>"#,
                 esc(e)
             );
         }
@@ -864,7 +870,7 @@ pub fn point_page_html(pg: &PointPage, env: (&str, &str)) -> String {
                     b,
                     r#"<p class="muted small">{} {}</p>"#,
                     esc(PARTIAL_WORDS),
-                    pages::tip("tip-partial", "Findings named", PARTIAL_TIP)
+                    pages::tip("tip-partial", "Findings listed", PARTIAL_TIP)
                 );
             }
             b.push_str("</header>");
@@ -889,7 +895,7 @@ pub fn point_page_html(pg: &PointPage, env: (&str, &str)) -> String {
                     };
                     let _ = write!(
                         b,
-                        r#"<li class="{fixed}"><span class="pill {sev}"><span class="dot" aria-hidden="true"></span>{sev_words}</span><span class="nf-title">{title}</span><span class="nf-meta">{change}<code>{rule}</code></span></li>"#,
+                        r#"<li class="{fixed}"><span class="pill {sev}"><span class="dot" aria-hidden="true"></span>{sev_words}</span><span class="nf-title">{title}</span><span class="nf-meta">{change}<code title="Rule">{rule}</code></span></li>"#,
                         fixed = if x.change == PointChange::Fixed {
                             "nf-gone"
                         } else {
@@ -926,11 +932,11 @@ mod tests {
         // full runs were kept says so.
         assert_eq!(
             NoFull::of(Keep::Full, Some(false)).line(),
-            "Recorded before full runs were kept, so there's no report or graph."
+            "Recorded before reports were kept, so there's no report or graph."
         );
         assert_eq!(
             NoFull::of(Keep::Full, None).line(),
-            "No full run on this computer, so there's no report or graph."
+            "Its report and graph aren't on this computer."
         );
         assert_eq!(
             NoFull::of(Keep::Full, Some(true)),
@@ -941,7 +947,7 @@ mod tests {
             NoFull::of(Keep::Names, None).line(),
             "Only its numbers are kept, so there's no report or graph."
         );
-        assert_eq!(Tag::NumbersWithNames.words(), "Numbers with names");
+        assert_eq!(Tag::NumbersWithNames.words(), "Numbers only");
         assert_eq!(Source::NumbersOnly.key(), "numbers-only");
     }
 

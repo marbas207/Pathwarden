@@ -103,8 +103,8 @@ fn runs_list_show_and_report() {
     let (point, saved) = (&runs[0], &runs[1]);
     assert_eq!(point["source"], "numbers-only", "{v}");
     assert_eq!(point["tags"][0], "Scheduled");
-    assert_eq!(point["tags"][1], "Numbers with names");
-    assert_eq!(point["note"], "no full run");
+    assert_eq!(point["tags"][1], "Numbers only");
+    assert!(point["note"].is_null(), "the tag says it: {v}");
     assert_eq!(point["id"], point["run_id"]);
     assert_eq!(saved["source"], "local", "{v}");
     assert!(saved["run_id"].is_string(), "recorded too: {v}");
@@ -117,9 +117,9 @@ fn runs_list_show_and_report() {
 
     // The text says the same words.
     let text = list(&[]);
-    assert!(text.contains("[Scheduled]  [Numbers with names]"), "{text}");
+    assert!(text.contains("[Scheduled]  [Numbers only]"), "{text}");
     assert!(
-        text.contains("Recorded by the schedule · no full run"),
+        text.contains("Recorded by the schedule") && !text.contains("no full run"),
         "{text}"
     );
     assert!(text.contains("With an attack path to Tier Zero:"), "{text}");
