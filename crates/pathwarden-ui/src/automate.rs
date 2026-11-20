@@ -159,7 +159,7 @@ async fn schedule_file(
         return (StatusCode::BAD_REQUEST, errors.join(" ")).into_response();
     }
     let Some(body) = target.file(&file) else {
-        return (StatusCode::NOT_FOUND, "No such file").into_response();
+        return (StatusCode::NOT_FOUND, "No such file.").into_response();
     };
     let mut r = ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], body).into_response();
     // `file` is one of a fixed set of names (checked by `target.file`).
@@ -268,9 +268,7 @@ fn status(
     let mut b =
         String::from(r#"<section class="card setting sched-status" aria-label="Schedule status">"#);
     let mut facts = String::new();
-    let local_task = task.unwrap_or(
-        "No Pathwarden task on this computer. That's expected when the schedule runs on a server.",
-    );
+    let local_task = task.unwrap_or("None. Expected when the schedule runs on a server.");
     let _ = write!(
         facts,
         "<div><dt>On this computer</dt><dd>{local_task}</dd></div>"
@@ -304,14 +302,14 @@ fn status(
                     "None recorded in the history in use (<code>{}</code>).",
                     esc(&crate::workspace::shown_path(&loc.dir))
                 ),
-                Err(_) => "Unknown: the history settings can't be used.".into(),
+                Err(_) => r#"Unknown: fix the history settings on <a href="/automate/history">History storage</a>."#.into(),
             },
         }
     );
     if let Some(first) = scheduled.first() {
         let _ = write!(
             facts,
-            "<div><dt>Set up</dt><dd>Running since {} ({} scheduled run{} recorded).</dd></div>",
+            "<div><dt>Running since</dt><dd>{} ({} scheduled run{} recorded).</dd></div>",
             pages::time(first.at),
             num(scheduled.len()),
             if scheduled.len() == 1 { "" } else { "s" }
@@ -328,7 +326,7 @@ fn status(
         .filter(|r| !r.demo && r.shared.is_none())
         .collect();
     if own.is_empty() {
-        b.push_str(r#"<p class="muted small">No analysis of your own data yet, so the files below use example values. <a href="/analyze">Analyze a collection</a> or <a href="/collect">collect</a> first, and the schedule follows its domains.</p>"#);
+        b.push_str(r#"<p class="muted small">No run of your own yet, so the files use example values.</p>"#);
     } else {
         let mut options = String::new();
         for r in own.iter().take(50) {
@@ -348,7 +346,7 @@ fn status(
         }
         let _ = write!(
             b,
-            r#"<form class="sched-pick" method="get" action="/automate/schedule"><input type="hidden" name="os" value="{os}"><div class="field"><label for="sched-run">Repeat the collection of</label><select class="input" id="sched-run" name="run">{options}</select><p class="hint">Any run of your own data: uploaded, from a path or collected here. The nightly run collects every domain it covers.</p></div><button type="submit" class="btn">Use this run</button></form>"#,
+            r#"<form class="sched-pick" method="get" action="/automate/schedule"><input type="hidden" name="os" value="{os}"><div class="field"><label for="sched-run">Based on run</label><select class="input" id="sched-run" name="run">{options}</select><p class="hint">The nightly run collects every domain this run covers.</p></div><button type="submit" class="btn">Use this run</button></form>"#,
             os = if t.linux { "linux" } else { "windows" },
         );
     }
@@ -366,19 +364,23 @@ fn status(
         (Ok(loc), None) => {
             steps.push("Copy the files below to the server and register the task, then try it once.".into());
             steps.push(if loc.git.is_some() {
-                "Copy <code>pathwarden.toml</code> to the server too: it points the scheduled run at the same git repository, so its runs show up here when the app syncs, or after <strong>Sync now</strong> on History storage.".to_string()
+                "Copy <code>pathwarden.toml</code> to the server too, so its runs reach this history.".to_string()
             } else {
-                format!(
-                    "Make the server record into a history this computer can read: a shared folder or a git repository, set on <a href=\"/automate/history\">History storage</a>, and copy <code>pathwarden.toml</code> to the server. Right now the history is <code>{}</code>, which a server can't reach unless it is a share.",
-                    esc(&crate::workspace::shown_path(&loc.dir))
-                )
+                r#"Set a shared folder or git repository on <a href="/automate/history">History storage</a>, so the server's runs reach this computer."#.to_string()
             });
         }
         (Ok(_), Some(p)) if now - p.at > STALE_SCHEDULE_SECS => {
             steps.push(if t.linux {
-                format!("On the server, look at the last run: <code>journalctl -u {}.service -e</code>.", esc(&t.unit()))
+                format!(
+                    "On the server, check the timer's last run and its log ({}).",
+                    pages::repo_link("docs/running.md#linux-systemd-timer", "how")
+                )
             } else {
-                format!("On the server, look at the last result: <code>Get-ScheduledTaskInfo -TaskName '{}'</code> (<code>LastTaskResult</code> 0 means it worked), and each run's log in <code>{}</code>.", esc(&t.task_name()), esc(&t.log_dir()))
+                format!(
+                    "On the server, check the task's last result and its log in <code>{}</code> ({}).",
+                    esc(&t.log_dir()),
+                    pages::repo_link("docs/running.md#windows-task-scheduler-with-a-gmsa", "how")
+                )
             });
         }
         (Ok(_), Some(_)) => {

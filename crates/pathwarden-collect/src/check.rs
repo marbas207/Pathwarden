@@ -189,7 +189,7 @@ impl Problem {
     /// What went wrong and what to do about it, in plain words.
     pub fn explain(self) -> &'static str {
         match self {
-            Problem::Settings => "Some settings need fixing.",
+            Problem::Settings => "Some settings need fixing. Check them, then try again.",
             Problem::Dns => {
                 "This computer can't find that domain or domain controller. Check the spelling, \
                  and that this computer uses your domain's DNS (it does when it's joined to the \
@@ -208,9 +208,8 @@ impl Problem {
                  VPN, and any firewall between this computer and the domain controller."
             }
             Problem::Stalled => {
-                "The domain controller stopped answering partway through the collection, so \
-                 Pathwarden stopped instead of waiting forever. Try again; if it happens again, \
-                 turn on LDAPS."
+                "The domain controller stopped answering. Try again; if it happens again, turn \
+                 on LDAPS."
             }
             Problem::WrongDomain => {
                 "That domain controller belongs to a different domain than the one you entered. \
@@ -223,7 +222,7 @@ impl Problem {
             }
             Problem::CertificateName => {
                 "The domain controller's certificate doesn't match the name you entered. Use the \
-                 domain controller's full name, like dc01.contoso.local, not an IP address or a \
+                 domain controller's full name, like dc01.scale.local, not an IP address or a \
                  short name."
             }
             Problem::CertificateExpired => {

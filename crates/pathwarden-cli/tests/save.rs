@@ -189,7 +189,9 @@ fn run_reads_a_runs_kept_collection_with_other_files() {
     );
     let shown = ok(&pw(&dir, &["runs", "show", &id, "--workspace", &w]));
     assert!(
-        shown.contains("    The collection wasn't kept, so there is nothing to add to."),
+        shown.contains(
+            "    The raw collection wasn't kept. Tick Keep the raw collection next time."
+        ),
         "{shown}"
     );
     // A run that isn't there.

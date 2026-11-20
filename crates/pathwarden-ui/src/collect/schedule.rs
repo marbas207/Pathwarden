@@ -94,12 +94,12 @@ fn is_linux(p: &Params) -> bool {
     }
 }
 
-const BAD_LINUX_FOLDER: &str =
-    "The folder must be a full path like /opt/pathwarden (letters, digits, _ . - /).";
-const BAD_WINDOWS_FOLDER: &str = r"The folder must be a full path like C:\Pathwarden (letters, digits, spaces, _ . - and \), in a folder of its own: not a drive or a Windows folder such as C:\Windows, C:\Program Files or C:\Users.";
+const BAD_LINUX_FOLDER: &str = "Use a full path, like /opt/pathwarden (letters, digits, _ . - /).";
+const BAD_WINDOWS_FOLDER: &str = r"Use a full path of its own, like C:\Pathwarden (letters, digits, spaces, _ . - and \): not a drive or a Windows folder.";
 const BAD_GMSA: &str = r"Enter the gMSA as DOMAIN\name$ (a gMSA's name ends with $).";
 const BAD_TIME: &str = "Enter the time as HH:MM, like 02:00.";
-const BAD_USER: &str = "Enter the user name like svc-pathwarden or svc-pathwarden@scale.local.";
+const BAD_USER: &str =
+    "Enter the user name, like svc-pathwarden, SCALE\\svc-pathwarden or svc-pathwarden@scale.local.";
 
 /// The typed fields that were refused, each with its problem (as
 /// [`Target::resolve`] reports it): `folder`, `account` or `user`, then
@@ -577,10 +577,7 @@ impl Target {
         let mut notes = Vec::new();
         if !extra_domains.is_empty() {
             notes.push(format!(
-                "This run covers {} domains, so the nightly run collects each of them in turn: \
-                 {}. Only {domain} uses the domain controller you chose; the others use one \
-                 that DNS finds. If one collection fails, that night's run stops rather than \
-                 report a partial forest.",
+                "Collects {} domains each night: {}. If one fails, that night's run stops.",
                 extra_domains.len() + 1,
                 std::iter::once(domain.as_str())
                     .chain(extra_domains.iter().map(String::as_str))
@@ -595,10 +592,8 @@ impl Target {
         let sharphound = !linux && (used_sharphound || full || (!src.cli && !BUILTIN));
         if !linux && full && !used_sharphound {
             notes.push(
-                "This run used the built-in collector with a password. The scheduled task runs \
-                 as a gMSA, which has no password to hand over, so the nightly Full collection \
-                 uses SharpHound. The gMSA needs local admin rights on the computers to see \
-                 sessions and local groups."
+                "The nightly Full collection uses SharpHound (a gMSA has no password). The gMSA \
+                 needs local admin rights for sessions and local groups."
                     .to_string(),
             );
         } else if !linux && !sharphound && info.is_some_and(|i| !i.current_user) {
@@ -609,12 +604,15 @@ impl Target {
             );
         }
         if !linux && !sharphound && !BUILTIN {
-            notes.push(
+            notes.push(format!(
                 "These files collect with the built-in collector, which this build of \
-                 Pathwarden doesn't include. Use the full build of Pathwarden on the server, \
-                 or pass --sharphound."
-                    .to_string(),
-            );
+                 Pathwarden doesn't include. Use the full build of Pathwarden on the server{}.",
+                if src.cli {
+                    ", or pass --sharphound"
+                } else {
+                    ""
+                }
+            ));
         }
         if linux && !BUILTIN {
             notes.push(
@@ -624,12 +622,10 @@ impl Target {
             );
         }
         if linux && server.is_none() {
-            notes.push(
-                "LDAPS checks the domain controller's certificate against the name it connects \
-                 to. If the domain name isn't on the certificate, add <code>--server</code> with \
-                 the domain controller's full name to <code>run.sh</code>."
-                    .to_string(),
-            );
+            notes.push(format!(
+                "If the domain name isn't on the domain controller's certificate, LDAPS fails: see {}.",
+                crate::pages::repo_link("docs/running.md#linux-systemd-timer", "Linux systemd timer")
+            ));
         }
 
         let pick = |given: &Option<String>,
@@ -1232,7 +1228,7 @@ fi
                         "Run these as root in the folder with the two unit files. The password is the one for <code>{}</code>; it is stored readable by root only.",
                         esc(&self.user)
                     ),
-                    blocks: vec![block("code-setup", "Commands", "setup.sh".into(), self.linux_setup(), false)],
+                    blocks: vec![block("code-setup", "Shell (as root)", "setup.sh".into(), self.linux_setup(), false)],
                 },
                 Step {
                     title: "Try it once",
@@ -1240,7 +1236,7 @@ fi
                         "Start a run now and watch its output. The report is written to <code>{}/reports/latest.html</code>.",
                         esc(&self.var_dir())
                     ),
-                    blocks: vec![block("code-test", "Commands", "test.sh".into(), self.linux_test(), false)],
+                    blocks: vec![block("code-test", "Shell", "test.sh".into(), self.linux_test(), false)],
                 },
             ]
         } else {
@@ -1254,9 +1250,10 @@ fi
                 Step {
                     title: "Prepare the gMSA and the folder",
                     text: format!(
-                        "The task runs as <code>{}</code>, so no password is stored anywhere. If it doesn't exist yet, a domain admin creates it and allows this server to use it (see Running on a schedule in the documentation). Then, on a domain-joined server, check it works and create the folder, before you copy anything there. A folder made under <code>C:\\</code> lets every local user change it, and whatever they put there would run as the gMSA. The second block creates <code>{}</code> so that only administrators can change it; the gMSA can read it and write only to <code>reports</code> and <code>pathwarden-state</code>. It refuses a folder that already exists if someone else could have changed it, and a junction or link. You can run it again at any time, for example after copying in a new <code>pathwarden.exe</code>. <code>run.ps1</code> refuses to run if anyone else can change the folder.",
+                        "The task runs as <code>{}</code>, so no password is stored anywhere. Check the gMSA, then create <code>{}</code> so only administrators can change it, before you copy anything there. Run the second block again after each update. Details: {}.",
                         esc(&self.account),
-                        esc(&self.folder)
+                        esc(&self.folder),
+                        crate::pages::repo_link("docs/running.md#windows-task-scheduler-with-a-gmsa", "Windows Task Scheduler with a gMSA")
                     ),
                     blocks: vec![
                         block("code-gmsa", admin, "check-gmsa.ps1".into(), self.gmsa_check(), false),
@@ -1295,7 +1292,7 @@ fi
                         esc(&self.log_dir()),
                         LOGS_KEPT
                     ),
-                    blocks: vec![block("code-test", "PowerShell", "test-task.ps1".into(), self.test_command(), false)],
+                    blocks: vec![block("code-test", admin, "test-task.ps1".into(), self.test_command(), false)],
                 },
             ]
         }

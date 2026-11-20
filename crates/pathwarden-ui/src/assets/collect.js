@@ -264,7 +264,6 @@
     $("td-count").textContent = n + " of " + all + " ticked";
     $("td-all").hidden = n === 0;
     // Said before the Check step signs in to them.
-    $("td-auth").hidden = n === 0;
   }
   function alertIcon() {
     var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -320,7 +319,7 @@
         var opt = document.createElement("span"); opt.className = "opt"; opt.textContent = "optional";
         lab.appendChild(opt);
         var dc = document.createElement("input"); dc.type = "text"; dc.id = id;
-        dc.placeholder = "Found through DNS"; dc.spellcheck = false;
+        dc.placeholder = "Find through DNS"; dc.spellcheck = false;
         dc.setAttribute("autocapitalize", "off"); dc.setAttribute("autocomplete", "off");
         dc.value = tdDc[d.name.toLowerCase()] || "";
         sub.appendChild(lab); sub.appendChild(dc);
@@ -330,7 +329,7 @@
     });
     box.hidden = !ul.children.length;
     $("td-hint").textContent = data && data.from
-      ? "From the trusts in " + data.from + "'s last run. Ticked domains are collected in the same run, one after another, with the same sign-in."
+      ? "From " + data.from + "'s last run. Ticked domains are collected in this run, one after another."
       : "";
     tdCount();
   }
@@ -430,7 +429,7 @@
     return fetch("/api/collect/also", { method: "POST", credentials: "same-origin", body: fd })
       .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, data: parse(t) }; }); })
       .then(function (r) {
-        if (!r.ok) throw new Error(r.data.error || "The files couldn't be uploaded.");
+        if (!r.ok) throw new Error(r.data.error || "The added files couldn't be uploaded. Try again, or remove them.");
         return r.data.also || "";
       });
   }
@@ -502,8 +501,8 @@
     else if (!mustLdaps && ldapsAuto) { ldaps.checked = false; ldapsAuto = false; }
     ldaps.disabled = mustLdaps;
     $("ldaps-hint").textContent = pw
-      ? "Required with a password: it keeps the password and your data encrypted on the way. The domain controller's certificate must be trusted by this computer."
-      : "Optional. Without it, Windows still signs and encrypts the connection (Kerberos). With it, the domain controller's certificate must be trusted by this computer.";
+      ? "Required with a password. Needs a certificate this computer trusts."
+      : "Optional: Windows already encrypts the connection.";
     $("skip-verify").disabled = !ldaps.checked;
     if (!ldaps.checked) $("skip-verify").checked = false;
     // Kerberos only and SMB signing turned off, or Kerberos only with the
@@ -521,7 +520,7 @@
       : (a.depth === "full" && !pw) ? "For a Full collection it needs a user and password (step 2): it signs in to every computer with them."
       : (!pw && !WINDOWS) ? "Needs a user and password on this computer (step 2)." : "";
     var shWhy = !WINDOWS ? "Runs on Windows only."
-      : pw ? "Runs as your Windows account only. Choose \u201cUse my Windows account\u201d in step 2 to use it." : "";
+      : pw ? "Runs as your Windows account only. Choose \"Use my Windows account\" in step 2 to use it." : "";
     setAvailable(bi, biWhy);
     setAvailable(sh, shWhy);
     var chosen = radio("collector");
@@ -572,7 +571,7 @@
     }
     if (n === 3) {
       var r = document.querySelector('input[name="collector"]:checked');
-      if (!r || r.disabled) return fieldError("collector", "Choose a collector. If none is available here, upload a file collected elsewhere."), false;
+      if (!r || r.disabled) return fieldError("collector", "Choose a collector. If none is available here, analyze a file collected elsewhere on the Analyze page."), false;
       if (a.collector === "sharphound" && !a.sharphound)
         return fieldError("sharphound", "Enter where SharpHound.exe is, like C:\\Tools\\SharpHound.exe."), false;
     }
@@ -666,12 +665,12 @@
       } else {
         checked = false;
         found = { state: r.data.dns ? "dns" : "", server: "" };
-        $("check-error").textContent = r.data.error || "The check failed (" + r.status + ").";
+        $("check-error").textContent = r.data.error || "The check failed. Try again.";
         var detail = $("check-detail");
         detail.textContent = r.data.detail ? "Details: " + r.data.detail : "";
         detail.hidden = !r.data.detail;
         fixStep = r.data.step || 1;
-        $("check-fix").title = "Back to " + LABELS[fixStep - 1] + " to change it";
+        $("check-fix").title = "Go back to step " + fixStep + " (" + LABELS[fixStep - 1] + ")";
         $("check-fix").setAttribute("data-field", r.data.field || "");
         showCheck("bad");
       }
@@ -680,7 +679,7 @@
     }, function () {
       checking = false;
       checked = false;
-      $("check-error").textContent = "Pathwarden didn't answer. Is it still running?";
+      $("check-error").textContent = "Pathwarden isn't answering. Is it still running?";
       $("check-detail").hidden = true;
       showCheck("bad");
       refreshNav();
@@ -837,7 +836,7 @@
   }
   $("run-log-copy").addEventListener("click", function () {
     var b = $("run-log-copy"), label = b.querySelector("span");
-    var text = (logLost ? "(" + logLost + " earlier lines not shown)\n" : "") + logLines.join("\n");
+    var text = (logLost ? earlierLines(logLost) + "\n" : "") + logLines.join("\n");
     copyText(text).then(function () {
       label.textContent = "Copied"; b.classList.add("done");
       setTimeout(function () { label.textContent = "Copy log"; b.classList.remove("done"); }, 1800);
@@ -845,11 +844,6 @@
   });
 
   function num(n) { return Number(n || 0).toLocaleString(); }
-  function hms(s) {
-    s = Math.max(0, Math.round(s));
-    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-    return (h ? h + ":" + ("0" + m).slice(-2) : m) + ":" + ("0" + (s % 60)).slice(-2);
-  }
   function size(n) {
     var u = ["B", "KB", "MB", "GB", "TB"], i = 0;
     while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
@@ -869,7 +863,16 @@
     if (!collecting || st.finished) return "Collected";
     if (st.eta_secs == null) return "Estimating time left\u2026";
     if (st.eta_secs === 0) return "Almost done";
-    return "About " + hms(st.eta_secs) + " left";
+    return "About " + aboutMin(st.eta_secs) + " left";
+  }
+  // Time left as the header gives it ("8 min", "1 h 20 min").
+  function aboutMin(s) {
+    var m = Math.max(1, Math.round(s / 60));
+    if (m < 60) return m + " min";
+    return Math.floor(m / 60) + " h" + (m % 60 ? " " + (m % 60) + " min" : "");
+  }
+  function earlierLines(n) {
+    return "(" + n.toLocaleString() + (n === 1 ? " earlier line" : " earlier lines") + " not shown)";
   }
 
   var lastJob = null;
@@ -1002,7 +1005,7 @@
         collecting: collecting, multi: multi, title: title, sub: sub,
         // One domain: the title has its name; the panel says only the phase.
         panelName: multi && active ? active.name : "",
-        phase: collecting ? (st ? st.phase : c.phase || "Starting") : "Collection finished",
+        phase: collecting ? (st ? st.phase : c.phase || "Starting") : "Collected",
         step: step, groups: groups, counts: counts(c, st, collecting),
         // The checklist is one line while collecting; it opens out after.
         stepsFolded: collecting,
@@ -1047,6 +1050,8 @@
       var open = b.getAttribute("aria-expanded") !== "true";
       b.setAttribute("aria-expanded", open ? "true" : "false");
       b.textContent = open ? "Hide" : "Show";
+      var said = b.getAttribute("aria-label");
+      if (said) b.setAttribute("aria-label", said.replace(/^(Show|Hide)/, open ? "Hide" : "Show"));
       $(b.getAttribute("aria-controls")).hidden = !open;
     });
   });
@@ -1074,13 +1079,14 @@
     });
     var n = p.notes.length;
     $("run-notes-what").hidden = !n;
-    $("run-notes-n").textContent = n + (n === 1 ? " note" : " notes") + " on this collection";
+    $("run-notes-n").textContent = n + (n === 1 ? " warning" : " warnings");
     $("run-notes-show").textContent = notesOpen ? "Hide" : "Show";
+    $("run-notes-show").setAttribute("aria-label", notesOpen ? "Hide warnings" : "Show warnings");
     $("run-notes-show").setAttribute("aria-expanded", notesOpen ? "true" : "false");
     ul.hidden = !n || !notesOpen;
     // Collected, the output is a link here (the panel's switch is gone).
     $("run-output").hidden = p.panel;
-    $("run-output").textContent = outputOpen ? "Hide collector output" : "Collector output";
+    $("run-output").textContent = outputOpen ? "Hide collector log" : "Collector log";
     $("run-output").setAttribute("aria-expanded", outputOpen ? "true" : "false");
     $("run-notes").hidden = !n && p.panel;
   }
@@ -1120,8 +1126,8 @@
     var parts = collecting && st && st.parts ? st.parts : null;
     $("cp-streams").hidden = $("cp-parts").hidden = !parts;
     if (parts) {
-      $("cp-streams").textContent = (units(st) ? " · " : "") + num(parts.streams) + (parts.streams === 1 ? " stream" : " streams");
-      $("cp-parts-text").textContent = "Read in " + num(parts.parts) + " parts; " + num(Math.min(parts.done, parts.parts)) + " done.";
+      $("cp-streams").textContent = (units(st) ? " · " : "") + num(parts.streams) + (parts.streams === 1 ? " connection" : " connections");
+      $("cp-parts-text").textContent = "Split into " + num(parts.parts) + (parts.parts === 1 ? " part; " : " parts; ") + num(Math.min(parts.done, parts.parts)) + " done.";
     } else {
       $("cp-parts").classList.remove("open");
     }
@@ -1164,7 +1170,7 @@
     var box = $("run-log-box"), log = $("run-log");
     box.hidden = p.panel ? verb !== "log" : !outputOpen;
     var atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
-    log.textContent = (logLost ? "… " + logLost + " earlier lines\n" : "") + logLines.join("\n");
+    log.textContent = (logLost ? earlierLines(logLost) + "\n" : "") + logLines.join("\n");
     if (atBottom) log.scrollTop = log.scrollHeight;
     $("run-log-n").textContent = c.log_total ? "(" + num(c.log_total) + " lines)" : "";
     // Reading the collection during the analysis: bytes read.
@@ -1176,7 +1182,7 @@
     } else if (j.status === "running") {
       mark(j.phase);
       $("collect-cancel").hidden = true;
-      $("run-note").textContent = "Collected. Analyzing now; you can leave this page.";
+      $("run-note").textContent = "Collected. Analyzing now; you can leave this page, it keeps going.";
     }
   }
 
@@ -1184,10 +1190,10 @@
     fetch("/api/jobs/" + encodeURIComponent(job), { credentials: "same-origin" })
       .then(function (r) { return r.text().then(function (t) { return { ok: r.ok, data: parse(t) }; }); })
       .then(function (r) {
-        if (!r.ok) throw new Error(r.data.error || "Lost track of the collection.");
+        if (!r.ok) throw new Error(r.data.error || "Can't get this collection's progress. Reload the page.");
         handle(r.data);
-      })
-      .catch(function (e) { failed(e.message || "Lost track of the collection."); });
+      }, function () { throw new Error("Pathwarden isn't answering. Is it still running?"); })
+      .catch(function (e) { failed(e.message || "Can't get this collection's progress. Reload the page."); });
   }
 
   function handle(j) {
@@ -1219,7 +1225,7 @@
       refreshNav();
       nav.hidden = true;
     } else {
-      failed(j.error || "The collection failed.", !!(j.collect && j.collect.resumable), j.log);
+      failed(j.error || "The collection failed. Open the log for details.", !!(j.collect && j.collect.resumable), j.log);
     }
   }
 
@@ -1281,7 +1287,7 @@
 
   // Start, or Resume / Start over a read that stopped.
   function begin(resume) {
-    if (where && where.choice() === null) { toast("Choose an environment first."); return; }
+    if (where && where.choice() === null) { toast("Choose where the run goes first."); return; }
     confirmDomains(function () { startCollecting(resume); });
   }
   $("collect-start").addEventListener("click", function () { begin(false); });
@@ -1309,7 +1315,7 @@
           if (r.data.field) fieldError(r.data.field, r.data.error);
           else toast(r.data.error);
         } else {
-          toast(r.data.error || "Couldn't start the collection.");
+          toast(r.data.error || "Couldn't start the collection. Try again.");
         }
         return;
       }
@@ -1327,18 +1333,29 @@
       poll();
     }, function () {
       enable(true);
-      toast("Pathwarden didn't answer. Is it still running?");
+      toast("Pathwarden isn't answering. Is it still running?");
     });
   }
 
+  // Stopping asks first: a read that can't be resumed is lost.
   $("collect-cancel").addEventListener("click", function () {
+    var dlg = $("stop-dialog");
+    if (dlg && dlg.showModal) {
+      dlg.returnValue = "";
+      dlg.onclose = function () { if (dlg.returnValue === "stop") stopCollecting(); };
+      dlg.showModal();
+    } else if (confirm("Stop collecting? Anything that can be resumed is kept for 24 hours.")) {
+      stopCollecting();
+    }
+  });
+  function stopCollecting() {
     var b = $("collect-cancel");
     b.disabled = true;
     $("run-phase").textContent = "Stopping\u2026";
     post("/api/collect/" + encodeURIComponent(job) + "/cancel").then(function (r) {
-      if (!r.ok) { b.disabled = false; toast(r.data.error || "Couldn't stop the collection."); }
-    }, function () { b.disabled = false; });
-  });
+      if (!r.ok) { b.disabled = false; toast(r.data.error || "Couldn't stop the collection. Try again."); }
+    }, function () { b.disabled = false; toast("Pathwarden isn't answering. Is it still running?"); });
+  }
 
   function restart(toStep) {
     try { history.replaceState(null, "", "/collect"); } catch (e) {}
@@ -1361,13 +1378,13 @@
     var f = box.querySelector(".again-pw");
     if (!f.hidden) {
       var input = f.querySelector("input");
-      if (!input.value) { fieldError(input.id, "Type the password to continue."); return; }
+      if (!input.value) { fieldError(input.id, "Enter the password to continue."); return; }
       $("password").value = input.value;
       input.value = "";
     }
     var typeAgain = answers().auth === "password" && !$("password").value;
     restart(typeAgain ? 2 : 5);
-    if (typeAgain) { fieldError("password", "Type the password again to continue."); return; }
+    if (typeAgain) { fieldError("password", "Enter the password again to continue."); return; }
     begin(resume);
   }
   $("failed-resume").addEventListener("click", function () { again(true, $("collect-failed")); });

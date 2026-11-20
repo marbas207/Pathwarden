@@ -204,7 +204,7 @@ async fn automate_pages_and_the_rail() {
         assert!(!body.contains(" style=\""), "{uri}: no inline styles");
     }
     let (_, _, body) = a.get("/automate/schedule").await;
-    assert!(body.contains("No analysis of your own data yet"), "{body}");
+    assert!(body.contains("No run of your own yet"), "{body}");
     assert!(body.contains("Next steps"));
     let (_, _, body) = a.get("/automate/history").await;
     assert!(body.contains("The default: nothing is set"), "{body}");
