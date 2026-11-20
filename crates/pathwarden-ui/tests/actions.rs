@@ -636,7 +636,10 @@ async fn plugins_and_actions_shows_programs_tests_them_and_locks_changes() {
             page.contains(words) || page.contains(&html_words),
             "{uri}: {words}"
         );
-        assert!(page.contains("pathwarden.org/docs/ui.html#safety-locks"), "{uri}");
+        assert!(
+            page.contains("pathwarden.org/docs/ui.html#safety-locks"),
+            "{uri}"
+        );
         assert!(!page.contains("--allow-destinations"), "{uri}");
     }
 }
