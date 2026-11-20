@@ -291,7 +291,7 @@ fn probe_says_what_a_repository_holds_before_anything_is_saved() {
         "Encrypted with a passphrase.",
         "Full runs and settings.",
         "2 runs. The latest was recorded on",
-        "Your account can push to this repository.",
+        "Your account can share runs to this run history.",
     ] {
         assert!(text.contains(want), "{want}: {text}");
     }

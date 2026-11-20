@@ -259,7 +259,7 @@ async fn the_page_looks_opens_and_connects() {
     let (_, page) = a.get(&format!("/environments/connect?s={token}")).await;
     for want in [
         "Open and sync",
-        "Your account can push to this repository.",
+        "Your account can share runs to this run history.",
         "Share runs from this computer",
         "What it keeps and its encryption come from the run history.",
         "Encrypted. Your passphrase opens it.",

@@ -219,10 +219,10 @@ impl Access {
     }
 }
 
-pub const CAN_PUSH: &str = "Your account can push to this repository.";
+pub const CAN_PUSH: &str = "Your account can share runs to this run history.";
 pub const CANNOT_PUSH: &str = "Your account can read this repository but can't push to it.";
 pub const UNCLEAR_PUSH: &str =
-    "Pathwarden couldn't tell whether your account can push to this repository.";
+    "Pathwarden couldn't tell whether your account can share runs to this run history.";
 /// Under [`CANNOT_PUSH`] (and a computer that chose to read only).
 pub const READ_ONLY_WORDS: &str = "This computer will only read the shared history. Analyses you \
 start here stay on this computer.";

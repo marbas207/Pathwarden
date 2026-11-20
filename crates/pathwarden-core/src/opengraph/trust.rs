@@ -27,9 +27,9 @@ impl PackEntry {
     pub fn trust_label(&self) -> &'static str {
         if self.from_repo.is_some() {
             if self.pack.trusted() {
-                "From the repository · trusted here"
+                "From the run history · trusted here"
             } else {
-                "From the repository · not trusted here"
+                "From the run history · not trusted here"
             }
         } else if !self.pack.trusted() {
             "Untrusted mapping: context only"
@@ -44,7 +44,7 @@ impl PackEntry {
     pub fn origin(&self) -> String {
         match (&self.path, &self.from_repo) {
             (None, _) => "Built in".to_string(),
-            (Some(_), Some(_)) => "From the repository".to_string(),
+            (Some(_), Some(_)) => "From the run history".to_string(),
             (Some(path), None) => format!(
                 "Your pack ({})",
                 std::path::Path::new(path)

@@ -120,8 +120,8 @@ amber dot marks its link at the top of Settings and **Settings** in the
 sidebar on every page. **Dismiss** on the note hides the dots and the merged
 line on this computer until a new clash appears; the note stays as one
 line. A section this version can't take apart entry by entry, or whose last
-sync isn't known, shows both sides whole, with **Use shared settings** and
-**Use local settings**. The CLI equivalent is `pathwarden config sync`
+sync isn't known, shows both sides whole, with **Use shared** and
+**Keep this computer's**. The CLI equivalent is `pathwarden config sync`
 ([running.md](running.md#shared-settings)).
 
 ## Act on a finding
@@ -226,12 +226,12 @@ Then use `pathwarden history storage set` or `pathwarden env create
 
 This is turned off with `pathwarden ui --lock-destinations` (see above).
 
-1. **Where is it?**: the repository URL and branch, or a shared folder.
-   Click **Connect**. Pathwarden downloads a copy to show what the history
+1. **Where it is**: the repository URL and branch, or a shared folder.
+   Click **Check it**. Pathwarden downloads a copy to show what the history
    holds; a large one can take a few minutes. Never put a password in the URL.
 2. **What it holds**: for an encrypted history, enter the passphrase.
-3. **Open and sync**: name the environment, choose **Push runs from this
-   computer** or **Read only**, and click **Use this history and sync**.
+3. **Open and sync**: name the environment, choose **Share runs from this
+   computer** or **Read only**, and click **Connect and sync**.
 
 With **Full runs and settings**, the first sync takes the history's shared
 settings (rules, Tier Zero additions, accepted risks, zones, management

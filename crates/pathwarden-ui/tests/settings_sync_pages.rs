@@ -202,7 +202,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     // Mappings: the pack came, untrusted here whatever it says.
     let (_, page) = a.get("/mappings").await;
     assert!(
-        page.contains("From the repository · not trusted here"),
+        page.contains("From the run history · not trusted here"),
         "{page}"
     );
     assert!(
