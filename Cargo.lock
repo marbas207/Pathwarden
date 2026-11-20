@@ -3935,7 +3935,7 @@ dependencies = [
 
 [[package]]
 name = "pathwarden"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 dependencies = [
  "anstream",
  "anstyle",
@@ -3960,7 +3960,7 @@ dependencies = [
 
 [[package]]
 name = "pathwarden-collect"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -3988,7 +3988,7 @@ dependencies = [
 
 [[package]]
 name = "pathwarden-core"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 dependencies = [
  "age",
  "aho-corasick",
@@ -4016,7 +4016,7 @@ dependencies = [
 
 [[package]]
 name = "pathwarden-desktop"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 dependencies = [
  "anyhow",
  "axum",
@@ -4033,7 +4033,7 @@ dependencies = [
 
 [[package]]
 name = "pathwarden-export"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 dependencies = [
  "anyhow",
  "boon",
@@ -4043,7 +4043,7 @@ dependencies = [
 
 [[package]]
 name = "pathwarden-output-jira"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 dependencies = [
  "anyhow",
  "serde",
@@ -4055,7 +4055,7 @@ dependencies = [
 
 [[package]]
 name = "pathwarden-output-servicenow"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 dependencies = [
  "anyhow",
  "rustls",
@@ -4068,7 +4068,7 @@ dependencies = [
 
 [[package]]
 name = "pathwarden-ui"
-version = "1.0.0-rc.2"
+version = "1.0.0-rc.3"
 dependencies = [
  "anstream",
  "anstyle",

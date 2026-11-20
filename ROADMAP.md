@@ -9,17 +9,10 @@ what is next. The open issues on GitHub are the detailed list.
 
 ## 1.0 release candidates
 
-1.0.0-rc.2 is out. From here to 1.0, release candidates carry fixes only.
+1.0.0-rc.3 is out. From here to 1.0, release candidates carry fixes only.
 
-- **1.0.0-rc.3:** when a domain fails in a later collection, its numbers are
-  carried from its last good collection, marked with that date, so trends
-  stay on one line. Finding actions: your own buttons on a finding (open a
-  ticket, alert a team, run a check), and a record of what they did that
-  everyone sharing the history sees. An action is no longer offered on a
-  fixed finding unless it lists `fixed` in its `when` (follow-ups on a
-  record still are). Upgrade every computer before changing how a history
-  is stored: rc.2 doesn't rewrite what actions did. Fixes reported against
-  rc.2.
+- **1.0.0-rc.4:** clearer wording across the app. The report lists fixed
+  findings whose ticket is still open. Fixes reported against rc.3.
 - **1.0:** when the release candidates have run without new problems.
 
 ## After 1.0
