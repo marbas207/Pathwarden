@@ -435,7 +435,7 @@ async fn mappings_lists_packs_and_trust_needs_a_confirm() {
         "TaskHound",
         "TH_HasTaskWithStoredCreds",
         "MSSQLHound",
-        "Untrusted: context only",
+        "Untrusted mapping: context only",
         // An untrusted pack's summary doesn't call its relationships
         // attack paths yet.
         "attack paths once trusted</summary>",
@@ -516,7 +516,7 @@ async fn user_packs_show_on_mappings() {
     .unwrap();
     let (s, page) = a.get("/mappings").await;
     assert_eq!(s, StatusCode::OK);
-    assert!(page.contains("Yours: packs/widget.toml"), "{page}");
+    assert!(page.contains("Your pack (widget.toml)"), "{page}");
     assert!(page.contains("Widget&lt;b&gt;Hound&lt;/b&gt;"));
     assert!(page.contains("fill=\"#0EA5E9\""));
     assert!(page.contains("packs/bad.toml was refused"));

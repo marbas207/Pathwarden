@@ -142,7 +142,7 @@ pub fn reach_summary(total: usize) -> String {
         return "Nothing has an attack path to it.".into();
     }
     format!(
-        "{} an attack path to it. Unprivileged users and computers come first: they are where an attacker starts. Attack paths stop at Tier Zero objects.",
+        "{} an attack path to it, unprivileged users first.",
         count(total, "object has", "objects have")
     )
 }
@@ -167,7 +167,7 @@ impl Heuristic {
         match self {
             Heuristic::ChokePoint => "Objects many paths cross",
             Heuristic::Control => "Control over many objects",
-            Heuristic::PrivilegedSessions => "Privileged logons",
+            Heuristic::PrivilegedSessions => "Privileged sign-ins",
         }
     }
 
@@ -175,7 +175,7 @@ impl Heuristic {
         match self {
             Heuristic::ChokePoint => "Objects outside Tier Zero that many exposed users' and computers' paths run through. Protecting them like Tier 1 cuts the most routes.",
             Heuristic::Control => "Admin or control rights over many computers, groups or users. Whoever holds this holds all of them.",
-            Heuristic::PrivilegedSessions => "Computers where Tier Zero or other privileged accounts log on. Their credentials can be taken from there.",
+            Heuristic::PrivilegedSessions => "Computers where Tier Zero or other privileged accounts sign in. Their credentials can be taken from there.",
         }
     }
 }
@@ -215,7 +215,7 @@ pub struct SuggestionsAnswer<'a> {
 /// The line under "Suggested zones".
 pub fn suggestions_intro(exposed: usize, relevant_population: usize) -> String {
     format!(
-        "Candidates for Tier 1 (servers and anything close to Tier Zero) or Tier 2 (workstations) zones, from the data's graph. {} of {} active users and computers can reach Tier Zero.",
+        "Candidates for Tier 1 (servers and anything close to Tier Zero) or Tier 2 (workstations) zones. {} of {} enabled users and computers can reach Tier Zero.",
         num(exposed),
         num(relevant_population)
     )
@@ -416,7 +416,7 @@ impl<'a> Explorer<'a> {
                     ));
                 }
                 let verb = if s.count == 1 { "was" } else { "were" };
-                let mut r = format!("{} {verb} seen logged on to it", who.join(" and "));
+                let mut r = format!("{} {verb} seen signed in to it", who.join(" and "));
                 if let Some(e) = example {
                     r.push_str(&format!(" ({e})"));
                 }
@@ -484,7 +484,7 @@ mod tests {
     #[test]
     fn reach_lines() {
         assert_eq!(reach_summary(0), "Nothing has an attack path to it.");
-        assert!(reach_summary(1).starts_with("1 object has an attack path to it."));
+        assert!(reach_summary(1).starts_with("1 object has an attack path to it,"));
         assert!(reach_summary(1200).starts_with("1,200 objects have an attack path"));
     }
 }

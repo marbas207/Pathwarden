@@ -209,9 +209,8 @@ pub struct TrustWay {
 }
 
 /// Why a forest trust's SID filtering is unknown without its attributes.
-pub const FOREST_FLAG_UNKNOWN: &str = "the collector's SidFilteringEnabled flag only reports \
-quarantine, which forest trusts don't use; the trust attributes that would show TREAT_AS_EXTERNAL \
-are not in the data";
+pub const FOREST_FLAG_UNKNOWN: &str = "the collector didn't record this trust's attributes, and \
+its summary flag doesn't apply to forest trusts";
 
 /// Rights principals of one domain hold over objects of another. Within a
 /// forest, those held by Tier Zero are left out: Enterprise Admins control

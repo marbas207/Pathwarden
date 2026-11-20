@@ -479,10 +479,7 @@ fn expansion_is_bounded_and_says_so() {
     .unwrap();
     assert!(r.truncated && !r.timed_out, "5,000 rows is not all of them");
     assert_eq!(r.rows.len(), 5_000);
-    assert_eq!(
-        r.stopped[0],
-        "Stopped at the 5,000-row cap: there are more rows."
-    );
+    assert_eq!(r.stopped[0], "Stopped at 5,000 rows: there are more.");
     for cell in r.paths() {
         let Cell::Path { relationships, .. } = cell else {
             unreachable!()

@@ -315,7 +315,7 @@ pub fn evaluate(
         ));
     } else if ctx.truncated {
         stopped.push(format!(
-            "Stopped at the {}-row cap: there are more rows.",
+            "Stopped at {} rows: there are more.",
             crate::text::num(limits.max_rows)
         ));
     } else if ctx.relationships_truncated {
@@ -2595,7 +2595,7 @@ mod tests {
         assert!(r.truncated && !r.timed_out);
         assert_eq!(
             r.stopped,
-            vec!["Stopped at the 2-row cap: there are more rows.".to_string()]
+            vec!["Stopped at 2 rows: there are more.".to_string()]
         );
     }
 }

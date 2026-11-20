@@ -86,7 +86,7 @@ fn goad_is_two_forests_and_two_trusts() {
     for f in a.findings.iter().filter(|f| f.rule == "PW-012") {
         assert!(
             f.title
-                .ends_with(": SID filtering unknown (the collector's flag can't tell)"),
+                .ends_with(": SID filtering unknown (the collected data doesn't say)"),
             "{}",
             f.title
         );

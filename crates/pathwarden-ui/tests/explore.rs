@@ -305,7 +305,7 @@ async fn answers_match_the_analysis() {
         [
             "Objects many paths cross",
             "Control over many objects",
-            "Privileged logons"
+            "Privileged sign-ins"
         ]
     );
     let items = v["items"].as_array().unwrap();
