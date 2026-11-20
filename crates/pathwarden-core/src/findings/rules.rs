@@ -36,7 +36,7 @@ pub(super) static ALL: &[RuleInfo] = &[
     },
     RuleInfo {
         id: "PW-004",
-        title: "Tier Zero account logged on to computers outside Tier Zero",
+        title: "Tier Zero account signed in to computers outside Tier Zero",
         run: tier_zero_sessions,
     },
     RuleInfo {
@@ -126,7 +126,7 @@ pub(super) static ALL: &[RuleInfo] = &[
     },
     RuleInfo {
         id: "PW-023",
-        title: "Account or group outside Tier Zero can log on to domain controllers",
+        title: "Account or group outside Tier Zero can sign in to domain controllers",
         run: dc_logon,
     },
     RuleInfo {
@@ -153,7 +153,7 @@ pub(super) static ALL: &[RuleInfo] = &[
     },
     RuleInfo {
         id: "PW-028",
-        title: "Possible management plane: review whether it manages Tier Zero",
+        title: "Possible management system: check whether it manages Tier Zero",
         run: super::planes::review,
     },
     RuleInfo {
@@ -190,7 +190,7 @@ pub(super) static ALL: &[RuleInfo] = &[
     },
     RuleInfo {
         id: "PW-035",
-        title: "Tier Zero computer managed by SCCM from outside Tier Zero",
+        title: "Tier Zero computers managed by SCCM from outside Tier Zero",
         run: super::opengraph::sccm_controls_tier_zero,
     },
     RuleInfo {
@@ -200,7 +200,7 @@ pub(super) static ALL: &[RuleInfo] = &[
     },
     RuleInfo {
         id: "PW-037",
-        title: "Seamless SSO Kerberos key not rolled over",
+        title: "Seamless SSO Kerberos key not rotated",
         run: super::planes::sso_key_age,
     },
     RuleInfo {
@@ -210,7 +210,7 @@ pub(super) static ALL: &[RuleInfo] = &[
     },
     RuleInfo {
         id: "PW-039",
-        title: "Tier Zero computers are virtual machines of an unmodeled hypervisor",
+        title: "Tier Zero computers are virtual machines on a hypervisor Pathwarden doesn't check",
         run: super::planes::tier_zero_vms,
     },
 ];
@@ -738,24 +738,19 @@ fn tier_zero_sessions(ctx: &Context) -> Vec<Finding> {
                 return None;
             }
             Some(
-                Finding::new("PW-004", Severity::High, &[&n.id], format!("{} is logged on to {}", n.name, crate::text::count(hosts.len(), "computer outside Tier Zero", "computers outside Tier Zero")))
+                Finding::new("PW-004", Severity::High, &[&n.id], format!("{} is signed in to {}", n.name, crate::text::count(hosts.len(), "computer outside Tier Zero", "computers outside Tier Zero")))
                     .domain(n.domain.as_ref())
                     .floor(Severity::High)
                     .summary(format!(
-                        "Tier Zero account {} had sessions on {} when the data was collected. Anyone with admin \
+                        "Tier Zero account {} was signed in to {} when the data was collected. Anyone with admin \
                          rights on those computers can take its credentials from memory.",
                         n.name,
                         names(g, &hosts, 10)
                     ))
                     .remediation(format!(
-                        "Use a separate admin account for each tier so {0} only signs in to Tier Zero systems. \
-                         Enforce it on computers outside Tier Zero with the user rights 'Deny log on locally', \
-                         'Deny log on through Remote Desktop Services', 'Deny log on as a batch job' and 'Deny log \
-                         on as a service', or with an Authentication Policy Silo, and add the account to Protected \
-                         Users. 'Deny access to this computer from the network' also stops network sign-ins, but \
-                         it blocks remote administration of those computers with {0} as well. Then sign {0} out of the listed computers \
-                         or restart them, to clear its credentials from memory. If any of them may have been \
-                         compromised, change the password of {0}.",
+                        "Use a separate admin account per tier so {0} signs in only to Tier Zero systems; enforce \
+                         it with deny-logon user rights or an Authentication Policy Silo. Then sign {0} out of these \
+                         computers or restart them.",
                         n.name
                     ))
                     .affect(g, std::iter::once(ix).chain(hosts.iter().copied()))
@@ -831,7 +826,7 @@ fn kerberoastable(ctx: &Context) -> Vec<Finding> {
                 .password_age(days)
                 .summary(format!(
                     "{} has a service principal name, so any domain user can request a ticket encrypted with \
-                     its password and crack it offline, and it {reach}.{age}",
+                     its password and crack it offline. The account {reach}.{age}",
                     n.name
                 ))
                 .remediation(format!(
@@ -936,7 +931,7 @@ fn stale_tier_zero(ctx: &Context) -> Vec<Finding> {
         .filter(|(_, n)| n.tier_zero)
         .filter(|(_, n)| match n.props.lastlogontimestamp {
             Some(t) if t > 0 => ctx.days_since(t) > limit,
-            Some(_) => true, // never logged on
+            Some(_) => true, // never signed in
             None => false,
         })
         .map(|(ix, _)| ix);
@@ -946,8 +941,8 @@ fn stale_tier_zero(ctx: &Context) -> Vec<Finding> {
             Finding::new("PW-009", Severity::Medium, &[&domain], format!("{} in {domain}", crate::text::count(ixs.len(), "stale Tier Zero account", "stale Tier Zero accounts")))
                 .domain(Some(&domain))
                 .summary(format!(
-                    "{} not signed in for over {limit} days, or never. Nobody watches unused privileged \
-                     accounts, so a stolen password for one goes unnoticed.",
+                    "{} not signed in for over {limit} days, or never. Unused privileged accounts are \
+                     rarely watched, so misuse can go unnoticed.",
                     count(ixs.len(), "enabled Tier Zero account has", "enabled Tier Zero accounts have"),
                 ))
                 .remediation(
@@ -958,8 +953,8 @@ fn stale_tier_zero(ctx: &Context) -> Vec<Finding> {
                     g,
                     ixs.into_iter().map(|ix| {
                         let detail = match g.node(ix).props.lastlogontimestamp {
-                            Some(t) if t > 0 => format!("last logon {}", ago(ctx.days_since(t))),
-                            _ => "never logged on".to_string(),
+                            Some(t) if t > 0 => format!("last signed in {}", ago(ctx.days_since(t))),
+                            _ => "never signed in".to_string(),
                         };
                         (ix, Some(detail))
                     }),
@@ -1072,9 +1067,9 @@ fn sid_filtering(ctx: &Context) -> Vec<Finding> {
             // RIDs under 1000 and the built-in SIDs (MS-PAC 4.1.2.2), so
             // neither title says filtering is off.
             let title = if t.trust_type.eq_ignore_ascii_case("forest") {
-                format!("Trust {} → {} has SID history enabled (TREAT_AS_EXTERNAL)", t.source, t.target)
+                format!("Trust {} → {} lets SID history through (SID filtering relaxed)", t.source, t.target)
             } else {
-                format!("Trust {} → {} is not quarantined", t.source, t.target)
+                format!("Trust {} → {} has SID filtering relaxed", t.source, t.target)
             };
             Finding::new("PW-012", Severity::High, &[&t.source, &t.target], title)
                 .domain(Some(&t.source))
@@ -1118,7 +1113,7 @@ fn sid_filtering_flag_only(t: &crate::ingest::TrustInfo) -> Finding {
         PW012_FLAG_ONLY_SEVERITY,
         &[&t.source, &t.target],
         format!(
-            "Trust {} → {}: {SID_FILTERING_UNKNOWN} (the collector's flag can't tell)",
+            "Trust {} → {}: {SID_FILTERING_UNKNOWN} (the collected data doesn't say)",
             t.source, t.target
         ),
     )
@@ -1185,7 +1180,7 @@ fn krbtgt_age(ctx: &Context) -> Vec<Finding> {
             let days = ctx.days_since(n.props.pwdlastset.filter(|&t| t > 0)?);
             (days > limit).then(|| {
                 let days = crate::report::num(days.max(0) as usize);
-                Finding::new("PW-014", Severity::Medium, &[&n.id], format!("{} password is {days} days old", n.name))
+                Finding::new("PW-014", Severity::Medium, &[&n.id], format!("{}'s password is {days} days old", n.name))
                     .domain(n.domain.as_ref())
                     .summary(format!(
                         "The krbtgt key signs every Kerberos ticket in the domain. It was last changed {days} days \
@@ -1327,7 +1322,7 @@ fn dc_remote_logon(ctx: &Context) -> Vec<Finding> {
                 .collect();
             let severity = if sid::is_broad_group(&from.id) { Severity::Critical } else { Severity::High };
             Finding::new("PW-023", severity, &[&from.id, &domain], format!(
-                "{} can log on to {} in {domain} ({})",
+                "{} can sign in to {} in {domain} ({})",
                 from.name,
                 crate::text::count(dcs.len(), "domain controller", "domain controllers"),
                 how.join(", ")
@@ -1344,7 +1339,7 @@ fn dc_remote_logon(ctx: &Context) -> Vec<Finding> {
             .remediation(format!(
                 "Remove {} from the built-in {} {} of {domain}. On domain controllers these are domain \
                  groups shared by every DC, not local groups, so one change covers all of them. Also check the \
-                 GPOs linked to the Domain Controllers OU for user rights that grant the same logon (for example \
+                 GPOs linked to the Domain Controllers OU for user rights that grant the same sign-in (for example \
                  'Allow log on through Remote Desktop Services'). Only Tier Zero administrators should sign in \
                  to domain controllers.{}",
                 from.name,

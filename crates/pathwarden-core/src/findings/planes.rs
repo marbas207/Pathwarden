@@ -1286,7 +1286,7 @@ pub(super) fn ssh_note(ctx: &Context, findings: &mut [Finding]) {
         }
         f.summary.push_str(&format!(
             " Note: {} also {} an SSH server (sshd), as {} Tier Zero settings {} shows. Who may \
-             log on over SSH is set in its sshd_config, not by these groups, and Pathwarden \
+             sign in over SSH is set in its sshd_config, not by these groups, and Pathwarden \
              doesn't read that file.",
             names(g, &dcs, 5),
             one_or_many(dcs.len() == 1, "runs", "run"),

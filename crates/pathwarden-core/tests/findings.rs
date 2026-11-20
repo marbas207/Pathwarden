@@ -135,7 +135,7 @@ fn forest_findings() {
 
     assert_eq!(
         one("PW-012").title,
-        "Trust CONTOSO.LOCAL → FABRIKAM.COM is not quarantined"
+        "Trust CONTOSO.LOCAL → FABRIKAM.COM has SID filtering relaxed"
     );
     assert_eq!(affected(one("PW-013")), ["JDOE@CONTOSO.LOCAL"]);
     assert_eq!(affected(one("PW-014")), ["KRBTGT@CONTOSO.LOCAL"]);
@@ -623,7 +623,7 @@ fn pw012_says_unknown_on_a_forest_trusts_flag_alone() {
     assert_eq!(findings::PW012_FLAG_ONLY_SEVERITY, Severity::High);
     assert_eq!(
         f.title,
-        "Trust A.LOCAL → B.LOCAL: SID filtering unknown (the collector's flag can't tell)"
+        "Trust A.LOCAL → B.LOCAL: SID filtering unknown (the collected data doesn't say)"
     );
     // A.LOCAL's record of a two-way trust: A.LOCAL trusts B.LOCAL, so the
     // check and the fix are on A.LOCAL's side; the bit is tested, as
@@ -667,7 +667,7 @@ fn pw012_says_unknown_on_a_forest_trusts_flag_alone() {
     assert_eq!(f.severity, Severity::High);
     assert_eq!(
         f.title,
-        "Trust A.LOCAL → B.LOCAL has SID history enabled (TREAT_AS_EXTERNAL)"
+        "Trust A.LOCAL → B.LOCAL lets SID history through (SID filtering relaxed)"
     );
     // What MS-PAC 4.1.2.2 says passes: RIDs of 1000 and up, never the
     // privileged groups; it must not claim filtering is off.
@@ -701,7 +701,7 @@ fn pw012_says_unknown_on_a_forest_trusts_flag_alone() {
     for attrs in [None, Some(0)] {
         let f = pw012(trust("External", attrs));
         assert_eq!(f.severity, Severity::High);
-        assert_eq!(f.title, "Trust A.LOCAL → B.LOCAL is not quarantined");
+        assert_eq!(f.title, "Trust A.LOCAL → B.LOCAL has SID filtering relaxed");
         firm(&f);
         assert!(f.remediation.contains("/quarantine:yes"));
     }

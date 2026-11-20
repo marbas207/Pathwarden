@@ -109,7 +109,7 @@ fn forest_trust_with_sid_history_is_reported_from_trust_attributes() {
     // sevenkingdoms' side (0x48) only; essos' side (0x8) filters SIDs.
     assert_eq!(
         titles,
-        ["Trust SEVENKINGDOMS.LOCAL → ESSOS.LOCAL has SID history enabled (TREAT_AS_EXTERNAL)"]
+        ["Trust SEVENKINGDOMS.LOCAL → ESSOS.LOCAL lets SID history through (SID filtering relaxed)"]
     );
     // The attributes are known, so it says so firmly.
     assert_eq!(pw012[0].severity, findings::Severity::High);
