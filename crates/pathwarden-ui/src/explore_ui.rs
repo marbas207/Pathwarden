@@ -168,17 +168,17 @@ impl Missing {
     pub fn reason(self) -> &'static str {
         match self {
             Missing::Old => "it has no saved graph",
-            Missing::IndexNotShared => "its object index wasn't shared",
-            Missing::GraphNotShared => "its graph wasn't shared",
+            Missing::IndexNotShared => "it was shared without its object list",
+            Missing::GraphNotShared => "it was shared without its graph",
         }
     }
 }
 
 /// What a run loaded from the history without its object index says.
-pub const INDEX_NOT_SHARED: &str = "This run's object index wasn't shared.";
+pub const INDEX_NOT_SHARED: &str = "This run was shared without its object list.";
 
 /// The same, without its graph.
-pub const GRAPH_NOT_SHARED: &str = "This run's graph wasn't shared.";
+pub const GRAPH_NOT_SHARED: &str = "This run was shared without its graph.";
 
 /// Why the run in `dir` can't be explored; `None` when it can.
 pub fn missing(dir: &FsPath) -> Option<Missing> {
@@ -249,10 +249,7 @@ fn bounds(dir: &FsPath) -> Result<Bounds, LoadError> {
         let mut text = Vec::new();
         f.take(max + 1).read_to_end(&mut text)?;
         if text.len() as u64 > max {
-            return Err(std::io::Error::other(format!(
-                "it is larger than {} KiB",
-                max >> 10
-            )));
+            return Err(std::io::Error::other("it is too large"));
         }
         Ok(text)
     };
@@ -260,7 +257,7 @@ fn bounds(dir: &FsPath) -> Result<Bounds, LoadError> {
     // Saved with a byte order mark or not.
     let text = text.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&text);
     let s: Summary = serde_json::from_slice(text)
-        .map_err(|e| LoadError::Broken(format!("its summary can't be read: {e}")))?;
+        .map_err(|_| LoadError::Broken("its summary is damaged".into()))?;
     Ok(Bounds::of_collected(s.objects))
 }
 
@@ -286,9 +283,7 @@ fn load(dir: &FsPath) -> Result<Loaded, LoadError> {
         .map_err(|_| LoadError::Broken("reading the graph failed".into()))??;
     let g = g.ok_or_else(|| LoadError::Broken("the object index couldn't be read".into()))?;
     if g.node_count() != x.node_count() {
-        return Err(LoadError::Broken(
-            "the object index and the graph disagree".into(),
-        ));
+        return Err(LoadError::Broken("the run's files don't match".into()));
     }
     Ok(Loaded {
         g,
@@ -311,8 +306,8 @@ pub fn read_run(dir: &FsPath) -> Result<(Arc<AdGraph>, ExploreGraph), String> {
         Err(LoadError::Missing(m)) => Err(format!(
             "{}, so it can't be explored on this computer",
             match m {
-                Missing::GraphNotShared => "this run's graph wasn't shared",
-                _ => "this run's object index wasn't shared",
+                Missing::GraphNotShared => "this run was shared without its graph",
+                _ => "this run was shared without its object list",
             }
         )),
         Err(LoadError::Broken(e)) => Err(format!("the run's graph can't be read: {e}")),
@@ -415,11 +410,6 @@ async fn latest(State(st): State<Shared>, Query(v): Query<ViewQuery>) -> Respons
             return Html(pages::shell(&ctx, Some(Nav::Explore), "Explore", "", &b)).into_response();
         }
     }
-    let older = if runs.is_empty() {
-        String::new()
-    } else {
-        " Runs analyzed before this version don't have the graph data; analyze their collection again.".to_string()
-    };
     // The empty state Home and Progress have.
     let body = format!(
         r#"<div class="page-head"><div><h1 class="panel-title">Explore</h1></div></div>
@@ -427,9 +417,7 @@ async fn latest(State(st): State<Shared>, Query(v): Query<ViewQuery>) -> Respons
         pages::welcome_card(
             "Explore",
             "Nothing to explore yet.",
-            &format!(
-                "Explore shows a run's attack paths as a graph, who can reach any object, and suggested zones. It needs one analysis first.{older}"
-            ),
+            "Attack paths as a graph. Needs one run first.",
         )
     );
     Html(pages::shell(&ctx, Some(Nav::Explore), "Explore", "", &body)).into_response()
@@ -460,7 +448,8 @@ where
     with_run_or_old(st, id, move |run| f(run).map_err(Failure::Api)).await
 }
 
-const OLD_GRAPH: &str = "This run was analyzed before Pathwarden kept the graph for exploring. Analyze the collection again to explore it.";
+const OLD_GRAPH: &str =
+    "This run is older than Explore's graph. Analyze the collection again to explore it.";
 
 /// Why a question about a run has no answer.
 enum Failure {
@@ -481,10 +470,13 @@ where
     let result = tokio::task::spawn_blocking(move || match open(&dir) {
         Ok(run) => f(&run),
         Err(LoadError::Missing(m)) => Err(Failure::Old(m.sentence())),
-        Err(LoadError::Broken(e)) => Err(Failure::Api(ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("This run's graph couldn't be read ({e}). Analyze the collection again to explore it."),
-        ))),
+        Err(LoadError::Broken(e)) => {
+            Err(Failure::Api(ApiError(StatusCode::INTERNAL_SERVER_ERROR, {
+                eprintln!("[explore] this run's graph can't be read: {e}");
+                "This run's graph can't be read. Analyze the collection again to explore it."
+                    .to_string()
+            })))
+        }
     })
     .await;
     match result {
@@ -493,7 +485,7 @@ where
         Ok(Err(Failure::Old(message))) => error(StatusCode::NOT_FOUND, message, true),
         Err(_) => error(
             StatusCode::INTERNAL_SERVER_ERROR,
-            "The explorer stopped. Try again.",
+            "Explore stopped unexpectedly. Reload the page.",
             false,
         ),
     }
@@ -586,7 +578,7 @@ fn forest_legend() -> String {
             String::new()
         } else {
             format!(
-                r#"<button type="button" class="fm-i" data-def="{d}" title="{d}" aria-label="About {l}">i</button>"#,
+                r#"<button type="button" class="fm-i" data-def="{d}" title="{d}" aria-label="About: {l}">i</button>"#,
                 d = esc(&def),
                 l = esc(label)
             )
@@ -664,13 +656,13 @@ async fn page(
     let body = match missing(&dir) {
         Some(Missing::Old) => format!(
             r#"{head}</div>
-<div class="note">{i_alert}<p><strong>Re-analyze to explore.</strong> This run was analyzed before Pathwarden kept the graph for exploring. <a href="/analyze">Analyze the collection again</a> and open the new run's Explore page. The <a href="/runs/{id}">report</a> is still here.</p></div>"#,
+<div class="note">{i_alert}<p><strong>Analyze again to explore.</strong> This run is older than Explore's graph: <a href="/analyze">analyze the collection again</a>. The <a href="/runs/{id}">report</a> is still here.</p></div>"#,
             i_alert = icon("i-alert"),
             id = esc(&id),
         ),
         Some(m) => format!(
             r#"{head}</div>
-<div class="note">{i_alert}<p><strong>Can't explore this run here.</strong> {why} It was over the largest file the recording computer shares. The <a href="/runs/{id}">report</a> is still here.</p></div>"#,
+<div class="note">{i_alert}<p><strong>Can't explore this run here.</strong> {why} The <a href="/runs/{id}">report</a> is still here.</p></div>"#,
             i_alert = icon("i-alert"),
             why = m.sentence(),
             id = esc(&id),
@@ -694,13 +686,13 @@ async fn page(
 {head}
 <div class="xp-search" role="search">
   {i_search}<label class="sr-only" for="xp-q">Find an object</label>
-  <input id="xp-q" type="search" placeholder="Find a user, computer, group, OU or GPO" autocomplete="off" spellcheck="false" aria-controls="xp-results" aria-expanded="false">
+  <input id="xp-q" type="search" placeholder="Search users, computers, groups, OUs and GPOs" autocomplete="off" spellcheck="false" aria-controls="xp-results" aria-expanded="false">
   <ul id="xp-results" class="xp-results card" role="listbox" hidden></ul>
 </div></div>
 <div class="xp" id="xp" data-run="{id}" data-finding="{finding}" data-node="{node}" data-view="{view}" data-defs="{defs}">
   <nav class="xp-pager card" id="xp-pager" aria-label="Findings">
     <button type="button" class="btn small-btn" id="xp-prev" title="Previous finding ( [ )">{i_back}<span class="lbl">Previous</span></button>
-    <button type="button" class="xp-current" id="xp-current" aria-haspopup="true"><span class="pill" id="xp-sev"></span><span class="xp-ctitle" id="xp-ctitle">Findings</span><span class="xp-pos muted" id="xp-pos"></span></button>
+    <button type="button" class="xp-current" id="xp-current"><span class="pill" id="xp-sev"></span><span class="xp-ctitle" id="xp-ctitle">Findings</span><span class="xp-pos muted" id="xp-pos"></span></button>
     <button type="button" class="btn small-btn" id="xp-next" title="Next finding ( ] )"><span class="lbl">Next</span>{i_arrow}</button>
   </nav>
   <div class="fm-strip card" id="fm-strip" aria-label="Domains and trusts" hidden><span class="fm-strip-main"><strong id="fm-lead">Domains and trusts</strong><span class="muted" id="fm-detail"></span></span><span class="fm-strip-tags" id="fm-status"></span></div>
@@ -712,10 +704,10 @@ async fn page(
           <button type="button" class="xp-tool" data-tool="fit" title="Fit to screen">Fit</button>
           <button type="button" class="xp-tool" data-tool="in" title="Zoom in" aria-label="Zoom in">+</button>
           <button type="button" class="xp-tool" data-tool="out" title="Zoom out" aria-label="Zoom out">&minus;</button>
-          <button type="button" class="xp-tool" data-tool="layout" title="Lay out left to right">Tidy</button>
+          <button type="button" class="xp-tool" data-tool="layout" title="Lay out left to right">Lay out</button>
           <button type="button" class="xp-tool" data-tool="between" title="Shortest path between the two selected objects" disabled>Path between</button>
-          <button type="button" class="xp-tool" data-tool="copy" title="Copy the names of the selected objects (or all)">Copy names</button>
-          <button type="button" class="xp-tool" data-tool="clear" title="Clear the graph">Clear</button>
+          <button type="button" class="xp-tool" data-tool="copy" title="Copy selected names (all if none selected)">Copy names</button>
+          <button type="button" class="xp-tool" data-tool="clear" title="Remove everything from the graph">Clear</button>
         </span>
       </div>
       <div class="xp-canvas">
@@ -726,7 +718,7 @@ async fn page(
         <div id="xp-empty" class="xp-empty" hidden><p><strong>Nothing on the graph yet.</strong><br><span class="muted">Search for an object above, or open a finding.</span></p></div>
         <div id="xp-dense" class="xp-dense" hidden></div>
         <div id="xp-note" class="xp-dense" role="status" hidden></div>
-        <div id="xp-busy" class="xp-busy" hidden><span class="spinner" aria-hidden="true"></span><span id="xp-busy-text">Loading the graph</span></div>
+        <div id="xp-busy" class="xp-busy" hidden><span class="spinner" aria-hidden="true"></span><span id="xp-busy-text">Loading the graph…</span></div>
       </div>
       <ul class="xp-legend" id="xp-legend" aria-label="Legend">
         <li><span class="lg lg-start"></span>Start</li>
@@ -745,7 +737,7 @@ async fn page(
         <button type="button" role="tab" id="xt-object" aria-controls="xp-p-object" aria-selected="false">Object</button>
         <button type="button" role="tab" id="xt-reach" aria-controls="xp-p-reach" aria-selected="false">Who can reach</button>
         <button type="button" role="tab" id="xt-zones" aria-controls="xp-p-zones" aria-selected="false">Suggested zones <span class="count" id="xp-basket-count" hidden></span></button>
-        <span class="xp-tabmore"><button type="button" class="xp-more-btn" id="xt-more" aria-haspopup="true" aria-expanded="false" aria-controls="xp-more-menu"><span id="xt-more-name">More</span> ▾</button><span class="xp-more-menu" id="xp-more-menu" hidden>
+        <span class="xp-tabmore"><button type="button" class="xp-more-btn" id="xt-more" aria-haspopup="true" aria-expanded="false" aria-controls="xp-more-menu"><span id="xt-more-name">More</span> <span aria-hidden="true">▾</span></button><span class="xp-more-menu" id="xp-more-menu" hidden>
           <button type="button" role="tab" id="xt-findings" aria-controls="xp-p-findings" aria-selected="false">Findings</button>
           <button type="button" role="tab" id="xt-query" aria-controls="xp-p-query" aria-selected="false">Query</button>
         </span></span>
@@ -1255,10 +1247,10 @@ async fn forest(State(st): State<Shared>, Path(id): Path<String>) -> Response {
         let map =
             (run.x.meta.forest.as_ref()).ok_or(Failure::Old(pathwarden_core::forest::NOT_KEPT))?;
         serde_json::to_value(map.document()).map_err(|e| {
-            Failure::Api(ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("The forest map couldn't be written ({e})."),
-            ))
+            Failure::Api(ApiError(StatusCode::INTERNAL_SERVER_ERROR, {
+                eprintln!("[explore] the forest map couldn't be written: {e}");
+                "The forest map can't be shown. Reload the page.".to_string()
+            }))
         })
     })
     .await
@@ -1388,10 +1380,7 @@ fn query_text(body: &QueryBody) -> Result<String, String> {
                 return Err(why.clone());
             }
             if q.edit_first {
-                return Err(
-                    "This query has a placeholder to replace first. Open it as Cypher and edit it."
-                        .into(),
-                );
+                return Err("This query has a placeholder to replace first. Choose Edit.".into());
             }
             Ok(q.query.clone())
         }
@@ -1434,7 +1423,7 @@ async fn query(
     let Ok(_turn) = QUERIES.acquire().await else {
         return error(
             StatusCode::SERVICE_UNAVAILABLE,
-            "Queries are stopped.",
+            "Pathwarden is shutting down. Try again after it restarts.",
             false,
         );
     };
@@ -1535,7 +1524,7 @@ struct OwnedBody {
 }
 
 /// `POST /api/runs/<id>/explore/owned`: the Object tab's "Mark as owned"
-/// and "Not owned", kept for the run's environment.
+/// and "Unmark as owned", kept for the run's environment.
 async fn set_owned(
     State(st): State<Shared>,
     Path(id): Path<String>,
