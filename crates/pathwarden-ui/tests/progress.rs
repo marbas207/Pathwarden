@@ -177,7 +177,7 @@ async fn progress_charts_the_history_over_a_range() {
         r#"<span class="kpi-value">90.00%</span>"#,
         "since the last run",
         r#"<span class="vh">down</span> 89"#,
-        r#"<span class="vh">up</span> 1.00 pts"#,
+        r#"<span class="vh">up</span> 1.00 points"#,
         // The change over the range, and the objects behind the share.
         r#"<span class="vh">down</span> 9,069</span> in 7 weeks"#,
         "45 of 50 objects",
@@ -342,7 +342,7 @@ async fn a_quick_run_is_not_targeted_not_a_dip() {
     assert!(body.contains("not compared with the last run"), "{body}");
     assert!(!body.contains("since the last run</span>"), "{body}");
     assert!(
-        body.contains("Sessions and local groups were not collected this run, so its counts are not compared with the last run."),
+        body.contains("Sessions and local groups weren&#39;t collected in this run, so this run&#39;s counts aren&#39;t compared with the last run."),
         "{body}"
     );
 }
@@ -589,7 +589,7 @@ async fn what_changed_over_a_period() {
     // The whole history reaches back to the run tracking began in (run 2).
     let (_, body) = a.get("/progress?range=all&changes=range").await;
     assert!(
-        body.contains("Objects and paths are dated from Sep 8 (run 2) on; before that, only whole findings are."),
+        body.contains("Objects and paths have first-seen dates from Sep 8 (run 2) on; before that, only findings do."),
         "{body}"
     );
 

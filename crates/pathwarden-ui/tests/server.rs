@@ -1218,5 +1218,5 @@ async fn a_wait_asks_whether_a_run_is_loading() {
     assert_eq!(v, serde_json::json!({ "loading_run": false }));
     let (_, _, js) = a.get("/static/app.js").await;
     assert!(js.contains("fetch(\"/api/busy\""), "app.js asks /api/busy");
-    assert!(js.contains("Loading this run into memory"));
+    assert!(js.contains("Opening this run…"));
 }
