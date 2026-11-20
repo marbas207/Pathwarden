@@ -2015,7 +2015,7 @@ fn a_loaded_run_from_the_future_and_the_schedule_picker() {
         !page.contains(&format!(r#"<option value="{}""#, r.id)),
         "{page}"
     );
-    assert!(page.contains("No analysis of your own data yet"), "{page}");
+    assert!(page.contains("No run of your own yet"), "{page}");
     remove_all(&dir);
 }
 
@@ -2200,14 +2200,14 @@ fn a_run_without_its_object_index_says_so() {
     assert_eq!(status, 200);
     let body = plain(&body);
     assert!(
-        body.contains("This run's object index wasn't shared."),
+        body.contains("This run was shared without its object list."),
         "{body}"
     );
     assert!(!body.contains("analyzed before"), "{body}");
     let (status, _, body) = page(&reader, &format!("/api/runs/{}/explore", newer.id));
     assert_eq!(status, 404);
     assert!(
-        body.contains("This run's object index wasn't shared."),
+        body.contains("This run was shared without its object list."),
         "{body}"
     );
     let err = pathwarden_ui::explore_ui::read_run(&reader.run_dir(&newer.id).unwrap())
@@ -2215,7 +2215,7 @@ fn a_run_without_its_object_index_says_so() {
         .unwrap();
     assert_eq!(
         err,
-        "this run's object index wasn't shared, so it can't be explored on this computer"
+        "this run was shared without its object list, so it can't be explored on this computer"
     );
     // Explore's entry opens the earlier run, and says which and why.
     let (status, location, _) = page(&reader, "/explore");
@@ -2223,7 +2223,7 @@ fn a_run_without_its_object_index_says_so() {
     assert_eq!(location, format!("/runs/{}/explore?from=latest", older.id));
     let (_, _, body) = page(&reader, &location);
     let line = format!(
-        "Showing the run of {}. The latest run, {}, can't be explored: its object index wasn't shared.",
+        "Showing the run of {}. The latest run, {}, can't be explored: it was shared without its object list.",
         pathwarden_core::time::format_local(older.created_at),
         pathwarden_core::time::format_local(newer.created_at),
     );

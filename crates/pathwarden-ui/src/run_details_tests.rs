@@ -391,7 +391,7 @@ fn rows_say_what_needs_a_look() {
             r#"<details class="row env" open><summary><span class="title">Objects skipped</span><span class="aside warn">2 objects skipped</span></summary>"#,
             "<p>2 objects were too large to read safely. Findings that depend on them may be missing from this run.</p>",
             r#"<span class="aside warn">1 collector warning</span>"#,
-            "<p>This run was collected with the built-in collector, Quick (directory only). It read CONTOSO.LOCAL from dc01.contoso.local over LDAPS, signed in as your Windows account.</p>",
+            "<p>This run was collected with the built-in collector, Quick (directory only). It read CONTOSO.LOCAL from dc01.contoso.local over LDAPS, signed in as the Windows account that ran it.</p>",
             "<p>Group policy local groups (SYSVOL) are not collected without a password.</p>",
             "<li>LDAPS certificates were not checked, so anyone on the network path could read or change the collection.</li>",
             r"<code>C:\c\x.zip</code>. Delete it when you no longer need it, because it is a complete map of your domain.",
@@ -617,7 +617,7 @@ fn add_other_data_goes_above_remove_this_run() {
     r.collection.as_mut().unwrap().kept = None;
     let panel = panel_html(&r, None, &applies, Remove::Hide, "n", None);
     let below = below_html(&r, None, &applies, Remove::Hide, None);
-    assert!(panel.contains(r#"<button type="button" class="rd-btn" disabled><span>Add files and analyze again</span></button><span class="why">The collection wasn&#39;t kept"#), "{panel}");
+    assert!(panel.contains(r#"<button type="button" class="rd-btn" disabled><span>Add files and analyze again</span></button><span class="why">The raw collection wasn&#39;t kept"#), "{panel}");
     assert!(
         below.contains(
             r#"<button type="button" class="btn" disabled>Add files and analyze again</button>"#
@@ -811,7 +811,7 @@ fn how_computers_were_signed_in_to() {
     };
     assert!(crate::collect::computers_sentence(&sharphound)
         .unwrap()
-        .contains("weren't enforced: SharpHound"));
+        .contains("don't apply to SharpHound"));
     let windows = crate::workspace::CollectionInfo {
         current_user: true,
         smb_signing: None,
@@ -1011,15 +1011,19 @@ fn other_sources_follow_where_it_came_from() {
         "{:?}",
         row.facts
     );
-    assert_eq!(get("Read"), "Read whole");
-    assert!(get("Mapping").starts_with("Trusted, "), "{:?}", row.facts);
+    assert_eq!(get("Read"), "Complete");
     assert!(
-        get("Mapping").ends_with(" pack: its mapped relationships make attack paths and findings.")
+        get("Mapping").starts_with("Trusted mapping: "),
+        "{:?}",
+        row.facts
+    );
+    assert!(
+        get("Mapping").ends_with(" pack's mapped relationships make attack paths and findings.")
     );
     assert_eq!(get("Coverage"), "From the collector: 1 tenant.");
     assert_eq!(
             row.text.last().unwrap(),
-            "For retests: Findings that rest on these sources are marked Fixed only when this coverage says the affected host was scanned again."
+            "For retests: findings that rest on these sources are marked Fixed only when this coverage says the affected host was scanned again."
         );
     assert_eq!(row.go, Some(Go::Mappings));
 
@@ -1094,15 +1098,15 @@ fn other_sources_that_need_a_look() {
     let has = |k: &str, v: &str| row.facts.iter().any(|(f, t, _)| *f == k && t == v);
     for (k, v) in [
             ("Source", "ContosoHound, OpenGraph · 1 file: contoso.json"),
-            ("Objects", "1,200 read: 3 matched to AD, 1,190 new, 7 unknown"),
+            ("Objects", "1,200: 3 matched to AD objects, 1,190 new, 7 not found"),
             ("Relationships kept", "40 (40 context only)"),
-            ("Dropped", "2 AD relationships (only AD data may say them); 1 with an end not found"),
-            ("Mapping", "Untrusted, context only: the Contoso pack labels its kinds; nothing from it is part of a path until the pack is trusted on Mappings."),
-            ("Coverage", "No coverage file. Its findings can open, but are never marked Fixed: a missing finding could be a host the collector didn't reach."),
+            ("Dropped", "2 AD relationships (ignored: only AD data sets these); 1 with an end not found"),
+            ("Mapping", "Untrusted mapping: context only. The Contoso pack labels its kinds; nothing from it is part of a path until the pack is trusted on Mappings."),
+            ("Coverage", "No coverage file: its findings are never marked Fixed."),
             ("Source", "<b>FabrikamHound</b>, OpenGraph · 1 file: a.zip!fabrikam.json"),
-            ("Read", "Read only partly (limit hit: edges)"),
-            ("Mapping", "No mapping, context only: shown in Explore; never part of a path, finding or plan."),
-            ("Coverage", "Coverage file bound, declared by a person: every enabled computer in FABRIKAM.LOCAL, 1 computer listed."),
+            ("Read", "Read only partly (stopped at the edges limit)"),
+            ("Mapping", "No mapping: context only. Shown in Explore; never part of a path, finding or the remediation path."),
+            ("Coverage", "Coverage file, declared by hand: every enabled computer in FABRIKAM.LOCAL, 1 computer listed."),
         ] {
             assert!(has(k, v), "{k}: {v} in {:?}", row.facts);
         }
@@ -1110,8 +1114,8 @@ fn other_sources_that_need_a_look() {
             row.text,
             [
                 "Relationship kinds no pack describes (context only): FB_Knows 3.",
-                "Coverage files not used: stray.coverage.json.",
-                "For retests: Findings that rest on ContosoHound can't be marked Fixed by a later run or retest: without coverage, their absence proves nothing. To declare what was scanned, analyze the files again from Analyze and fill in the coverage form under Detected sources.",
+                "Unused coverage files: stray.coverage.json.",
+                "For retests: findings from ContosoHound can't be marked Fixed without coverage. Declare it on Analyze.",
             ]
         );
     let panel = panel_html(&r, None, &applies, Remove::Hide, "n", None);
@@ -1130,10 +1134,7 @@ fn other_sources_that_need_a_look() {
             .unwrap();
     r.other_sources = Some(Box::new(only));
     let all = rows(&r, None, &applies);
-    assert_eq!(all[1].status, "Coverage files not used");
-    assert_eq!(
-        all[1].text,
-        ["Coverage files not used: stray.coverage.json."]
-    );
+    assert_eq!(all[1].status, "Unused coverage files");
+    assert_eq!(all[1].text, ["Unused coverage files: stray.coverage.json."]);
     assert_eq!(all[1].go, None);
 }

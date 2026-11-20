@@ -34,6 +34,20 @@
   }
 
   document.querySelectorAll(".pv-hit").forEach(function (el) {
+    // The label and its <title> say the run's time as the tooltip does:
+    // local, not the UTC the page was written with.
+    var unix = el.getAttribute("data-tip-unix");
+    var utc = (el.getAttribute("data-tip") || "").split("\n")[0];
+    if (unix && utc && window.PathwardenTime) {
+      var local = window.PathwardenTime.local(unix);
+      var label = el.getAttribute("aria-label") || "";
+      if (label.indexOf(utc) === 0) {
+        label = local + label.slice(utc.length);
+        el.setAttribute("aria-label", label);
+        var title = el.querySelector("title");
+        if (title) title.textContent = label;
+      }
+    }
     el.addEventListener("pointermove", function (e) { show(el, e.clientX, e.clientY); });
     el.addEventListener("pointerleave", hide);
     el.addEventListener("focus", function () {

@@ -127,7 +127,7 @@ test("the checklist is one line while collecting and opens out after", () => {
   const p = progressView({ ...job("ddddd"), status: "running", phase: "reading" }, NOW);
   assert.equal(p.stepsFolded, false);
   assert.equal(p.title, "Analyzing");
-  assert.equal(p.phase, "Collection finished");
+  assert.equal(p.phase, "Collected");
   assert.equal(p.panelName, "");
   assert.equal(p.groups.done.head, "5 done");
 });

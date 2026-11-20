@@ -42,7 +42,7 @@ pub fn routes() -> Router<Shared> {
 
 fn no_run_note() -> String {
     format!(
-        r#"<div class="note">{}<p><strong>Zones are built from the objects of an analysis.</strong> Search and the live preview need one analysis first: <a href="/analyze">analyze a collection</a><span class="demo-offer">, or <button type="button" class="linkish" data-demo>try the demo</button></span>.</p></div>"#,
+        r#"<div class="note">{}<p><strong>Zones are built from the objects of a run.</strong> Search and the live preview need one run first: <a href="/analyze">analyze a collection</a><span class="demo-offer">, or <button type="button" class="linkish" data-demo>try the demo</button></span>.</p></div>"#,
         icon("i-alert")
     )
 }
@@ -50,7 +50,7 @@ fn no_run_note() -> String {
 fn latest_line(st: &AppState) -> String {
     match run_data::latest_with(&st.ws(), run_data::OBJECTS_FILE) {
         Some((r, _)) => format!(
-            r#"<p class="muted small data-from">Objects from the latest analysis: <strong>{}</strong>, analyzed {}.</p>"#,
+            r#"<p class="muted small data-from">Objects from the latest run: <strong>{}</strong>, analyzed {}.</p>"#,
             esc(&r.environment()),
             pages::time(r.created_at)
         ),
@@ -99,7 +99,7 @@ async fn list_page(State(st): State<Shared>) -> Html<String> {
     if zones.is_empty() {
         let _ = write!(
             b,
-            r#"<div class="empty card">{}<p><strong>No zones yet.</strong><br><span class="muted">Tier Zero is always protected. Add a zone for the next most important systems, for example "Tier 1 servers": the server OUs and the groups that administer them.</span></p></div>"#,
+            r#"<div class="empty card">{}<p><strong>No zones yet.</strong><br><span class="muted">Add one for your next most important systems, like Tier 1 servers.</span></p></div>"#,
             icon("i-zone")
         );
     } else {
@@ -116,7 +116,7 @@ async fn list_page(State(st): State<Shared>) -> Html<String> {
                 parts.push(count(z.ous.len(), "OU", "OUs"));
             }
             if !z.members.is_empty() {
-                parts.push(count(z.members.len(), "named object", "named objects"));
+                parts.push(count(z.members.len(), "object", "objects"));
             }
             let sample: Vec<&str> = z
                 .groups
@@ -157,7 +157,7 @@ async fn list_page(State(st): State<Shared>) -> Html<String> {
     }
     let _ = write!(
         b,
-        r#"<div class="note tips">{}<p><strong>How a zone is built.</strong> Pick objects one by one, groups (with everyone nested in them) and OUs (with everything below them, and the GPOs linked to them). Tier Zero is never part of a zone: it already sits above every zone. {}</p></div>
+        r#"<div class="note tips">{}<p><strong>How a zone is built.</strong> A zone holds objects, groups (with members) and OUs (with everything below). {}</p></div>
 {}<script src="/static/config.js" defer></script>"#,
         icon("i-lock"),
         pages::repo_link("docs/privilege-zones.md", "Read the Privilege Zones guide"),
@@ -238,7 +238,7 @@ fn wizard(st: &AppState, index: Option<usize>, z: &ZoneConfig) -> Html<String> {
 <form id="zone-wizard" class="wizard" data-zone="{data}" novalidate>
 <section class="card wiz-panel" data-panel="1">
   <div class="field"><label for="zone-name">Zone name</label><input class="input big" id="zone-name" maxlength="100" placeholder="Tier 1 servers" autocomplete="off" required>
-  <p class="hint">Shown in reports and used on the command line.</p></div>
+  <p class="hint">Shown in reports.</p></div>
   <div class="examples"><span class="muted small">Common zones:</span> <button type="button" class="kchip-btn" data-example="Tier 1 servers">Tier 1 servers</button><button type="button" class="kchip-btn" data-example="Finance">Finance</button><button type="button" class="kchip-btn" data-example="Workstations">Workstations</button><button type="button" class="kchip-btn" data-example="Hypervisors">Hypervisors</button></div>
   <div class="wiz-nav"><span></span><button type="button" class="btn primary" data-next>Next: members {i_arrow}</button></div>
 </section>
@@ -268,7 +268,7 @@ fn wizard(st: &AppState, index: Option<usize>, z: &ZoneConfig) -> Html<String> {
 {saved}
 <script src="/static/config.js" defer></script>"##,
         title = esc(&title),
-        stepper = pages::stepper("wiz-steps", &["Name", "Members", "Review and save"], true),
+        stepper = pages::stepper("wiz-steps", &["Name", "Members", "Review"], true),
         data = crate::pages::json_attr(&data),
         latest = latest_line(st),
         picker = settings::picker(
@@ -355,7 +355,7 @@ async fn search(State(st): State<Shared>, Query(q): Query<SearchQuery>) -> Respo
         Some(results) => Json(serde_json::json!({ "results": results })).into_response(),
         None => json_error(
             StatusCode::NOT_FOUND,
-            "No analysis to search yet. Analyze a collection or try the demo first.",
+            "No run yet. Analyze a collection or try the demo first.",
         ),
     }
 }
@@ -383,13 +383,13 @@ async fn preview(State(st): State<Shared>, Json(z): Json<ZoneEdit>) -> Response 
     .flatten();
     match result {
         Some((env, p)) => {
-            let warnings = p.warnings("the latest analysis");
+            let warnings = p.warnings("the latest run");
             Json(serde_json::json!({ "environment": env, "preview": p, "warnings": warnings }))
                 .into_response()
         }
         None => json_error(
             StatusCode::NOT_FOUND,
-            "The preview needs one analysis first. Analyze a collection or try the demo.",
+            "No run yet. Analyze a collection or try the demo first.",
         ),
     }
 }
@@ -440,7 +440,7 @@ async fn remove(
     if loaded.error.is_none() && index >= loaded.config.zones.len() {
         return json_error(
             StatusCode::NOT_FOUND,
-            format!("No zone {index}: reload the page, pathwarden.toml may have changed."),
+            "That zone is gone: the settings changed. Reload the page.".to_string(),
         );
     }
     settings::edit(&st, move |d| d.remove_zone(index, &body.expect)).await

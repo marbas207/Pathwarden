@@ -207,9 +207,9 @@ pub fn run(args: UiArgs) -> anyhow::Result<()> {
             println!("{n}");
         }
         if !state.allow_destinations {
-            println!("The pages can't choose where findings and runs go: plugin and action programs and instances, the run history (--lock-destinations).");
+            println!("Locked (--lock-destinations): the pages can't change plugins, actions or where the run history is kept.");
         }
-        println!("Keep this window open while you use Pathwarden. To stop, press Ctrl+C here or use Stop Pathwarden (the power button at the bottom of the left rail).");
+        println!("Keep this window open. To stop, press Ctrl+C or use Stop Pathwarden in the app.");
         let opener = (!args.no_browser).then(|| launch::Opener::new(args.browser.unwrap_or_default(), &dir));
         if let Some(opener) = &opener {
             open_and_say(&state, &url, opener);
@@ -368,9 +368,7 @@ pub fn embedded(
 fn open_and_say(state: &server::AppState, url: &str, opener: &launch::Opener) {
     match launch::open_browser(state, url, opener) {
         Some(launch::Opened::App) => println!(
-            "Opened in its own {} window (a separate profile in the workspace). Closing it \
-             doesn't stop Pathwarden: use Stop Pathwarden (the power button at the bottom of \
-             the left rail), or Ctrl+C here.",
+            "Opened in its own {} window. Closing it doesn't stop Pathwarden.",
             opener.app_browser().map_or("browser", |b| b.name)
         ),
         Some(launch::Opened::Default) => {}

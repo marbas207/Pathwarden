@@ -107,7 +107,7 @@ fn trust_line(pack: Option<(&str, bool)>) -> String {
             r#"<span class="og-pill og-context">Untrusted mapping: context only</span> <span class="og-why">{} pack labels its kinds; nothing from it is part of a path until the pack is trusted on <a href="/mappings">Mappings</a>.</span>"#,
             esc(title)
         ),
-        None => r#"<span class="og-pill og-context">No mapping: context only</span> <span class="og-why">Shown in Explore; never part of a path, finding or plan.</span>"#.to_string(),
+        None => r#"<span class="og-pill og-context">No mapping: context only</span> <span class="og-why">Shown in Explore; never part of a path, finding or the remediation path.</span>"#.to_string(),
     }
 }
 
@@ -136,14 +136,14 @@ pub fn read_stats(run_dir: &FsPath) -> Option<OpenGraphStats> {
 fn mapping_words(pack: Option<(&str, bool)>) -> String {
     match pack {
         Some((title, true)) => format!(
-            "Trusted, {} pack: its mapped relationships make attack paths and findings.",
+            "Trusted mapping: the {} pack's mapped relationships make attack paths and findings.",
             bidi_safe(title)
         ),
         Some((title, false)) => format!(
-            "Untrusted, context only: the {} pack labels its kinds; nothing from it is part of a path until the pack is trusted on Mappings.",
+            "Untrusted mapping: context only. The {} pack labels its kinds; nothing from it is part of a path until the pack is trusted on Mappings.",
             bidi_safe(title)
         ),
-        None => "No mapping, context only: shown in Explore; never part of a path, finding or plan."
+        None => "No mapping: context only. Shown in Explore; never part of a path, finding or the remediation path."
             .to_string(),
     }
 }
@@ -194,7 +194,7 @@ pub fn details_row(s: &OpenGraphStats) -> Option<Row> {
         facts.push((
             "Objects",
             format!(
-                "{} read: {} matched to AD, {} new, {} unknown",
+                "{}: {} matched to AD objects, {} new, {} not found",
                 num(src.nodes),
                 num(src.merged),
                 num(src.created),
@@ -218,7 +218,7 @@ pub fn details_row(s: &OpenGraphStats) -> Option<Row> {
         let mut dropped = Vec::new();
         if src.dropped_native > 0 {
             dropped.push(format!(
-                "{} AD relationships (only AD data may say them)",
+                "{} AD relationships (ignored: only AD data sets these)",
                 num(src.dropped_native)
             ));
         }
@@ -227,7 +227,7 @@ pub fn details_row(s: &OpenGraphStats) -> Option<Row> {
         }
         if src.dropped_secrets > 0 {
             dropped.push(format!(
-                "{} secret-looking properties",
+                "{} properties that looked like secrets",
                 num(src.dropped_secrets)
             ));
         }
@@ -244,13 +244,13 @@ pub fn details_row(s: &OpenGraphStats) -> Option<Row> {
             facts.push(("Not modeled", words, false));
         }
         let read = if src.complete {
-            "Read whole".to_string()
+            "Complete".to_string()
         } else {
             warn = true;
             let mut why: Vec<String> = src
                 .caps_hit
                 .iter()
-                .map(|c| format!("limit hit: {c}"))
+                .map(|c| format!("stopped at the {c} limit"))
                 .collect();
             why.extend(src.errors.iter().map(|e| base_name(e).to_string()));
             bidi_safe(&format!("Read only partly ({})", why.join("; "))).into_owned()
@@ -279,7 +279,7 @@ pub fn details_row(s: &OpenGraphStats) -> Option<Row> {
                     what.push(format!("{} failed", num(c.failed.len())));
                 }
                 let by = match c.asserted_by.as_deref() {
-                    Some("user") => "declared by a person",
+                    Some("user") => "declared by hand",
                     Some("plugin") => "written by the collector plugin",
                     _ => "from the collector",
                 };
@@ -288,7 +288,7 @@ pub fn details_row(s: &OpenGraphStats) -> Option<Row> {
                 } else {
                     format!(": {}", what.join(", "))
                 };
-                format!("Coverage file bound, {by}{unfinished}{what}.")
+                format!("Coverage file, {by}{unfinished}{what}.")
             }
             CoverageState::Collector => format!(
                 "From the collector: {}{unfinished}.",
@@ -306,7 +306,7 @@ pub fn details_row(s: &OpenGraphStats) -> Option<Row> {
             CoverageState::None => {
                 warn = true;
                 without_coverage.push(name.clone());
-                "No coverage file. Its findings can open, but are never marked Fixed: a missing finding could be a host the collector didn't reach.".to_string()
+                "No coverage file: its findings are never marked Fixed.".to_string()
             }
         };
         facts.push(("Coverage", bidi_safe(&coverage).into_owned(), false));
@@ -335,14 +335,14 @@ pub fn details_row(s: &OpenGraphStats) -> Option<Row> {
             .iter()
             .map(|u| bidi_safe(base_name(u)).into_owned())
             .collect();
-        text.push(format!("Coverage files not used: {}.", list.join("; ")));
+        text.push(format!("Unused coverage files: {}.", list.join("; ")));
     }
     if !s.sources.is_empty() {
         text.push(if without_coverage.is_empty() {
-            "For retests: Findings that rest on these sources are marked Fixed only when this coverage says the affected host was scanned again.".to_string()
+            "For retests: findings that rest on these sources are marked Fixed only when this coverage says the affected host was scanned again.".to_string()
         } else {
             format!(
-                "For retests: Findings that rest on {} can't be marked Fixed by a later run or retest: without coverage, their absence proves nothing. To declare what was scanned, analyze the files again from Analyze and fill in the coverage form under Detected sources.",
+                "For retests: findings from {} can't be marked Fixed without coverage. Declare it on Analyze.",
                 crate::run_details::and_list(&without_coverage)
             )
         });
@@ -367,7 +367,7 @@ fn details_status(s: &OpenGraphStats) -> String {
         .map(|x| bidi_safe(&x.name).into_owned())
         .collect();
     let shown = match names.len() {
-        0 => return "Coverage files not used".to_string(),
+        0 => return "Unused coverage files".to_string(),
         1..=3 => names.join(", "),
         n => format!("{} and {} more", names[..2].join(", "), n - 2),
     };
@@ -462,7 +462,7 @@ fn classify(f: &SniffFile, packs: &[PackEntry]) -> Chosen {
 }
 
 /// What a chosen file is, in a few words, for its row in the file list
-/// (the Collect page's "Analyze other data with it"): "AzureHound:
+/// (the Collect page's "Add other data"): "AzureHound:
 /// Entra ID", "OpenGraph: TaskHound", "SharpHound". From the file's ends,
 /// as [`classify`] reads them.
 fn kind_label(f: &SniffFile, packs: &[PackEntry]) -> String {
@@ -555,7 +555,7 @@ fn render_sniff(files: &[SniffFile], packs: &[PackEntry], domains: &[String]) ->
         return (String::new(), false);
     }
     let mut b = String::from(
-        r#"<div class="og-head"><h2 class="sub">Detected sources</h2><p class="muted small">From the start and end of each file; the full count is on the run page after analysis.</p></div><ul class="og-list">"#,
+        r#"<div class="og-head"><h2 class="sub">Detected sources</h2><p class="muted small">From a quick look at each file; the run page has the full count.</p></div><ul class="og-list">"#,
     );
     let mut ad = Vec::new();
     if collectors > 0 {
@@ -567,7 +567,7 @@ fn render_sniff(files: &[SniffFile], packs: &[PackEntry], domains: &[String]) ->
     }
     if zips > 0 {
         ad.push(format!(
-            "{} (opened when analyzed: OpenGraph files inside are listed on the run page, without a coverage form)",
+            "{} (read when analyzed)",
             plural(zips, ".zip archive", ".zip archives")
         ));
     }
@@ -603,19 +603,18 @@ fn render_sniff(files: &[SniffFile], packs: &[PackEntry], domains: &[String]) ->
             let unknown_sidecar = sidecars.iter().any(|(_, p)| p.is_empty());
             let coverage = if covered {
                 format!(
-                    r#"<span class="og-pill og-ok">Coverage file found</span> <span class="og-why">for {}; checked against the file's SHA-256 when analyzed.</span>"#,
+                    r#"<span class="og-pill og-ok">Coverage file found</span> <span class="og-why">for {}; checked when analyzed.</span>"#,
                     esc(file)
                 )
             } else if src.is_none() {
-                r#"<span class="og-pill og-bad">No coverage file</span> <span class="og-why">This file doesn't say which collector wrote it (<code>metadata.source_kind</code>), so coverage can't be declared for it here.</span>"#.to_string()
+                r#"<span class="og-pill og-bad">No coverage file</span> <span class="og-why">This file doesn't name its collector, so coverage can't be declared here.</span>"#.to_string()
             } else {
                 let form = declare_form(fi, file, name, domains);
                 fi += 1;
                 format!(
-                    r#"<span class="og-pill og-bad">No coverage file{maybe}</span> <span class="og-why">{file}: its findings can open, but are never marked Fixed in a retest, because a missing finding could be a host {name} didn't reach.</span>{form}"#,
+                    r#"<span class="og-pill og-bad">No coverage file{maybe}</span> <span class="og-why">Findings from {file} are never marked Fixed in a retest.</span>{form}"#,
                     maybe = if unknown_sidecar { " matched yet" } else { "" },
                     file = esc(file),
-                    name = esc(name),
                 )
             };
             let _ = write!(
@@ -627,10 +626,10 @@ fn render_sniff(files: &[SniffFile], packs: &[PackEntry], domains: &[String]) ->
     }
     for (name, payloads) in &sidecars {
         let what = if payloads.is_empty() {
-            "Coverage file; matched to its OpenGraph file by SHA-256 when analyzed.".to_string()
+            "Coverage file; matched to its OpenGraph file when analyzed.".to_string()
         } else {
             format!(
-                "Coverage file for {}; checked against its SHA-256 when analyzed.",
+                "Coverage file for {}; checked when analyzed.",
                 payloads
                     .iter()
                     .map(|p| base_name(p))
@@ -647,12 +646,12 @@ fn render_sniff(files: &[SniffFile], packs: &[PackEntry], domains: &[String]) ->
     }
     b.push_str("</ul>");
     if collectors == 0 && zips == 0 {
-        b.push_str(r#"<p class="small og-note og-warn">OpenGraph files add to AD data; they are not a collection on their own. Add the SharpHound or RustHound-CE output too.</p>"#);
+        b.push_str(r#"<p class="small og-note og-warn">OpenGraph files need AD data: add the SharpHound or RustHound-CE output too.</p>"#);
     }
     if !other.is_empty() {
         let _ = write!(
             b,
-            r#"<p class="small og-note">Not recognized from their ends (read when analyzed): {}.</p>"#,
+            r#"<p class="small og-note">Not recognized yet (read when analyzed): {}.</p>"#,
             esc(&other.join(", "))
         );
     }
@@ -674,13 +673,13 @@ fn declare_form(i: usize, file: &str, source: &str, domains: &[String]) -> Strin
     format!(
         r#"<details class="og-declare" data-file="{file}"><summary>Declare what {source} scanned</summary>
 <div class="og-declare-body">
-<p class="muted small">Pathwarden writes a coverage file for <strong>{file}</strong>, marked as declared by you and bound to the exact file uploaded (its SHA-256). Declare only what the collector really attempted: a host you list that it didn't reach would let a finding there be marked Fixed.</p>
-<fieldset><legend>Every enabled computer in these domains was attempted</legend>{doms}
+<p class="muted small">Declare only what the collector really scanned for <strong>{file}</strong>: a host listed by mistake could mark a finding Fixed.</p>
+<fieldset><legend>Every enabled computer in these domains was scanned</legend>{doms}
 <label class="og-field"><span>Other domains (comma-separated)</span><input type="text" class="og-dom-other" placeholder="CONTOSO.LOCAL" autocomplete="off" spellcheck="false"></label></fieldset>
 <label class="og-field"><span>Or these computers (one per line: host names or SIDs)</span><textarea class="og-ok" rows="3" spellcheck="false"></textarea></label>
 <label class="og-file-load"><span class="btn small-btn">Load a list from a file</span><input type="file" class="og-load" accept=".txt,.csv,.lst" data-target="og-ok"></label>
-<label class="og-field"><span>Computers it attempted that failed (optional)</span><textarea class="og-failed" rows="2" spellcheck="false"></textarea></label>
-<label class="og-check"><input type="checkbox" class="og-complete" checked> The {source} run finished</label>
+<label class="og-field"><span>Computers it scanned that failed (optional)</span><textarea class="og-failed" rows="2" spellcheck="false"></textarea></label>
+<label class="og-check"><input type="checkbox" class="og-complete" checked> {source} finished its scan</label>
 <label class="og-check og-on"><input type="checkbox" class="og-enable"> Attach this coverage to the upload</label>
 </div></details>"#,
         file = esc(file),
@@ -737,7 +736,7 @@ pub(crate) fn write_declarations(
 /// The source an uploaded OpenGraph file names, and its SHA-256.
 fn read_payload(path: &FsPath, packs: &[PackEntry]) -> Result<(String, String), String> {
     let name = base_name(&path.to_string_lossy()).to_string();
-    let io = |e: std::io::Error| format!("Couldn't read {name}: {e}");
+    let io = |_: std::io::Error| format!("Couldn't read {name}. Upload it again.");
     let mut f = std::fs::File::open(path).map_err(io)?;
     let len = f.metadata().map_err(io)?.len();
     let peek = ingest::SNIFF_BYTES as u64;
@@ -749,10 +748,15 @@ fn read_payload(path: &FsPath, packs: &[PackEntry]) -> Result<(String, String), 
     f.read_to_end(&mut tail).map_err(io)?;
     let source = match ingest::sniff(&head, &tail) {
         Sniffed::OpenGraph { source_kind } => {
-            source_of(source_kind, &String::from_utf8_lossy(&head), packs)
-                .ok_or_else(|| format!("{name} doesn't say which collector wrote it (metadata.source_kind), so its coverage can't be declared."))?
+            source_of(source_kind, &String::from_utf8_lossy(&head), packs).ok_or_else(|| {
+                format!("{name} doesn't name its collector, so its coverage can't be declared.")
+            })?
         }
-        _ => return Err(format!("Coverage was declared for {name}, which is not an OpenGraph file.")),
+        _ => {
+            return Err(format!(
+                "Coverage was declared for {name}, which is not an OpenGraph file."
+            ))
+        }
     };
     f.seek(SeekFrom::Start(0)).map_err(io)?;
     let mut hasher = Sha256::new();
@@ -806,7 +810,7 @@ fn kind_icon(name: &str) -> String {
     };
     match sprite {
         Some(id) => format!(
-            r#" <span class="og-kind-ic" role="img" aria-label="{name} icon" title="Shown with the ‘{name}’ icon in the graph">{glyph}</span>"#,
+            r#" <span class="og-kind-ic" role="img" aria-label="Graph icon: {name}" title="Shown with the ‘{name}’ icon in the graph">{glyph}</span>"#,
             name = esc(name),
             glyph = icon(id),
         ),
@@ -844,7 +848,17 @@ async fn mappings_page(State(st): State<Shared>) -> Response {
             &b,
         ))
         .into_response(),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "The page failed."),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Html(pages::shell(
+                &ctx,
+                Some(Nav::Mappings),
+                "Mappings",
+                "config",
+                r#"<div class="note warn"><p>The Mappings page couldn't be shown. Reload the page; if it keeps failing, see Settings › Logs.</p></div>"#,
+            )),
+        )
+            .into_response(),
     }
 }
 
@@ -854,7 +868,7 @@ fn mappings_body(st: &AppState, sync: Option<&crate::sync_ui::View>) -> String {
     // Packs from the repository first: they wait for someone here.
     packs.sort_by_key(|e| e.from_repo.is_none());
     let mut b = String::from(
-        r#"<link rel="stylesheet" href="/static/opengraph.css"><div class="page-head"><div><p class="eyebrow">Configure</p><h1 class="panel-title">Mappings</h1><p class="lead">What OpenGraph collectors' kinds mean to Pathwarden. A file never decides this: only a mapping pack can make a relationship part of an attack path, and only a trusted one.</p></div></div>"#,
+        r#"<link rel="stylesheet" href="/static/opengraph.css"><div class="page-head"><div><p class="eyebrow">Configure</p><h1 class="panel-title">Mappings</h1><p class="lead">How OpenGraph data counts: only a trusted pack turns its relationships into attack paths.</p></div></div>"#,
     );
     if let Some(v) = sync {
         b.push_str(&crate::sync_ui::sync_line(v, "mappings"));
@@ -865,7 +879,7 @@ fn mappings_body(st: &AppState, sync: Option<&crate::sync_ui::View>) -> String {
     {
         let _ = write!(
             b,
-            r#"<div class="note warn">{}<p><strong>The record of which packs came from the repository can't be read.</strong> Every pack in the <code>packs</code> folder is untrusted until someone on this computer marks it as trusted again.</p></div>"#,
+            r#"<div class="note warn">{}<p><strong>The record of which packs came from the repository can't be read.</strong> Every shared pack is untrusted until it is trusted again on this computer.</p></div>"#,
             icon("i-alert")
         );
     }
@@ -880,7 +894,7 @@ fn mappings_body(st: &AppState, sync: Option<&crate::sync_ui::View>) -> String {
     for (path, e) in &refused {
         let _ = write!(
             b,
-            r#"<div class="note cfg-error">{}<p><strong>Mapping pack {} was refused.</strong> {} Analyses stop until it is fixed or removed from <code>[[mapping]]</code>.</p></div>"#,
+            r#"<div class="note cfg-error">{}<p><strong>Mapping pack {} was refused.</strong> {} Runs can't be analyzed until it is fixed or removed from the settings.</p></div>"#,
             icon("i-alert"),
             esc(path),
             esc(e)
@@ -931,11 +945,18 @@ fn mappings_body(st: &AppState, sync: Option<&crate::sync_ui::View>) -> String {
         r#"<dialog id="og-trust" class="card og-dialog" aria-labelledby="og-trust-title">
 <form method="dialog">
 <h2 class="sub" id="og-trust-title">Trust <span id="og-trust-name"></span>?</h2>
-<p>Trusting a pack lets its <strong>traversable</strong> relationships become attack paths: they count in exposure, appear in the remediation path and open PW-030 findings, from the next analysis on. Untrusted, they are only labels.</p>
-<p class="muted small">Trust a pack only after checking, for each traversable kind, that it really lets an attacker move (ideally against a lab). The name is added to <code>[opengraph] trust</code> in <code>pathwarden.toml</code>; remove it there or here to undo.</p>
+<p>From the next run, its <strong>traversable</strong> relationships become attack paths: they count in exposure, appear in the remediation path and raise findings. Trust it only after checking each one.</p>
+<p class="muted small">Undo with Remove trust on this page.</p>
 <label class="og-check"><input type="checkbox" id="og-trust-ok"> I reviewed this pack's traversable kinds</label>
 <p class="save-status small" id="og-trust-status" role="status"></p>
 <div class="dialog-actions"><button class="btn" value="cancel">Cancel</button><button type="button" class="btn primary" id="og-trust-go" disabled>Trust this pack</button></div>
+</form>
+</dialog>
+<dialog id="og-untrust" class="card og-dialog" aria-labelledby="og-untrust-title">
+<form method="dialog">
+<h2 class="sub" id="og-untrust-title">Remove trust from <span id="og-untrust-name"></span>?</h2>
+<p>From the next run its relationships are no longer attack paths. You can trust it again later.</p>
+<div class="dialog-actions"><button class="btn" value="cancel">Cancel</button><button class="btn danger solid" value="remove">Remove trust</button></div>
 </form>
 </dialog>
 {after}<script src="/static/opengraph.js" defer></script>"#,
@@ -973,14 +994,14 @@ fn pack_card(b: &mut String, i: usize, e: &PackEntry) {
             .unwrap_or_default();
         let _ = write!(
             pill,
-            r#"<span class="tip"><button type="button" class="tip-btn" aria-label="About: Trust on this computer" aria-describedby="tip-pack-{i}">{info}</button><span class="tip-text wide" role="tooltip" id="tip-pack-{i}"><span class="src-row"><span>Added by</span><span>{by}{day}</span></span><span class="src-row"><span>Trust</span><span>Never travels. Here its relationships are only labels until someone on this computer trusts it.</span></span></span></span>"#,
+            r#"<span class="tip"><button type="button" class="tip-btn" aria-label="About: where this pack came from" aria-describedby="tip-pack-{i}">{info}</button><span class="tip-text wide" role="tooltip" id="tip-pack-{i}"><span class="src-row"><span>Added by</span><span>{by}{day}</span></span><span class="src-row"><span>Trust</span><span>Trust isn't shared: trust it on each computer.</span></span></span></span>"#,
             info = icon("i-info"),
             by = esc(&by),
         );
     }
     let action = if !p.trusted() {
         format!(
-            r#"<button type="button" class="btn small-btn" data-og-trust="{n}" data-title="{t}" data-digest="{d}">Mark as trusted…</button>"#,
+            r#"<button type="button" class="btn small-btn" data-og-trust="{n}" data-title="{t}" data-digest="{d}">Trust…</button>"#,
             n = esc(p.name()),
             t = esc(p.title()),
             d = esc(e
@@ -1000,12 +1021,11 @@ fn pack_card(b: &mut String, i: usize, e: &PackEntry) {
     };
     let _ = write!(
         b,
-        r#"<section class="card og-pack" id="pack-{i}"><div class="og-pack-head"><div><h2 class="sub">{title} <span class="muted small">{name} v{version}</span></h2><p class="muted small">{origin} · for {sources} · kinds starting <code>{prefix}</code></p></div><div class="og-pack-actions">{pill}{action}</div></div>"#,
+        r#"<section class="card og-pack" id="pack-{i}"><div class="og-pack-head"><div><h2 class="sub">{title} <span class="muted small">{name} v{version}</span></h2><p class="muted small">{origin} · for {sources}</p></div><div class="og-pack-actions">{pill}{action}</div></div>"#,
         title = esc(p.title()),
         name = esc(p.name()),
         version = p.version(),
         sources = esc(&p.source_kinds().join(", ")),
-        prefix = esc(p.kind_prefix()),
     );
     if let Some(d) = p.description() {
         let _ = write!(b, r#"<p class="small">{}</p>"#, esc(d));

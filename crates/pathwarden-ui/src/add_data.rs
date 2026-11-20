@@ -21,8 +21,8 @@ pub const BUTTON: &str = "Add files and analyze again";
 pub const READY: &str = "Analyzes this run's collection again with AzureHound, OpenGraph or \
 SharpHound files, as a new run.";
 /// The line when the raw collection wasn't kept.
-pub const NOT_KEPT: &str = "The collection wasn't kept, so there is nothing to add to. Keep the \
-raw collection when you collect.";
+pub const NOT_KEPT: &str =
+    "The raw collection wasn't kept. Tick Keep the raw collection next time.";
 /// The line when it was kept, but is no longer where it was.
 pub const GONE: &str = "The kept collection was moved or deleted, so there is nothing to add to.";
 
@@ -99,10 +99,7 @@ pub fn find_kept(
     match kept_collection(r) {
         Some(Kept::Here(p)) => Ok((r.clone(), p)),
         Some(other) => Err(other.line().to_string()),
-        None => Err(
-            "That run wasn't collected on this computer, so there is no collection to add to."
-                .into(),
-        ),
+        None => Err("That run wasn't collected here, so there is nothing to add to.".into()),
     }
 }
 
@@ -258,7 +255,7 @@ mod tests {
         assert_eq!(kept_collection(&gone), Some(Kept::Gone));
         let not_kept = collected(None);
         assert_eq!(kept_collection(&not_kept), Some(Kept::NotKept));
-        assert!(NOT_KEPT.contains("Keep the raw collection when you collect."));
+        assert!(NOT_KEPT.contains("Tick Keep the raw collection next time."));
         // Never looked at: a network path.
         let unc = collected(Some(r"\\fileserver\share\collection".into()));
         assert_eq!(kept_collection(&unc), Some(Kept::Gone));

@@ -5,6 +5,9 @@
   var root = document.documentElement;
 
   function $(id) { return document.getElementById(id); }
+  // A request that got no answer at all (an HTTP error is an answer: its
+  // own message is shown instead).
+  var NOT_ANSWERING = "Pathwarden isn't answering. Is it still running?";
 
   // `keep`: stays until the user dismisses it (a note to read, not a
   // passing error).
@@ -61,7 +64,7 @@
   window.Pathwarden.settingsDot = function (differ, crash) {
     var link = document.querySelector('.tablist a[href="/settings"]');
     if (!link) return;
-    var DIFFER = "Settings differ from the shared ones", CRASH = "Pathwarden stopped unexpectedly";
+    var DIFFER = "Settings differ from the shared settings", CRASH = "Pathwarden stopped unexpectedly";
     var words = differ && crash ? DIFFER + "; " + CRASH.toLowerCase() : differ ? DIFFER : crash ? CRASH : "";
     link.toggleAttribute("data-differ", !!differ);
     link.toggleAttribute("data-crash", !!crash);
@@ -99,9 +102,9 @@
       body: JSON.stringify(file ? { file: file } : {})
     }).then(function (r) {
       if (r.ok) return;
-      return r.json().then(function (j) { throw new Error((j && j.error) || "Couldn't open it."); },
-        function () { throw new Error("Couldn't open it."); });
-    }).catch(function (e) { toast(e.message || "Couldn't open it."); });
+      return r.json().then(function (j) { throw new Error((j && j.error) || "Couldn't open the log."); },
+        function () { throw new Error("Couldn't open the log."); });
+    }, function () { throw new Error(NOT_ANSWERING); }).catch(function (e) { toast(e.message || "Couldn't open the log."); });
   };
 
   // Settings, the Logs card: Open logs folder, Open crash report, Dismiss.
@@ -123,7 +126,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ file: dismiss.getAttribute("data-crash-dismiss") || null })
       }).then(function (r) {
-        if (!r.ok) throw new Error("Couldn't dismiss it.");
+        if (!r.ok) throw new Error("Couldn't dismiss the crash report. Try again.");
         var line = card.querySelector("[data-crash]");
         if (line) line.remove();
         var jump = document.querySelector('.jump a[href="#logs"]');
@@ -210,10 +213,10 @@
         return r.text().then(function (t) {
           var j = {};
           try { j = t ? JSON.parse(t) : {}; } catch (e) {}
-          if (!r.ok) throw new Error(j.error || "Signing in failed (" + r.status + ").");
+          if (!r.ok) throw new Error(j.error || "Sign-in didn't finish. Try again.");
           return j;
         });
-      }, function () { throw new Error("Pathwarden is not answering. Is it still running?"); })
+      }, function () { throw new Error(NOT_ANSWERING); })
       .then(function (j) {
         var q = new URLSearchParams(location.search);
         if (typeof j.token === "string" && /^[0-9a-f]{32}$/.test(j.token)) q.set("signin", j.token);
@@ -262,10 +265,12 @@
     root.setAttribute("data-theme", theme);
     var button = $("theme-toggle");
     if (button) {
+      // The label names the theme it switches to, so it is not a pressed
+      // toggle: no aria-pressed.
       var label = theme === "dark" ? "Light mode" : "Dark mode";
       button.querySelector(".tt-label").textContent = label;
       button.title = label;
-      button.setAttribute("aria-pressed", theme === "light");
+      button.removeAttribute("aria-pressed");
       // The icon of the theme it switches to: a sun in dark mode.
       var use = button.querySelector("use");
       if (use) use.setAttribute("href", theme === "dark" ? "#i-sun" : "#i-theme");
@@ -465,7 +470,7 @@
           acceptDialog.removeEventListener("close", onClose);
           if (acceptDialog.returnValue === "accept") go();
         });
-      } else if (confirm("Accept the history as it is?")) {
+      } else if (confirm("Accept the history as it is? This computer's records of it are reset.")) {
         go();
       }
     });
@@ -476,6 +481,11 @@
   document.querySelectorAll("[data-delete]").forEach(function (b) {
     b.addEventListener("click", function () {
       var id = b.getAttribute("data-delete");
+      // The dialog's own words: Delete, Remove from the history or Hide.
+      var head = dialog && dialog.querySelector("h2");
+      var ask = head ? head.textContent : "Delete this run? This can't be undone.";
+      var goWords = ($("confirm-delete-go") || b).textContent || "";
+      var verb = /hide/i.test(goWords) ? "hide" : /remove/i.test(goWords) ? "remove" : "delete";
       function go() {
         fetch("/api/runs/" + encodeURIComponent(id), { method: "DELETE", credentials: "same-origin" })
           .then(function (r) {
@@ -488,7 +498,7 @@
                 location.href = "/runs";
               });
             }
-            return r.text().then(function (t) { throw new Error(errorText(t, "Couldn't delete the run.")); });
+            return r.text().then(function (t) { throw new Error(errorText(t, "Couldn't " + verb + " the run.")); });
           })
           .catch(function (e) { toast(e.message); });
       }
@@ -499,7 +509,7 @@
           dialog.removeEventListener("close", onClose);
           if (dialog.returnValue === "delete") go();
         });
-      } else if (confirm("Delete this run? This can't be undone.")) {
+      } else if (confirm(ask)) {
         go();
       }
     });
@@ -543,13 +553,14 @@
         if (saving) return;
         saving = true;
         var body = new URLSearchParams(new FormData(f));
+        var saveFails = f.hasAttribute("data-rename-form") ? "Couldn't save the name." : "Couldn't save the label.";
         fetch(f.action, {
           method: "POST", credentials: "same-origin", body: body,
           headers: { "Accept": "application/json" }
         })
           .then(function (r) {
             if (r.ok) { location.reload(); return; }
-            return r.text().then(function (t) { throw new Error(errorText(t, "Couldn't save it.")); });
+            return r.text().then(function (t) { throw new Error(errorText(t, saveFails)); });
           })
           .catch(function (err) { saving = false; toast(err.message); });
       });
@@ -766,7 +777,7 @@
 
   // ---- PathwardenFiles
   // Collector files chosen in the browser, on Analyze and in the Collect
-  // page's "Analyze other data with it": which are taken (.zip and
+  // page's "Add other data": which are taken (.zip and
   // .json, each once), the files of a dropped folder, a row of the list,
   // and what each file is (the server reads its two ends,
   // /api/opengraph/sniff). (tests/js/app.test.mjs runs take and dropped.)
@@ -1051,7 +1062,7 @@
     // What was being analyzed, unless the message already says.
     var src = $("failed-source");
     src.hidden = !lastSource || message.indexOf(lastSource) !== -1;
-    src.textContent = "Analyzing: " + lastSource;
+    src.textContent = "Source: " + lastSource;
     $("failed").scrollIntoView({ block: "nearest" });
   }
 
@@ -1068,10 +1079,10 @@
         return r.text().then(function (t) { return { ok: r.ok, text: t }; });
       })
       .then(function (r) {
-        if (!r.ok) throw new Error(errorText(r.text, "Lost track of the analysis."));
+        if (!r.ok) throw new Error(errorText(r.text, "Can't get this analysis's progress. Reload the page to check on it."));
         handle(JSON.parse(r.text), job);
-      })
-      .catch(function (e) { fail(e.message || "Lost track of the analysis."); });
+      }, function () { throw new Error(NOT_ANSWERING); })
+      .catch(function (e) { fail(e.message || "Can't get this analysis's progress. Reload the page to check on it."); });
   }
 
   // The checklist follows the real phase, but steps one item at a time and
@@ -1132,7 +1143,7 @@
       location.href = "/collect?job=" + encodeURIComponent(job);
     } else if (j.status === "stopped") {
       clearInterval(pacer);
-      fail("The collection was stopped.");
+      fail("Stopped before the analysis finished.");
     } else if (j.status === "duplicate") {
       clearInterval(pacer); pacer = null;
       duplicate(j, job);
@@ -1141,7 +1152,7 @@
       ask(j, job);
     } else {
       clearInterval(pacer);
-      fail(j.error || "The analysis failed.");
+      fail(j.error || "The analysis failed. See Settings › Logs, then try again.");
     }
   }
 
@@ -1177,7 +1188,7 @@
       })
         .then(function (r) { return r.text().then(function (t) { return { ok: r.status === 202, text: t }; }); })
         .then(function (r) {
-          if (!r.ok) throw new Error(errorText(r.text, "Couldn't save the run."));
+          if (!r.ok) throw new Error(errorText(r.text, "Couldn't save the run. Reload the page and try again."));
           $("ask-env").hidden = true;
           shown = -1; target = 0; finishedUrl = null;
           startedAt = Date.now();
@@ -1195,8 +1206,8 @@
     clearInterval(clock); clock = null;
     progress.hidden = true;
     var when = localTime(j.at);
-    $("duplicate-message").textContent = "This is the same data as " + j.what + " from " + when +
-      ". Analyzing it again adds a run with nothing new. Open that run, or analyze anyway.";
+    $("duplicate-message").textContent = "Same data as " + j.what + " from " + when +
+      ". A new run would add nothing.";
     var open = $("duplicate-open");
     open.href = j.run ? "/runs/" + encodeURIComponent(j.run) : "/runs";
     open.onclick = function () {
@@ -1278,7 +1289,7 @@
     xhr.addEventListener("load", function () {
       $("upbar").hidden = true;
       if (xhr.status !== 202) {
-        fail(errorText(xhr.responseText, "The upload failed (" + xhr.status + ")."));
+        fail(errorText(xhr.responseText, "The upload failed. Try again."));
         return;
       }
       var job = JSON.parse(xhr.responseText).job;
@@ -1286,7 +1297,7 @@
       try { history.replaceState(null, "", "/analyze?job=" + encodeURIComponent(job)); } catch (e2) {}
       poll(job);
     });
-    xhr.addEventListener("error", function () { fail("The upload failed. Is Pathwarden still running?"); });
+    xhr.addEventListener("error", function () { fail(NOT_ANSWERING); });
     xhr.send(data);
   });
 
@@ -1457,7 +1468,7 @@
               var i = document.createElement("i");
               i.setAttribute("aria-hidden", "true");
               pill.appendChild(i);
-              pill.appendChild(document.createTextNode("Loading this run into memory…"));
+              pill.appendChild(document.createTextNode("Opening this run…"));
               document.body.appendChild(pill);
             }
           } else if (pill) {

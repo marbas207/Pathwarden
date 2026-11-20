@@ -61,7 +61,9 @@ impl Outcome {
             Outcome::Ok => SIGNED_IN,
             Outcome::Failed => SIGN_IN_FAILED,
             Outcome::Cancelled => SIGN_IN_CANCELLED,
-            Outcome::Unreachable => "Couldn't sync with the repository.",
+            Outcome::Unreachable => {
+                "Couldn't reach the run history. Check the network, then try again."
+            }
         }
     }
 
@@ -194,7 +196,7 @@ pub async fn api(State(st): State<Arc<AppState>>) -> Response {
         Err(_) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Signing in failed." })),
+                Json(serde_json::json!({ "error": "Sign-in didn't finish. Try again." })),
             )
                 .into_response()
         }

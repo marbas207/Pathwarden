@@ -21,10 +21,10 @@
       return r.text().then(function (text) {
         var j = null;
         try { j = text ? JSON.parse(text) : {}; } catch (e) {}
-        if (!r.ok) throw new Error((j && j.error) || "Pathwarden didn't answer (" + r.status + "). Is it still running?");
+        if (!r.ok) throw new Error((j && j.error) || "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs.");
         return j;
       });
-    });
+    }, function () { throw new Error("Pathwarden isn't answering. Is it still running?"); });
   }
   function lines(text) {
     return (text || "").split(/[\r\n,;]+/).map(function (s) { return s.trim(); }).filter(Boolean);
@@ -68,7 +68,7 @@
         input.addEventListener("change", function () {
           var f = input.files && input.files[0];
           if (!f) return;
-          if (f.size > 8 << 20) { toast("That list is larger than 8 MB."); input.value = ""; return; }
+          if (f.size > 8 << 20) { toast("That list is larger than 8 MB. Pick a smaller file."); input.value = ""; return; }
           f.text().then(function (t) {
             var area = input.closest(".og-declare").querySelector("textarea.og-ok");
             var have = lines(area.value);
@@ -115,7 +115,7 @@
       });
       if (bad) {
         bad.open = true;
-        toast("Say what " + (bad.getAttribute("data-file") || "the file") + "'s collector scanned (a domain or a list of computers), or untick Attach this coverage.");
+        toast("Add a domain or computers for " + (bad.getAttribute("data-file") || "the file") + ", or untick Attach this coverage.");
         return false;
       }
       return out.length ? JSON.stringify(out) : "";
@@ -150,11 +150,22 @@
     Array.prototype.forEach.call(document.querySelectorAll("[data-og-untrust]"), function (b) {
       b.addEventListener("click", function () {
         var name = b.getAttribute("data-title") || b.getAttribute("data-og-untrust");
-        if (!window.confirm("Stop trusting " + name + "? Its relationships become context only from the next analysis on.")) return;
-        b.disabled = true;
-        post("/api/mappings/trust", { pack: b.getAttribute("data-og-untrust"), trusted: false })
-          .then(function () { location.reload(); })
-          .catch(function (e) { toast(e.message); b.disabled = false; });
+        function go() {
+          b.disabled = true;
+          post("/api/mappings/trust", { pack: b.getAttribute("data-og-untrust"), trusted: false })
+            .then(function () { location.reload(); })
+            .catch(function (e) { toast(e.message); b.disabled = false; });
+        }
+        // The app's own dialog, as for trusting; the browser's as a fallback.
+        var dlg = document.getElementById("og-untrust");
+        if (dlg && dlg.showModal) {
+          document.getElementById("og-untrust-name").textContent = name;
+          dlg.returnValue = "";
+          dlg.onclose = function () { if (dlg.returnValue === "remove") go(); };
+          dlg.showModal();
+        } else if (window.confirm("Remove trust from " + name + "? From the next run its relationships are no longer attack paths. You can trust it again later.")) {
+          go();
+        }
       });
     });
   }
