@@ -970,7 +970,7 @@ mod tests {
         );
         assert_eq!(s.kind, Kind::NoHelper);
         let line = s.line_html();
-        assert!(line.contains("Git here has no sign-in helper. Install Git for Windows with Git Credential Manager, then sync again."), "{line}");
+        assert!(line.contains("Git can&#39;t ask you to sign in. Install Git for Windows (it includes Git Credential Manager), then sync again."), "{line}");
         assert!(!line.contains("data-history-action=\"sign-in\""), "{line}");
         assert!(
             line.contains("so git can&#39;t ask for an account")

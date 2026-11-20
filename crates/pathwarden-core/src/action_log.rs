@@ -52,31 +52,26 @@ pub const REPORT_ACTIVITY: usize = 20;
 /// The commit message of a change (fixed: it names no finding or person).
 pub const MESSAGE: &str = "pathwarden: save what a finding action did";
 /// What is said when the history's file was saved by a newer Pathwarden.
-pub const NEWER_WORDS: &str = "The history's actions.json was saved by a newer Pathwarden, so \
-what actions do can't be saved here. Update Pathwarden to save it.";
+pub const NEWER_WORDS: &str =
+    "The action log was saved by a newer Pathwarden. Update Pathwarden to save here.";
 /// The most bytes of the file read: any writer of the history can push it.
 pub const MAX_BYTES: u64 = 16 << 20;
 /// What is said when an older release turned encryption off and left the
 /// file encrypted.
-pub const LEFT_SEALED_WORDS: &str = "What finding actions did (actions.json.age) is still \
-encrypted in a history that isn't any more: an older Pathwarden turned encryption off without \
-rewriting it, and the key it needs is gone. The rest of the history works. To get it back, \
-restore the old .pathwarden-key.age from the repository's history; to start over, remove \
-actions.json.age.";
+pub const LEFT_SEALED_WORDS: &str = "The action log is still encrypted, but this history no \
+longer has its key, so it can't be read. The rest of the history works. To get it back, restore \
+the old .pathwarden-key.age from the history's git history.";
 /// What is said when the file can't be opened with the history's key.
-pub const UNREADABLE_WORDS: &str = "What finding actions did (actions.json) can't be opened with \
-this history's key: an older Pathwarden changed the passphrase without rewriting it, or the file \
-was altered or rolled back. The rest of the history works; what actions did can't be shown or \
-saved here, and is kept as it is.";
+pub const UNREADABLE_WORDS: &str = "The action log can't be opened with this history's key. The \
+rest of the history works.";
 /// What a reader says of a plain actions.json in an encrypted history,
 /// on the command line ([`PLAIN_LEFT_PAGE_WORDS`] on a page).
 pub const PLAIN_LEFT_WORDS: &str = "A plain actions.json is in this encrypted history and wasn't \
 read. If an older Pathwarden left it when encryption was turned on, import it with `pathwarden \
 action log import`.";
 /// [`PLAIN_LEFT_WORDS`] for a page: without the command.
-pub const PLAIN_LEFT_PAGE_WORDS: &str = "A plain actions.json is in this encrypted history and \
-wasn't read. If an older Pathwarden left it when encryption was turned on, it can be imported \
-from the command line.";
+pub const PLAIN_LEFT_PAGE_WORDS: &str =
+    "An unencrypted copy of the action log was found in this encrypted history and wasn't read.";
 /// The most bytes of fields a later release keeps on one record
 /// ([`Record::other`]); past it the rest are dropped.
 pub const MAX_OTHER_BYTES: usize = 8 * 1024;
@@ -93,11 +88,11 @@ pub const LEFTOVER_PREFIX: &str = "actions.json.leftover-";
 /// What a save says on the command line when it is kept here but not
 /// pushed.
 pub const SAVED_HERE_WORDS: &str =
-    "Saved on this computer; not pushed yet: it will be retried with the next sync.";
+    "Saved on this computer, not shared yet: the next sync shares it.";
 /// Notes about saves moved aside, kept until a save or pull says them.
 const NOTES_FILE: &str = "pathwarden-actions-pending.notes";
 /// What a save says when it is kept here but not pushed.
-pub const NOT_PUSHED_WORDS: &str = "Not pushed yet: it will be retried with the next sync.";
+pub const NOT_PUSHED_WORDS: &str = "Not shared yet: the next sync shares it.";
 
 /// The whole file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -291,10 +286,10 @@ impl Activity {
             .join(", ")
     }
 
-    /// The line people read: "Opened RITM0001234 — NORTH\a.admin,
+    /// The line people read: "Opened RITM0001234 · NORTH\a.admin,
     /// SECOPS-WS02, Nov 18, 2026, 2:02 PM".
     pub fn line(&self) -> String {
-        format!("{} — {}", self.summary(), self.who_when())
+        format!("{} · {}", self.summary(), self.who_when())
     }
 
     /// What tells two entries apart when two histories are merged.
@@ -304,7 +299,7 @@ impl Activity {
 }
 
 /// The text of a record's chip: "RITM0001234 · Open"; on a fixed finding
-/// whose record is still open, "Fixed — RITM0001234 still Open".
+/// whose record is still open, "Fixed · RITM0001234 still Open".
 pub fn chip(r: &Record, fixed: bool) -> String {
     let name = r
         .number
@@ -318,7 +313,7 @@ pub fn chip(r: &Record, fixed: bool) -> String {
         .filter(|s| !s.is_empty())
         .unwrap_or(if r.open { "Open" } else { "Closed" });
     if fixed && r.open {
-        format!("Fixed — {name} still {status}")
+        format!("Fixed · {name} still {status}")
     } else {
         format!("{name} · {status}")
     }
@@ -389,8 +384,18 @@ pub enum LogError {
     #[error("{NEWER_WORDS}")]
     Newer(u64),
     /// Not a file this version can read.
-    #[error("The history's actions.json can't be read: {0}")]
+    #[error("The action log is damaged and can't be read.")]
     Damaged(String),
+}
+
+impl LogError {
+    /// Why the file is damaged, for the log and Show details.
+    pub fn detail(&self) -> Option<&str> {
+        match self {
+            LogError::Damaged(why) => Some(why),
+            LogError::Newer(_) => None,
+        }
+    }
 }
 
 /// Reads the file's text. A file without `version` is version 1.
@@ -633,7 +638,7 @@ impl ActionsFile {
 /// first) is refused.
 pub fn import_plain(store: &Store, push: bool, shown: &str) -> Result<Vec<String>> {
     if store.is_git() && !push {
-        bail!("This computer only reads the run history ([state] push = false), so it can't change it.");
+        bail!("This computer only reads the run history, so it can't change it.");
     }
     if !crypt::is_encrypted(&store.dir) {
         bail!("The history isn't encrypted, so there is no plain actions.json to import.");
@@ -970,8 +975,7 @@ fn is_refusal(e: &anyhow::Error) -> bool {
 pub fn save_reporting(store: &Store, change: &Change, push: bool) -> Result<Saved> {
     if store.is_git() && !push {
         bail!(
-            "This computer only reads the run history ([state] push = false), so what the \
-             action did isn't saved there."
+            "This computer only reads the run history, so what the action did isn't saved there."
         );
     }
     let mut notes = write(store, change)?;

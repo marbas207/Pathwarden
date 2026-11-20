@@ -32,15 +32,15 @@ pub const TEST_TIMEOUT: Duration = Duration::from_secs(120);
 pub const MAX_TEST_OUTPUT: usize = 64 * 1024;
 
 /// The message for a page session that tries to choose a program.
-pub const COMMANDS_LOCKED: &str = "Adding or changing plugin programs is turned off in this app. You can still change the name and settings, and use plugin programs from the plugins folder.";
+pub const COMMANDS_LOCKED: &str = "Safety locks are on, so plugin programs can't be added or changed here. You can still change the name and settings, and use programs from the plugins folder.";
 
 /// The message for a page session that tries to change where a plugin
 /// sends findings or its credentials, or which secrets it reads.
-pub const DESTINATION_LOCKED: &str = "Changing where a plugin sends findings is turned off in this app: its instance, project, table, allow_insecure_http and the environment variables it reads. You can still change its other settings, ticket fields and safety limits.";
+pub const DESTINATION_LOCKED: &str = "Safety locks are on, so where a plugin sends findings and which secrets it reads can't be changed here. You can still change its other settings, ticket fields and limits.";
 
 /// The message for a page session that tries to turn off the ticketing
 /// plugins' check on how many open tickets one run may close.
-pub const GUARD_LOCKED: &str = "Removing the limit on how many open tickets one run may close (100%) is turned off in this app. You can still set it anywhere below 100%.";
+pub const GUARD_LOCKED: &str = "Safety locks are on, so the limit on tickets one run may close can't be 100%. Any lower value works.";
 
 /// The Jira plugin shipped with Pathwarden, which gets its own form too.
 pub const JIRA: &str = "jira";
@@ -53,12 +53,11 @@ pub const JIRA_RESERVED_FIELDS: [&str; 5] =
     ["project", "issuetype", "summary", "description", "labels"];
 
 /// Why the script form refuses `servicenow` with no program of its own.
-pub const SERVICENOW_FORM: &str =
-    "Use the ServiceNow form (`pathwarden plugins add servicenow`) for the ServiceNow plugin.";
+pub const SERVICENOW_FORM: &str = "The ServiceNow plugin has its own form: use Add ServiceNow.";
 
 /// What "Test" asks before running a plugin that isn't shipped with
 /// Pathwarden: only those are known to honor `dry_run`.
-pub const TEST_CUSTOM: &str = "Pathwarden asks the plugin for a dry run by adding dry_run = true to its settings. A script that ignores that setting would really send its alert or create its tickets. Run it only if yours honors dry_run.";
+pub const TEST_CUSTOM: &str = "Test asks the plugin not to send anything. A script that ignores this sends for real. Test it only if your script supports test runs.";
 
 /// Whether "Test" must ask first ([`TEST_CUSTOM`]): every plugin but the
 /// shipped ServiceNow and Jira ones.
@@ -275,7 +274,7 @@ impl PluginForm {
         match b.auth.as_str() {
             "pat" => {
                 if !data_center {
-                    return Err("Personal access tokens are for Jira Data Center. Jira Cloud signs in with an e-mail and an API token.".into());
+                    return Err("Personal access tokens are for Jira Data Center. Jira Cloud signs in with an email and an API token.".into());
                 }
                 set.push(env_setting("pat_env", &b.pat_env)?);
                 remove.extend(["username_env".to_string(), "token_env".to_string()]);
@@ -330,7 +329,7 @@ impl PluginForm {
         for (k, v) in &b.fields {
             let k = k.trim();
             if looks_secret(k) {
-                return Err(format!("{k}: don't put secrets in issue fields."));
+                return Err(format!("{k}: secrets can't go in issue fields."));
             }
             if JIRA_RESERVED_FIELDS.contains(&k) {
                 return Err(format!("{k}: the plugin sets this field itself."));
@@ -340,7 +339,7 @@ impl PluginForm {
                 && serde_json::from_str::<Value>(v).is_err()
             {
                 return Err(format!(
-                    "{k}: the value starts like JSON but isn't valid JSON, like [{{\"name\": \"Active Directory\"}}]."
+                    "{k}: the value isn't valid JSON. Example: [{{\"name\": \"Active Directory\"}}]."
                 ));
             }
         }
@@ -486,7 +485,7 @@ fn env_setting(key: &str, name: &str) -> Result<(String, Setting), String> {
     let n = name.trim();
     if !plugins::valid_env_name(n) {
         return Err(format!(
-            "{n:?} is not an environment variable name (letters, digits and _, not starting with a digit)"
+            "\"{n}\" isn't a valid environment variable name: use letters, digits and _, not starting with a digit."
         ));
     }
     Ok((key.to_string(), Setting::Str(n.to_string())))
@@ -544,7 +543,7 @@ impl PluginForm {
             b.limits(&mut set, &mut remove)?;
             for (k, _) in &b.fields {
                 if looks_secret(k) {
-                    return Err(format!("{k}: don't put secrets in ticket fields."));
+                    return Err(format!("{k}: secrets can't go in ticket fields."));
                 }
             }
             Ok(OutputEdit {
@@ -766,7 +765,7 @@ pub fn check_command(
 
 /// The message for a page session that tries to add a finding action, or
 /// change anything of one but its name, time limit and filters.
-pub const ACTIONS_LOCKED: &str = "Adding or changing action programs is turned off in this app. You can still change the name, time limit and filters.";
+pub const ACTIONS_LOCKED: &str = "Safety locks are on, so action programs can't be added or changed here. You can still change the name, time limit and filters.";
 
 /// [`check_command`]'s rule for an `[[action]]` block, shared by the app
 /// and `pathwarden action add`, stricter than for outputs. Without `allow`
@@ -873,7 +872,7 @@ pub fn action_program(a: &ActionConfig) -> (String, bool) {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TestRun {
     pub ok: bool,
-    /// "exit code 0", or how it stopped.
+    /// "Finished", "Ended with error code 1", or how it stopped.
     pub status: String,
     /// Its lines, at most [`MAX_TEST_OUTPUT`] bytes.
     pub output: String,
@@ -898,7 +897,8 @@ pub fn dry_run(output: &OutputConfig, event: &str) -> Result<TestRun, String> {
     Ok(TestRun {
         ok: ran.status.success(),
         status: match ran.status.code() {
-            Some(c) => format!("exit code {c}"),
+            Some(0) => "Finished".to_string(),
+            Some(c) => format!("Ended with error code {c}"),
             None => ran.status.to_string(),
         },
         output: text,

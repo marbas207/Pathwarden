@@ -387,7 +387,7 @@ fn a_run_carries_what_actions_did() {
         "no chip"
     );
     assert!(html.contains("<h4>Activity</h4>"), "no activity");
-    assert!(html.contains("Opened t-1 <span class=\"ac-who\">— ned, WS, "));
+    assert!(html.contains("Opened t-1 <span class=\"ac-who\">&middot; ned, WS, "));
     assert!(html.contains(r#"data-records="1""#));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -446,7 +446,7 @@ fn encryption_turned_off_by_an_older_release() {
         true,
     )
     .unwrap_err();
-    assert!(format!("{e:#}").contains("older Pathwarden turned encryption off"));
+    assert!(format!("{e:#}").contains("this history no longer has its key"));
     assert_eq!(std::fs::read(&sealed).unwrap(), kept);
     assert!(!dir.join("actions.json").exists());
     // Encrypting again (here) keeps it as it was, with a note.
@@ -558,7 +558,7 @@ fn a_plain_file_in_an_encrypted_history_is_only_imported_on_purpose() {
     );
     assert_eq!(summary.newest[0].0, "PW-003-cccc");
     assert!(
-        summary.newest[0].1.starts_with("Opened t-p — ned"),
+        summary.newest[0].1.starts_with("Opened t-p · ned"),
         "{:?}",
         summary.newest
     );

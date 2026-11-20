@@ -739,13 +739,7 @@ fn a_passphrase_kept_here_connects_a_new_environment() {
         &["env", "create", "--from-git", &url, "--workspace", &w],
         &[],
     ));
-    assert!(
-        e.contains(
-            "Passphrases saved on this computer before Pathwarden 0.2 are no longer tried on \
-             other histories. Enter this history's passphrase once."
-        ),
-        "{e}"
-    );
+    assert!(e.contains("Enter this history's passphrase once."), "{e}");
     assert!(e.contains("This history is encrypted."), "{e}");
     assert!(leftovers(&wsb).is_empty(), "{:?}", leftovers(&wsb));
     remove_all(&dir);

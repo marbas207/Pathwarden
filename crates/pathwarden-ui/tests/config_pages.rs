@@ -357,7 +357,7 @@ async fn zone_preview_matches_the_analysis() {
     // The warnings are core's words, as `pathwarden zones preview` prints them.
     assert_eq!(
         v["warnings"],
-        json!(["DOMAIN ADMINS@CONTOSO.LOCAL is Tier Zero, so it is left out: Tier Zero already sits above every zone."])
+        json!(["DOMAIN ADMINS@CONTOSO.LOCAL is Tier Zero, so it is left out."])
     );
     assert_eq!(
         v["preview"]["tier_zero"],
@@ -414,7 +414,7 @@ async fn zone_preview_matches_the_analysis() {
         v["error"]
             .as_str()
             .unwrap()
-            .contains("Jan 1, 2020 has already passed"),
+            .contains("Jan 1, 2020 has passed."),
         "{v}"
     );
     let (s, v) = a
@@ -1278,7 +1278,7 @@ async fn plugin_commands_need_the_flag() {
         v["error"]
             .as_str()
             .unwrap()
-            .contains("Adding or changing plugin programs is turned off in this app."),
+            .contains("Safety locks are on, so plugin programs"),
         "{v}"
     );
     assert!(a.config().is_none());
@@ -1286,7 +1286,7 @@ async fn plugin_commands_need_the_flag() {
     // offers only a plugin program.
     let (s, body) = a.get("/plugins/new?kind=command").await;
     assert_eq!(s, StatusCode::OK);
-    assert!(body.contains("Adding or changing plugin programs is turned off in this app."));
+    assert!(body.contains("Safety locks are on, so plugin programs"));
     assert!(body.contains("pathwarden.org/docs/ui.html#safety-locks"));
     assert!(!body.contains("--allow-destinations"));
     assert!(body.contains(r#"value="command" disabled"#), "{body}");
@@ -1338,7 +1338,10 @@ async fn plugin_commands_need_the_flag() {
     let before = a.config();
     let (s, v) = a.json(Method::POST, "/api/plugins", sn.clone()).await;
     assert_eq!(s, StatusCode::BAD_REQUEST, "{v}");
-    assert!(v["error"].as_str().unwrap().contains("instance"), "{v}");
+    assert!(
+        v["error"].as_str().unwrap().contains("Safety locks are on"),
+        "{v}"
+    );
     assert_eq!(a.config(), before);
     std::fs::write(
         a.state.ws().config_path(),

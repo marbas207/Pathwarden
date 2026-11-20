@@ -536,7 +536,7 @@ async fn plugins_and_actions_shows_programs_tests_them_and_locks_changes() {
     assert!(page.contains("Critical only"), "Ping the team's filter");
     // Locked with --lock-destinations: plain words, an (i) with the
     // docs, no command, no Add, Remove off.
-    assert!(page.contains(pathwarden_core::plugin_form::ACTIONS_LOCKED));
+    assert!(page.contains(&pathwarden_core::plugin_form::ACTIONS_LOCKED.replace('\'', "&#39;")));
     assert!(page.contains("pathwarden.org/docs/ui.html#safety-locks"));
     assert!(!page.contains("--allow-destinations"));
     assert!(!page.contains("pathwarden ui"));

@@ -133,8 +133,9 @@ fn records(a: &App) -> usize {
 
 const REFUSED: &str = "last-run.json in the history was replaced with an older copy.";
 const BUTTON: &str = "Accept the history as it is";
-const SAYS: &str = "This computer will trust the history&#39;s files as they are now. Use it only \
-                    after restoring the history on purpose.";
+const SAYS: &str =
+    "This computer will trust the history&#39;s files as they are now. Do this only \
+                    if you restored an older copy on purpose. You can&#39;t undo it.";
 
 #[tokio::test]
 async fn an_older_copy_is_accepted_from_the_pages() {
@@ -165,7 +166,10 @@ async fn an_older_copy_is_accepted_from_the_pages() {
     let before = records(&a);
     let (s, b) = a.post("/api/history/accept", json!({ "env": env })).await;
     assert_eq!(s, StatusCode::CONFLICT, "{b}");
-    assert!(b.contains("Nothing in this history is refused."), "{b}");
+    assert!(
+        b.contains("Nothing needs accepting: the history is fine. Reload the page."),
+        "{b}"
+    );
     assert_eq!(records(&a), before);
 
     // Restored from a backup.
@@ -221,7 +225,10 @@ async fn an_older_copy_is_accepted_from_the_pages() {
     assert_eq!(records(&a), 0);
     let (s, b) = a.post("/api/history/accept", json!({ "env": env })).await;
     assert_eq!(s, StatusCode::CONFLICT, "{b}");
-    assert!(b.contains("Nothing in this history is refused."), "{b}");
+    assert!(
+        b.contains("Nothing needs accepting: the history is fine. Reload the page."),
+        "{b}"
+    );
     let page = a.get("/automate/history").await;
     assert!(!page.contains(REFUSED) && !page.contains(BUTTON), "{page}");
     assert!(!a.get("/runs").await.contains(BUTTON));

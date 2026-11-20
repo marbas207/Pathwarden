@@ -104,10 +104,10 @@ impl Problem {
                 if *git { "repository" } else { "folder" }
             ),
             Problem::Newer { version: Some(v) } => {
-                format!("This history was written by Pathwarden {v}.")
+                format!("This history was saved by Pathwarden {v}.")
             }
             Problem::Newer { version: None } => {
-                "This history was written by a newer Pathwarden.".into()
+                "This history was saved by a newer Pathwarden.".into()
             }
             Problem::NoFolder => "Pathwarden couldn't find the folder.".into(),
             Problem::BadDefaultBranch => {
@@ -231,7 +231,7 @@ pub const ADOPTED_WORDS: &str = "What it keeps and its encryption come from the 
 /// A URL with a password or token in it, refused (a user name alone is
 /// fine: [`crate::config::remote_has_token`]).
 pub const PASSWORD_IN_URL: &str =
-    "The URL holds a password or token. Remove it: git on this computer signs in by itself.";
+    "The URL holds a password or token. Remove it: git on this computer signs you in.";
 /// The wrong passphrase, on the page and in the terminal.
 pub const WRONG_PASSPHRASE: &str = "That passphrase doesn't open this history.";
 
@@ -245,8 +245,7 @@ pub const ANOTHER_PASSPHRASE: &str =
 /// no longer tried on other histories
 /// ([`crate::keystore::kept_without_key_file`]), on the page and in the
 /// terminal.
-pub const OLD_PASSPHRASES: &str = "Passphrases saved on this computer before Pathwarden 0.2 \
-     are no longer tried on other histories. Enter this history's passphrase once.";
+pub const OLD_PASSPHRASES: &str = "Enter this history's passphrase once.";
 
 /// What a probe found: a Pathwarden history, and what can be read of it
 /// before the passphrase (file names and the plain marker only).
@@ -297,8 +296,10 @@ impl Found {
 /// Under "What it keeps".
 pub fn keep_sub(keep: Keep) -> &'static str {
     match keep {
-        Keep::Full => "Each run in full, plus shared settings and accepted risks.",
-        Keep::Names => "The numbers of each run, with finding titles and domains.",
+        Keep::Full => {
+            "Each run in full, plus shared settings and accepted risks with who accepted them."
+        }
+        Keep::Names => "The numbers of each run, with each finding's title and domain.",
     }
 }
 
@@ -414,7 +415,7 @@ pub const NOT_SIGNED_IN: &str = "This computer isn't signed in to the repository
 /// What follows [`NOT_SIGNED_IN`] when git here has no credential helper;
 /// the page ends it ("then sync again.", "then look again.").
 pub const NO_HELPER: &str =
-    "Git here has no sign-in helper. Install Git for Windows with Git Credential Manager,";
+    "Git can't ask you to sign in. Install Git for Windows (it includes Git Credential Manager),";
 
 /// A sign-in that worked, and the sync after it.
 pub const SIGNED_IN: &str = "Signed in and synced.";
@@ -424,7 +425,7 @@ pub const SIGN_IN_FAILED: &str =
     "Sign-in didn't work. Check that the account can read the repository, then try again.";
 
 /// A sign-in window closed without signing in.
-pub const SIGN_IN_CANCELLED: &str = "Sign-in was cancelled.";
+pub const SIGN_IN_CANCELLED: &str = "Sign-in was canceled.";
 
 /// Whether git's `message` says the repository wanted a sign-in it didn't
 /// get: no account to give (prompts off, no helper), or one it refused.

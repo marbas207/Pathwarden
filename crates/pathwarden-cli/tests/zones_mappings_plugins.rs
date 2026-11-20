@@ -305,7 +305,7 @@ fn mapping_packs_are_trusted_only_after_a_review() {
     // Show: what the review is of, the pack card opened.
     let show = json(&run(&dir, &["mappings", "-c", c, "show", name, "--json"]));
     assert_eq!(show["name"], name);
-    assert_eq!(show["trust"], "Untrusted: context only");
+    assert_eq!(show["trust"], "Untrusted mapping: context only");
     let edges = show["relationship_kinds"].as_array().unwrap();
     assert_eq!(
         edges.len() as u64,
@@ -317,7 +317,7 @@ fn mapping_packs_are_trusted_only_after_a_review() {
         assert_eq!(t["attack_path"], false);
     }
     let text = ok(&run(&dir, &["mappings", "-c", c, "show", name]));
-    assert!(text.contains("[Untrusted: context only]"), "{text}");
+    assert!(text.contains("[Untrusted mapping: context only]"), "{text}");
     if let Some(t) = traversable {
         let kind = t["kind"].as_str().unwrap();
         assert!(
@@ -421,7 +421,7 @@ fn plugins_are_added_tested_and_removed() {
                 "--field",
                 "password=x",
             ],
-            "don't put secrets in ticket fields",
+            "secrets can't go in ticket fields",
         ),
         (
             vec![
@@ -451,7 +451,7 @@ fn plugins_are_added_tested_and_removed() {
                 "--setting",
                 "instance=http://sn.example.com",
             ],
-            "Use the ServiceNow form (`pathwarden plugins add servicenow`)",
+            "The ServiceNow plugin has its own form",
         ),
     ] {
         let mut full = vec!["plugins", "--workspace", ws];
@@ -522,7 +522,10 @@ fn plugins_are_added_tested_and_removed() {
     // of your own needs --yes, where the page asks first.
     let e = err(&run(&dir, &["plugins", "--workspace", ws, "test", "2"]));
     assert!(e.contains("isn't shipped with Pathwarden"), "{e}");
-    assert!(e.contains("Run it only if yours honors dry_run."), "{e}");
+    assert!(
+        e.contains("Test it only if your script supports test runs."),
+        "{e}"
+    );
     assert!(e.contains("--yes"), "{e}");
     let out = ok(&run(
         &dir,

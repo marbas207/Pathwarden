@@ -1816,7 +1816,7 @@ pub enum ActionError {
     #[error("{name}: {detail}")]
     Program { name: String, detail: String },
     /// `describe` gave nothing that can be used.
-    #[error("{name} didn't list its actions: {}", .problems.join("; "))]
+    #[error("{name} sent a list of actions Pathwarden can't read: {}", .problems.join("; "))]
     Describe {
         name: String,
         problems: Vec<String>,
@@ -2191,7 +2191,7 @@ pub fn run(
             return Ok(out);
         }
         Ended::Cancelled => {
-            out.message = "Cancelled: it was stopped before it finished.".into();
+            out.message = "Canceled before it finished.".into();
             return Ok(out);
         }
         Ended::Exited => {}
@@ -2278,7 +2278,7 @@ pub fn check(
     let who = crate::identity::Actor::current();
     for def in &described.describe.actions {
         if cancel.is_cancelled() {
-            out.push("Cancelled before every action was checked.".into());
+            out.push("Canceled before every action was checked.".into());
             break;
         }
         let o = offer(a, def);

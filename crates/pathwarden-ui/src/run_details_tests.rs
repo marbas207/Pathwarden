@@ -237,7 +237,7 @@ fn a_sign_in_row() {
         .into_iter()
         .find(|r| r.title == HISTORY_ROW)
         .unwrap();
-    assert_eq!(row.text, ["This run is recorded here, but not pushed: this computer isn't signed in to the repository. Git here has no sign-in helper. Install Git for Windows with Git Credential Manager, then sync again."]);
+    assert_eq!(row.text, ["This run is recorded here, but not pushed: this computer isn't signed in to the repository. Git can't ask you to sign in. Install Git for Windows (it includes Git Credential Manager), then sync again."]);
     assert!(!row.sign_in, "no helper: nothing to open");
 
     // After a sign-in that worked, the push took it: recorded.
