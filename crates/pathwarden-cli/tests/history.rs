@@ -888,7 +888,7 @@ fn a_quick_run_is_not_targeted_and_never_a_false_win() {
         )
     };
     let first = run(&full);
-    assert!(!first.contains("not targeted"), "{first}");
+    assert!(!first.contains("not collected"), "{first}");
     let second = run(&quick);
     let since = second
         .split("\nSince the last run (")
@@ -927,7 +927,7 @@ fn a_quick_run_is_not_targeted_and_never_a_false_win() {
     // The posture and the history table say "not targeted".
     let posture = pw(&dir, &["posture", "-i", &quick], &[]);
     assert!(
-        posture.contains("sessions not targeted   local groups not targeted"),
+        posture.contains("sessions not collected   local groups not collected"),
         "{posture}"
     );
     assert!(
@@ -950,7 +950,7 @@ fn a_quick_run_is_not_targeted_and_never_a_false_win() {
         since.starts_with(pts[0]["run_id"].as_str().unwrap()),
         "{since}"
     );
-    assert!(!since.contains("not targeted"), "{since}");
+    assert!(!since.contains("not collected"), "{since}");
     let history = pw(&dir, &["history", "--state", &state_arg], &[]);
     assert!(history.contains(" not collected"), "{history}");
     assert!(

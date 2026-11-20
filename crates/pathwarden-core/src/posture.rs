@@ -359,9 +359,9 @@ pub fn percent_number(p: f64) -> String {
     }
 }
 
-/// A change in percentage points to two decimals: "2.93 pts".
+/// A change in percentage points to two decimals: "2.93 points".
 pub fn points(d: f64) -> String {
-    format!("{d:.2} pts")
+    format!("{d:.2} points")
 }
 
 /// What "Tier Zero protected" means, for a glossary or an ⓘ. It is a

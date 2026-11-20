@@ -472,7 +472,7 @@ fn overview_with_history_shows_the_trend_and_changes() {
     assert!(o.contains(r#"<span class="vh">down</span> 2</span>"#));
     if p.tier_zero.protection_score.is_some() {
         assert!(
-            o.contains(r#"<span class="vh">up</span> 10.00 pts</span>"#),
+            o.contains(r#"<span class="vh">up</span> 10.00 points</span>"#),
             "{o}"
         );
     }

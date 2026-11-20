@@ -553,7 +553,7 @@ pub fn build_request(form: CollectForm, output_dir: PathBuf) -> Result<CollectRe
                     return Err(FieldError::new(
                         3,
                         "sharphound",
-                        format!("Nothing found at {raw}. Check the path."),
+                        format!("Nothing found at {raw}. Check the path and try again."),
                     ))
                 }
             }
@@ -1440,7 +1440,7 @@ fn capitalize(s: &str) -> String {
 fn busy() -> Response {
     json_error(
         StatusCode::CONFLICT,
-        "Pathwarden is already collecting or analyzing. Wait for it to finish, then try again.",
+        "A collection or analysis is running. Try again when it finishes.",
     )
 }
 

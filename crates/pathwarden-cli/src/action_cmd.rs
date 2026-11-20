@@ -1093,7 +1093,7 @@ fn print_record(r: &actions::ActionRecord, indent: &str) {
         ..Default::default()
     };
     println!(
-        "{indent}  {d}by {} — {}{d:#}",
+        "{indent}  {d}by {} · {}{d:#}",
         ui::safe(&r.action),
         ui::safe(&first.who_when())
     );
@@ -1333,7 +1333,7 @@ fn activity(t: &Target, fingerprint: Option<&str>, json: bool) -> Result<ExitCod
             format!("{}  ", ui::safe(fp))
         };
         println!(
-            "  {what}{}{} {d}— {}{d:#}",
+            "  {what}{}{} {d}· {}{d:#}",
             if a.ok { "" } else { "! " },
             ui::safe(&a.summary()),
             ui::safe(&a.who_when())

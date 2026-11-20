@@ -318,7 +318,7 @@ fn actions_are_added_run_checked_and_removed() {
     assert_eq!(act[1]["record_ids"], serde_json::json!(["fake-1"]));
     assert_eq!(act[1]["dry_run"], false);
     let out = ok(&call(&["activity", &critical], &[]));
-    assert!(out.contains("  Opened FAKE0001 — "), "{out}");
+    assert!(out.contains("  Opened FAKE0001 · "), "{out}");
     let out = ok(&call(&["activity"], &[]));
     assert!(
         out.contains("! Open a ticket failed: The fake desk said no"),

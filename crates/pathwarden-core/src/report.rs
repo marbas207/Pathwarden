@@ -357,7 +357,7 @@ pub fn render_html(r: &ReportInput) -> String {
       <a role="tab" id="tab-overview" href="#overview" aria-controls="overview">{i_overview}<span class="tl">Overview</span></a>
       <a role="tab" id="tab-plan" href="#plan" aria-controls="plan">{i_plan}<span class="tl">Remediation path</span><span class="count">{fixes}</span></a>
       <a role="tab" id="tab-findings" href="#findings" aria-controls="findings">{i_findings}<span class="tl">Findings</span><span class="count{hot}">{open}</span></a>
-      <a role="tab" id="tab-environment" href="#environment" aria-controls="environment">{i_env}<span class="tl">Environment</span></a>
+      <a role="tab" id="tab-environment" href="#environment" aria-controls="environment">{i_env}<span class="tl">Collection</span></a>
     </div>
   </nav>
   <dl class="meta">
@@ -2255,7 +2255,7 @@ fn overview_section(h: &mut String, r: &ReportInput) {
         if cp.low_domains > 0 {
             let _ = write!(
                 h,
-                r##"<p class="ov-note warn" role="note"><strong>Incomplete collection.</strong> {} {} below {LOW_PERCENT:.0}%: paths through sessions and local administrator rights can be missing, so these counts can read low. See <a href="#environment">Environment</a>.</p>"##,
+                r##"<p class="ov-note warn" role="note"><strong>Incomplete collection.</strong> {} {} below {LOW_PERCENT:.0}%: paths through sessions and local administrator rights can be missing, so these counts can read low. See <a href="#environment">Collection</a>.</p>"##,
                 esc(&figures),
                 if cp.low_domains == 1 {
                     "1 domain is".to_string()
@@ -4115,7 +4115,7 @@ fn rule_settings_row(h: &mut String, p: &Posture) {
 }
 
 fn environment_section(h: &mut String, r: &ReportInput) {
-    panel_open(h, "environment", "Environment");
+    panel_open(h, "environment", "Collection");
     h.push_str(r#"<div class="rows card">"#);
     rule_settings_row(h, r.posture);
 

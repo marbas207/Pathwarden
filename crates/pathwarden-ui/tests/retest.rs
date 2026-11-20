@@ -739,7 +739,7 @@ async fn retest_buttons_dialog_progress_and_api() {
     for want in [
         "Accounts with an attack path to each tier",
         "Open findings and attack paths",
-        "Plan steps",
+        "Remediation path",
         "Objects per tier",
         "Collection completeness",
         "What changed since",

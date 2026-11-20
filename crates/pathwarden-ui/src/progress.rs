@@ -916,7 +916,7 @@ fn kpis(b: &mut String, all: &[Point], pts: &[Point]) {
         b,
         r#"<div class="kpis pv-kpis">
 <div class="kpi {band}" title="{reason}"><span class="kpi-label">With an attack path to Tier Zero · {grade}{t1}</span><span class="kpi-value">{exposed_n}</span>{exposed}</div>
-<div class="kpi"><span class="kpi-label">Plan steps{t2}</span><span class="kpi-value">{steps}</span>{plan}</div>
+<div class="kpi"><span class="kpi-label">Remediation path{t2}</span><span class="kpi-value">{steps}</span>{plan}</div>
 <div class="kpi"><span class="kpi-label">Open findings{t3}</span><span class="kpi-value">{open_n}</span>{open}</div>
 <div class="kpi"><span class="kpi-label">Tier Zero protected{t4}</span><span class="kpi-value">{score_n}</span>{score}</div>
 </div>"#,
@@ -925,7 +925,7 @@ fn kpis(b: &mut String, all: &[Point], pts: &[Point]) {
         grade = r.grade().as_str(),
         t1 = tip("k-exposed", "With an attack path to Tier Zero", "Enabled users and computers outside Tier Zero with a full path to it. The status comes from the paths and the open findings, never from a share."),
         exposed_n = num(l.tier_zero_exposed),
-        t2 = tip("k-plan", "Plan steps", "The fewest changes that cut every attack path to Tier Zero, the one that cuts the most first."),
+        t2 = tip("k-plan", "Remediation path", "The fewest steps that cut every attack path to Tier Zero, biggest cut first."),
         steps = steps.map_or("–".to_string(), num),
         t3 = tip("k-open", "Open findings", "Findings not fixed or accepted as a risk, attack path and hygiene alike."),
         open_n = num(open_of(l)),
@@ -1733,7 +1733,7 @@ fn tiers_chart(pts: &[Point]) -> String {
         class: "pv-tiers",
         title,
         tip_id: "c-tiers",
-        definition: "For each tier, the enabled users and computers outside it (and outside Tier Zero) with a path into it. Log scale: each step up is ten times more, so a drop from thousands to tens stays visible. A run marked not targeted did not read sessions or local groups, so it counts fewer paths.",
+        definition: "For each tier, the enabled users and computers outside it (and outside Tier Zero) with a path into it. Log scale: each step up is ten times more, so a drop from thousands to tens stays visible. A run marked not collected did not read sessions or local groups, so it counts fewer paths.",
         sub: "Enabled users and computers outside each tier with a path into it, per run. Lower is better.",
         legend: &legend(&items),
         extra: &extra,
@@ -1752,7 +1752,14 @@ fn plan_chart(pts: &[Point]) -> String {
     let n = pts.len();
     let note = starts_note(pts, |p| p.hp.plan.is_some(), "the remediation plan");
     if pts.iter().all(|p| p.hp.plan.is_none()) {
-        return empty_figure("pv-plan", "Plan steps", "c-plan", PLAN_DEF, PLAN_SUB, &note);
+        return empty_figure(
+            "pv-plan",
+            "Remediation path",
+            "c-plan",
+            PLAN_DEF,
+            PLAN_SUB,
+            &note,
+        );
     }
     let (mut s, mut axis) = (String::new(), String::new());
     let max = pts
@@ -1767,7 +1774,7 @@ fn plan_chart(pts: &[Point]) -> String {
     let first = pts.iter().position(|p| p.hp.plan.is_some());
     let last = pts.iter().rposition(|p| p.hp.plan.is_some());
     let mut table = String::from(
-        "<thead><tr><th>Run</th><th>Plan steps</th><th>Accounts left after them</th></tr></thead><tbody>",
+        "<thead><tr><th>Run</th><th>Steps</th><th>Accounts left after them</th></tr></thead><tbody>",
     );
     for (i, p) in pts.iter().enumerate() {
         let cx = slot_x(i, n);
@@ -1828,13 +1835,13 @@ fn plan_chart(pts: &[Point]) -> String {
     table.push_str("</tbody>");
     Figure {
         class: "pv-plan",
-        title: "Plan steps",
+        title: "Remediation path",
         tip_id: "c-plan",
         definition: PLAN_DEF,
         sub: PLAN_SUB,
         legend: &legend(&[("plan", "Changes in the plan".into())]),
         extra: "",
-        svg: &svg("Plan steps", H, &s, &axis, Axis::Y, ""),
+        svg: &svg("Remediation path steps", H, &s, &axis, Axis::Y, ""),
         note: &note,
         table: &table,
     }
@@ -2258,7 +2265,7 @@ fn objects_chart(pts: &[Point]) -> String {
 
 /// Collection completeness: sessions and local groups, 0 to 100%, with
 /// the runs below [`LOW_PERCENT`] (or with a domain below it) shaded.
-const COMPLETE_DEF: &str = "The share of computers whose sessions, and of member computers whose local groups, were collected. Paths through logged-on sessions and local administrator rights are only as complete as these; below 80% the counts above can read low. A run marked not targeted did not ask the collector to read them.";
+const COMPLETE_DEF: &str = "The share of computers whose sessions, and of member computers whose local groups, were collected. Paths through sessions and local administrator rights are only as complete as these; below 80% the counts above can read low. A run marked not collected did not ask for them.";
 
 /// What a point's run did not target (nothing, when it doesn't say).
 fn untargeted(p: &Point) -> pathwarden_core::posture::Untargeted {
@@ -2283,18 +2290,18 @@ fn untargeted_groups(pts: &[Point]) -> Vec<f64> {
     out
 }
 
-/// A muted "not targeted" over each group of such runs, at `y`.
+/// A muted "not collected" over each group of such runs, at `y`.
 fn untargeted_labels(b: &mut String, pts: &[Point], y: f64) {
     for x in untargeted_groups(pts) {
         let _ = write!(
             b,
-            r#"<text class="pv-nt" x="{x:.1}" y="{y:.1}">not targeted</text>"#
+            r#"<text class="pv-nt" x="{x:.1}" y="{y:.1}">not collected</text>"#
         );
     }
 }
 
 /// The tooltip line of a run that did not target sessions or local
-/// groups: "Sessions and local groups not targeted".
+/// groups: "Sessions and local groups not collected".
 fn untargeted_tip(p: &Point) -> Option<String> {
     let chip = untargeted(p).chip()?;
     let mut c = chip.chars();
@@ -2419,7 +2426,7 @@ fn completeness_chart(pts: &[Point]) -> String {
     }
     x_labels(&mut s, pts, MT + plot_h());
     // A run that did not target a part has no point for it: the line ends
-    // at the last run that did, and the slot says "not targeted".
+    // at the last run that did, and the slot says "not collected".
     untargeted_labels(&mut s, pts, MT + plot_h() * 0.5);
     let series = [
         Series {
@@ -2473,7 +2480,7 @@ fn completeness_chart(pts: &[Point]) -> String {
             None => Some("–".to_string()),
             Some(g) => Some(format!("{}%", since::whole_percent(g))),
         };
-        let shown = |v: &Option<String>| v.clone().unwrap_or_else(|| "not targeted".into());
+        let shown = |v: &Option<String>| v.clone().unwrap_or_else(|| "not collected".into());
         let mut tl = vec![
             when(p.hp.at),
             format!("Sessions {}", shown(&sess)),
@@ -2520,15 +2527,15 @@ fn completeness_chart(pts: &[Point]) -> String {
 const DEFINITIONS: &str = r#"<details class="explain pv-defs"><summary>{info} All definitions</summary><dl>
 <div><dt>With an attack path to Tier Zero</dt><dd>Enabled users and computers outside Tier Zero with a full path to it. Each is a way in.</dd></div>
 <div><dt>Status</dt><dd>Critical, High, Moderate or Low, from the paths and the open findings, never from a share: any path into Tier Zero keeps it at High or above.</dd></div>
-<div><dt>Plan steps</dt><dd>The fewest changes that cut every attack path to Tier Zero, the one that cuts the most first.</dd></div>
+<div><dt>Remediation path</dt><dd>The fewest steps that cut every attack path to Tier Zero, biggest cut first.</dd></div>
 <div><dt>Open findings</dt><dd>Findings not fixed or accepted as a risk. Attack path findings are on a path to Tier Zero; hygiene findings are weaknesses not on an attack path.</dd></div>
 <div><dt>Tier Zero protected</dt><dd>The share of Tier Zero objects that no open attack path finding leads to.</dd></div>
 <div><dt>Accounts with an attack path to each tier</dt><dd>For Tier Zero and each Privilege Zone, the accounts outside it (and outside Tier Zero) with a path into it. Log scale: each step up is ten times more.</dd></div>
 <div><dt>Objects per tier</dt><dd>The objects each tier protects. Tier Zero objects are never zone members, so an object counts in the highest tier only.</dd></div>
-<div><dt>Collection completeness</dt><dd>The share of computers whose sessions, and of member computers whose local groups, were collected. Below 80% the counts can read low. A run marked not targeted did not ask the collector to read them, as in a Quick collection; its counts are compared only with runs that also didn't.</dd></div>
+<div><dt>Collection completeness</dt><dd>The share of computers whose sessions, and of member computers whose local groups, were collected. Below 80% the counts can read low. A run marked not collected did not ask for them, as in a Quick collection; it is compared only with other Quick collections.</dd></div>
 <div><dt>What changed</dt><dd>The latest run against the run before it in the same environment. Over the time range above, or two days picked: everything net new in it (new findings, findings back after a fix, findings that gained objects, new members of Tier Zero and the zones, new paths into them) and what was fixed. The report's Findings tab names them.</dd></div>
 <div><dt>Introduced</dt><dd>First seen by Pathwarden: a change carries the date of the run that found it, not when it was made in the directory. Objects and paths are dated from the first run of this version on.</dd></div>
-<div><dt>Time range</dt><dd>The week, month or three months up to the latest run (not up to today). At most the latest 40 runs are charted.</dd></div>
+<div><dt>Time range</dt><dd>The week, month or 3 months up to the latest run (not up to today). At most the latest 40 runs are charted.</dd></div>
 </dl><p class="muted small">More terms in the <a href="https://pathwarden.org/kb/glossary.html">glossary</a>.</p></details>"#;
 
 #[cfg(test)]

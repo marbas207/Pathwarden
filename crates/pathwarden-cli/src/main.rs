@@ -3546,7 +3546,7 @@ fn print_completeness(p: &Posture) {
                 pct(c.sessions_percent)
             )
         } else {
-            "sessions not targeted".to_string()
+            "sessions not collected".to_string()
         };
         let mut services = match c.services_words() {
             Some(w) => format!("   services read {w}"),
@@ -3606,7 +3606,7 @@ fn print_completeness(p: &Posture) {
     }
     if p.completeness.iter().any(|c| c.is_low()) {
         println!(
-            "  Below 80%: paths through logged-on sessions and local admin rights may be missing. \
+            "  Below 80%: paths through signed-in sessions and local admin rights may be missing. \
              Run the collector with privileged session collection and from a computer that can \
              reach all computers."
         );
@@ -3623,7 +3623,7 @@ fn pct(p: f64) -> String {
 /// none.
 fn local_groups_cell(c: &posture::Completeness) -> String {
     match c.local_groups_na() {
-        None if !c.local_groups_targeted => "not targeted".to_string(),
+        None if !c.local_groups_targeted => "not collected".to_string(),
         None => format!(
             "{}/{} ({})",
             c.local_groups_collected,
@@ -4093,7 +4093,7 @@ fn run_cmd(
         count(c.suppressed, "accepted risk", "accepted risks"),
         if c.held > 0 && rec.not_targeted.is_some() {
             format!(
-                ", {} can't tell (not collected, not read or not targeted this run)",
+                ", {} can't tell (not collected or not read this run)",
                 c.held
             )
         } else if c.held > 0 {

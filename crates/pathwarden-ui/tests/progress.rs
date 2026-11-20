@@ -170,14 +170,14 @@ async fn progress_charts_the_history_over_a_range() {
     for want in [
         "With an attack path to Tier Zero · Critical",
         r#"<span class="kpi-value">31</span>"#,
-        "Plan steps",
+        "Remediation path",
         r#"<span class="kpi-value">1</span>"#,
         "Open findings",
         "Tier Zero protected",
         r#"<span class="kpi-value">90.00%</span>"#,
         "since the last run",
         r#"<span class="vh">down</span> 89"#,
-        r#"<span class="vh">up</span> 1.00 pts"#,
+        r#"<span class="vh">up</span> 1.00 points"#,
         // The change over the range, and the objects behind the share.
         r#"<span class="vh">down</span> 9,069</span> in 7 weeks"#,
         "45 of 50 objects",
@@ -201,7 +201,7 @@ async fn progress_charts_the_history_over_a_range() {
     // The five charts, each with a title, a subtitle and a legend.
     for title in [
         "Accounts with an attack path to each tier",
-        "Plan steps",
+        "Remediation path",
         "Open findings and attack paths",
         "Objects per tier",
         "Collection completeness",
@@ -321,8 +321,8 @@ async fn a_quick_run_is_not_targeted_not_a_dip() {
     assert!(!body.contains("counts may be low</text>"), "{body}");
     // One label on each chart that marks it (the accounts chart twice: linear and log).
     assert_eq!(body.matches(r#"class="pv-nt""#).count(), 3, "{body}");
-    assert!(body.contains("Sessions not targeted"), "{body}");
-    assert!(body.contains("Local groups not targeted"), "{body}");
+    assert!(body.contains("Sessions not collected"), "{body}");
+    assert!(body.contains("Local groups not collected"), "{body}");
     assert!(
         body.contains("Sessions and local groups not collected"),
         "{body}"
@@ -333,7 +333,7 @@ async fn a_quick_run_is_not_targeted_not_a_dip() {
         2,
         "{body}"
     );
-    assert!(body.contains("A run marked not targeted did not ask the collector to read them."));
+    assert!(body.contains("A run marked not collected did not ask for them."));
     // The cards and What changed: not compared with the Full run.
     assert!(body.contains("not compared with the last run"), "{body}");
     assert!(!body.contains("since the last run</span>"), "{body}");
