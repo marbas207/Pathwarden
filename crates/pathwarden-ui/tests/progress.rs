@@ -355,7 +355,7 @@ async fn empty_and_single_runs_offer_an_action() {
     let (_, body) = a.get("/progress").await;
     assert!(body.contains("No runs yet."), "{body}");
     // The empty state Home has.
-    assert!(body.contains(r#"href="/collect""#) && body.contains("Collect or analyze"));
+    assert!(body.contains(r#"href="/collect""#) && body.contains("<strong>Analyze</strong>"));
 
     a.history(&[point(0, 31, 12, 1, 1, 2, 94.0, false)]);
     let (_, body) = a.get("/progress").await;

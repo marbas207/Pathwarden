@@ -352,7 +352,7 @@ fn an_action_runs_in_a_browser_and_stays_on_the_finding() {
         f["all"].as_u64().unwrap(),
         "{said:?}"
     );
-    assert_eq!(f["overview"], "1 finding has records");
+    assert_eq!(f["overview"], "1 finding has a record");
     // Closed with its x, the dialog leaves no wait bar.
     let c = step("closed");
     assert_eq!(c["open"], false, "{said:?}");

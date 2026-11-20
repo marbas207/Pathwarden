@@ -849,7 +849,15 @@ pub fn exposure_lists(
     }
     Some(
         read_gz_capped(&path, pathwarden_core::exposed::MAX_LISTS_BYTES)
-            .map_err(|e| format!("The run's account lists can't be read ({e})."))
+            .map_err(|e| {
+                // The path and size go to the log, not the page.
+                pathwarden_core::logs::note(&format!("The run's account lists: {e}"));
+                if e.kind() == std::io::ErrorKind::Other {
+                    "The run's account lists are too large to read.".to_string()
+                } else {
+                    "The run's account lists can't be read.".to_string()
+                }
+            })
             .and_then(|b| pathwarden_core::exposed::ExposureLists::parse(&b)),
     )
 }

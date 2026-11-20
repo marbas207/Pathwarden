@@ -91,6 +91,10 @@
 .ac-fu .when { color: var(--muted); font-weight: 400; }
 .ac-problem { margin: 8px 0; display: flex; gap: 8px; align-items: baseline; color: var(--muted); font-size: 0.86rem; }
 .ac-problem .ic { width: 15px; height: 15px; color: var(--warn); flex: none; }
+.ac-problem { flex-wrap: wrap; }
+.ac-why { flex-basis: 100%; margin-left: 23px; }
+.ac-why summary { cursor: pointer; }
+.ac-why p { margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .pluglist.ac-progs > .ac-progwrap + .ac-progwrap { border-top: 1px solid var(--line); }
 .ac-progs + .after-list { margin-bottom: 18px; }
 /* A lock note: what is turned off in this app, with its (i). */

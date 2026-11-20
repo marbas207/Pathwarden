@@ -80,6 +80,7 @@
 .ac-chip.stale { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .ac-chip.stale .ic { color: var(--warn); }
 .ac-more { color: var(--muted); font-size: 0.74rem; font-weight: 650; }
+.ac-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .title .ac-rowchips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 3px 0 0; font-weight: 400; letter-spacing: 0; text-transform: none; }
 .title .seen .ac-rowchips { display: inline-flex; flex-wrap: nowrap; margin: 0 0 0 8px; vertical-align: 1px; }
 /* "first seen …" and its chips stay one line: it may run past the title's

@@ -190,7 +190,7 @@ webhook_env = "PATHWARDEN_ALERT_WEBHOOK"
 
 1. Open a run's report and a finding.
 2. Click **Alert the team** in the finding's action bar.
-3. Type a note, and click **Run**.
+3. Type a note, and click **Start**.
 
 #### On the command line
 
@@ -795,7 +795,7 @@ from which computer. What leaves the computer is up to the program.
 ### Nothing runs unattended
 
 - Actions never run from `pathwarden run` or a scheduled task.
-- The app runs one only after someone clicks **Run** in its dialog.
+- The app runs one only after someone clicks **Start** in its dialog.
 - `pathwarden action run` and `pathwarden action test` ask first, unless
   `--yes`.
 - `pathwarden action check` asks whenever a real finding would be sent: a

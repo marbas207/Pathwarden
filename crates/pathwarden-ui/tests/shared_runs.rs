@@ -1124,7 +1124,7 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     // pages, not Progress.
     let (status, _, list) = page(&reader, "/runs");
     assert_eq!(status, 200);
-    assert_eq!(list.matches("From the repository").count(), 2, "{list}");
+    assert_eq!(list.matches("From the run history").count(), 2, "{list}");
     assert!(list.contains("Recorded by the schedule"), "{list}");
     for r in &runs {
         assert!(
@@ -1132,7 +1132,7 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
             "{list}"
         );
     }
-    assert!(!list.contains("Numbers with names"), "{list}");
+    assert!(!list.contains("Numbers only"), "{list}");
     let loc = pathwarden_ui::history_ui::locate(&reader, None).unwrap();
     let snap = pathwarden_ui::history_ui::Snapshot {
         history: pathwarden_ui::history_ui::read(&loc),
@@ -1150,7 +1150,7 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     assert_eq!(status, 200, "{body}");
     // The header: tagged, nothing more about where it came from (the
     // owner's choice). What the report opens stays sandboxed.
-    assert!(body.contains("From the repository"), "{body}");
+    assert!(body.contains("From the run history"), "{body}");
     assert!(!body.contains("ecorded by the schedule"), "{body}");
     assert!(
         body.contains(r#"sandbox="allow-scripts allow-popups">"#),
@@ -1158,7 +1158,7 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     );
     assert!(!body.contains("allow-popups-to-escape-sandbox"), "{body}");
     assert!(body.contains(&format!("/runs/{folder}/explore")));
-    assert!(!body.contains("Remove from the history"));
+    assert!(!body.contains("Remove from the run history"));
     // The Run details tab, in the report as the run page embeds it: where
     // it came from and, on a computer that only reads, Hide.
     let (status, _, embed) = page(&reader, &format!("/runs/{folder}/report?embed=1"));
@@ -1171,8 +1171,8 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     );
     assert!(embed.contains(&format!("<code>{r2}</code>")), "the run ID");
     assert!(embed.contains("Hide on this computer"));
-    assert!(embed.contains("It stays in the repository for everyone else."));
-    assert!(!embed.contains("Remove from the history"));
+    assert!(embed.contains("It stays in the run history for everyone else."));
+    assert!(!embed.contains("Remove from the run history"));
     assert!(
         embed.contains(r#"id="i-trash""#),
         "the report's icons have the trash"
@@ -1221,12 +1221,15 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     assert_eq!(w.len(), 1);
     let (status, _, embed) = page(&writer, &format!("/runs/{}/report?embed=1", w[0].id));
     assert_eq!(status, 200);
-    assert!(embed.contains("Remove from the history"), "{embed}");
+    assert!(embed.contains("Remove from the run history"), "{embed}");
     assert!(embed.contains("This removes it on every computer."));
     assert!(!embed.contains("Hide on this computer"));
     // The page's dialog asks to remove it from the history.
     let (_, _, body) = page(&writer, &format!("/runs/{}", w[0].id));
-    assert!(body.contains("Remove this run from the history?"), "{body}");
+    assert!(
+        body.contains("Remove this run from the run history?"),
+        "{body}"
+    );
     pathwarden_ui::history_ui::delete_run(&writer, None, &w[0].id).unwrap();
     assert!(remote_bundles(&remote).is_empty());
     assert!(!remote_points(&remote).contains(&r2));
@@ -1286,7 +1289,7 @@ fn changed_damaged_and_newer_full_runs() {
     // What was left out, and that Explore can't open it when it
     // needed one of them.
     let status = plain(&body)
-        .split(r#"<span class="rd-s">From the repository · "#)
+        .split(r#"<span class="rd-s">From the run history · "#)
         .nth(1)
         .and_then(|s| s.split("</span>").next())
         .map(str::to_string)
@@ -1373,16 +1376,13 @@ fn changed_damaged_and_newer_full_runs() {
     assert!(list.contains("Needs a newer Pathwarden"), "{list}");
     assert!(list.contains("update Pathwarden to open it"), "{list}");
     assert!(
-        !list.contains("recorded before full runs were kept"),
+        !list.contains("recorded before reports were kept"),
         "{list}"
     );
     let writer = other_computer(&dir, &remote, "writer", true);
     get_latest(&writer);
     let (_, _, list) = page(&writer, "/runs");
-    assert!(
-        list.contains("recorded before full runs were kept"),
-        "{list}"
-    );
+    assert!(list.contains("recorded before reports were kept"), "{list}");
 
     // Another schema: not a full run of ours, so not "update Pathwarden".
     m["schema"] = "someone.else.v7".into();
@@ -1768,7 +1768,7 @@ fn a_loaded_run_is_shown_not_trusted() {
         body.contains(r#"class="card rd-below" id="run-details" aria-label"#),
         "{body}"
     );
-    assert!(body.contains("Remove from the history"), "{body}");
+    assert!(body.contains("Remove from the run history"), "{body}");
     assert!(
         body.contains("This removes it on every computer."),
         "{body}"
@@ -1967,7 +1967,7 @@ fn another_environment_s_run_follows_its_own_history_under_state() {
         .to_string();
     let (_, _, _, embed) = request(&st, &format!("/runs/{f}/report?embed=1&rd={nonce}"));
     assert!(embed.contains("Hide on this computer"), "{embed}");
-    assert!(!embed.contains("Remove from the history"), "{embed}");
+    assert!(!embed.contains("Remove from the run history"), "{embed}");
     assert!(body.contains("Hide this run on this computer?"), "{body}");
     // And Delete hides it: the repository keeps it, the flag's folder is
     // left alone.
@@ -2187,7 +2187,7 @@ fn a_run_without_its_object_index_says_so() {
     let body = plain(&body);
     assert!(
         body.contains(
-            r#"<span class="rd-s">From the repository · object index left out, so Explore can't open it</span>"#
+            r#"<span class="rd-s">From the run history · object index left out, so Explore can't open it</span>"#
         ),
         "{body}"
     );

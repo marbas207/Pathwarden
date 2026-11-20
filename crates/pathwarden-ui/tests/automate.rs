@@ -451,7 +451,7 @@ async fn the_same_collection_warns_before_a_run_is_made() {
     assert_eq!(s, StatusCode::NOT_FOUND);
     assert_eq!(
         serde_json::from_str::<Value>(&b).unwrap()["error"],
-        "No such job."
+        "That analysis or collection is no longer running. Reload the page."
     );
     assert_eq!(a.state.ws().runs().len(), 3);
 }
@@ -479,7 +479,7 @@ async fn scheduled_runs_show_on_runs_and_progress_with_their_report() {
     );
     assert!(body.contains(r#"href="/history/report""#), "{body}");
     assert!(body.contains(&format!(r#"href="/runs/{first}""#)));
-    assert!(!body.contains("Local only"), "{body}");
+    assert!(!body.contains("This computer only"), "{body}");
     let (s, h, report) = a.get("/history/report").await;
     assert_eq!(s, StatusCode::OK);
     assert!(report.contains("Scheduled report"));
@@ -533,7 +533,7 @@ async fn earlier_runs_stay_local_until_the_user_chooses() {
         "{page}"
     );
     let (_, _, body) = a.get("/runs").await;
-    assert!(body.contains("Local only"), "{body}");
+    assert!(body.contains("This computer only"), "{body}");
     assert!(body.contains("Import or keep local only"), "{body}");
     let (_, _, body) = a.get("/automate/history").await;
     assert!(body.contains("Import them in order"), "{body}");
@@ -736,8 +736,8 @@ async fn numbers_only_runs_open_their_small_page() {
     assert!(body.contains(&format!(r#"href="/runs/{point}""#)), "{body}");
     assert!(body.contains(&format!(r#"href="/runs/{first}""#)), "{body}");
     assert!(!body.contains("/progress?env="), "{body}");
-    assert!(body.contains("Numbers with names"), "{body}");
-    assert!(body.contains("no full run"), "{body}");
+    assert!(body.contains("Numbers only"), "{body}");
+    assert!(!body.contains("no full run"), "the tag says it: {body}");
     assert!(body.contains(r#"class="runrow numbers-only""#), "{body}");
 
     let (s, _, page) = a.get(&format!("/runs/{point}")).await;
@@ -772,7 +772,7 @@ async fn numbers_only_runs_open_their_small_page() {
     // And the run's line no longer says only its numbers are kept.
     let (_, _, page) = a.get(&format!("/runs/{point}")).await;
     assert!(
-        page.contains("No full run on this computer, so there"),
+        page.contains("Its report and graph aren&#39;t on this computer."),
         "{page}"
     );
 }

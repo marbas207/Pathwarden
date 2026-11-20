@@ -733,7 +733,7 @@ async fn sharphound_collects_then_the_analysis_runs() {
     );
     assert!(!tab.contains("collector warning"), "{tab}");
     assert!(
-        tab.contains(r##"<a href="#" data-pw-run="schedule">Run it every night</a>"##),
+        tab.contains(r##"<a href="#" data-pw-run="schedule">Schedule this collection</a>"##),
         "{tab}"
     );
     let (_, _, sched) = a

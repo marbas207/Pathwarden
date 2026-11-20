@@ -798,7 +798,7 @@ async fn a_path_produces_a_run_and_a_report() {
     );
     assert!(!details.contains(&format!("<code>{id}</code>")));
     assert!(details.contains("<dt>Recorded</dt><dd>On this computer</dd>"));
-    assert!(details.contains(r#"data-pw-run="remove""#) && details.contains("Delete this run"));
+    assert!(details.contains(r#"data-pw-run="remove""#) && details.contains("Delete run"));
     // Not in the report itself, and the page has no Delete button of its
     // own: only the trigger the tab's button asks for.
     let (_, _, full) = a.get(&format!("/runs/{id}/report")).await;
@@ -852,7 +852,7 @@ async fn a_path_produces_a_run_and_a_report() {
     // local in the browser (UTC until then).
     let (_, _, home) = a.get("/").await;
     assert!(home.contains(&format!("/runs/{id}")));
-    assert!(home.contains(r#"<section class="env-ov">"#) && home.contains("New analysis"));
+    assert!(home.contains(r#"<section class="env-ov">"#) && home.contains(" Analyze <svg"));
     assert!(home.contains(r#"<div class="hero card"#), "{home}");
     assert!(home.contains(r#"class="ov-cards""#), "{home}");
     assert!(!home.contains(r##"<a href="#"##), "{home}");
@@ -861,7 +861,7 @@ async fn a_path_produces_a_run_and_a_report() {
     let (_, _, runs) = a.get("/runs").await;
     assert!(runs.contains("CONTOSO.LOCAL"));
     // Each row against the run before; this is the first.
-    assert!(runs.contains("Vs previous") && runs.contains("First run"));
+    assert!(runs.contains("Since the previous run") && runs.contains("First run"));
 
     // Delete it.
     let req = a
@@ -921,7 +921,7 @@ async fn bad_input_fails_plainly() {
         )
         .await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    assert!(body.contains("is not a .zip or .json file"), "{body}");
+    assert!(body.contains("isn't a .zip or .json file"), "{body}");
     assert!(a.uploads_empty());
 
     // Nothing chosen.
