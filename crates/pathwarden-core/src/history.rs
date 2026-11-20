@@ -157,6 +157,11 @@ pub struct ReportHistory<'s> {
     /// The history folder the points come from, for the earlier run's
     /// exposed accounts ([`crate::exposed`]); `None` when not known.
     pub state_dir: Option<std::path::PathBuf>,
+    /// The fixed findings whose record (a ticket) is still open, newest
+    /// fix first ([`crate::action_log::fixed_open`]): the Findings tab's
+    /// "Fixed, ticket still open" card. Filled with `state`; empty
+    /// otherwise.
+    pub fixed_open: Vec<crate::action_log::FixedFinding>,
 }
 
 impl ReportHistory<'_> {
@@ -236,7 +241,7 @@ pub fn for_report_in(state_dir: &Path, domains: &[String], this: This) -> Report
         h.state = read_state(state_dir).map(Cow::Owned);
     }
     h.state_dir = Some(state_dir.to_path_buf());
-    h
+    with_fixed_open(h, state_dir)
 }
 
 /// [`for_report_in`] for a run just recorded, from the history in
@@ -254,6 +259,19 @@ pub fn for_report_with<'s>(
         h.state = Some(Cow::Borrowed(state));
     }
     h.state_dir = Some(state_dir.to_path_buf());
+    with_fixed_open(h, state_dir)
+}
+
+/// `h` with its fixed findings whose record is still open
+/// ([`ReportHistory::fixed_open`]), from the findings state it has and
+/// what actions did in the history under `state_dir`. None when it has no
+/// state (a report of an earlier run) or the actions can't be read.
+fn with_fixed_open<'s>(mut h: ReportHistory<'s>, state_dir: &Path) -> ReportHistory<'s> {
+    if let Some(state) = h.state.as_deref() {
+        if let Ok(file) = crate::action_log::load_in(state_dir) {
+            h.fixed_open = crate::action_log::fixed_open(state, &file);
+        }
+    }
     h
 }
 
@@ -935,9 +953,18 @@ mod tests {
             )
             .unwrap();
         }
+        // r3 found PW-006-a fixed; its ticket is still open.
         std::fs::write(
             dir.join("findings.json"),
-            serde_json::to_string(&FindingsState::default()).unwrap(),
+            r#"{"version":1,"findings":{"PW-006-a":{"rule":"PW-006","severity":"high",
+            "category":"attack_path","status":"resolved","first_seen":100,"last_seen":200,
+            "resolved_at":300,"times_seen":2}}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join(crate::action_log::FILE),
+            r#"{"version":1,"findings":{"PW-006-a":{"records":[{"action":"desk/open",
+            "id":"sys-1","number":"RITM0010816","status":"Open","open":true}]}}}"#,
         )
         .unwrap();
         let this = |digest| This::Data {
@@ -949,6 +976,7 @@ mod tests {
         assert_eq!(ids, ["r1"]);
         assert_eq!(h.this_run.as_ref().map(|p| p.run_id.as_str()), Some("r2"));
         assert!(h.state.is_none(), "the state is r3's");
+        assert!(h.fixed_open.is_empty());
         let mut posture = posture.clone();
         posture.tier_zero.exposed = 3;
         let s = h.since(&posture, 999, None).unwrap();
@@ -958,6 +986,12 @@ mod tests {
         let h = for_report_in(&dir, &[], this("data of r3"));
         assert_eq!(h.earlier.len(), 2);
         assert!(h.state.is_some());
+        let fixed: Vec<(&str, i64)> = h
+            .fixed_open
+            .iter()
+            .map(|f| (f.fingerprint.as_str(), f.fixed_at))
+            .collect();
+        assert_eq!(fixed, [("PW-006-a", 300)]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

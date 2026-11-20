@@ -1071,6 +1071,40 @@ fn action_chips(f: &Finding) -> String {
     }
 }
 
+/// The "Fixed, ticket still open" card: each fixed finding that still
+/// has an open record, with its records' chips and the day it was fixed
+/// (in the reader's time zone, as the page's other dates), newest fix
+/// first ([`crate::action_log::fixed_open`]). Nothing when there are none.
+fn fixed_open_card(h: &mut String, list: &[crate::action_log::FixedFinding]) {
+    if list.is_empty() {
+        return;
+    }
+    h.push_str(
+        r#"<section class="card fixed-open" aria-labelledby="fo-h"><h3 id="fo-h">Fixed, ticket still open</h3><p class="muted small">These findings are fixed, but their tickets are still open, so they can be closed.</p><ul>"#,
+    );
+    for f in list {
+        let chips: String = f
+            .records
+            .iter()
+            .map(|r| {
+                format!(
+                    r#"<span class="ac-chip">{}</span>"#,
+                    esc(&crate::action_log::chip(&r.record, false))
+                )
+            })
+            .collect();
+        let _ = write!(
+            h,
+            r#"<li><span class="t"><span class="rule">{}</span>{}</span><span class="fo-chips">{chips}</span><span class="when">Fixed <time data-unix="{}" data-fmt="day">{}</time></span></li>"#,
+            esc(&f.rule),
+            esc(&f.title),
+            f.fixed_at,
+            esc(&short_date(f.fixed_at))
+        );
+    }
+    h.push_str("</ul></section>");
+}
+
 /// A finding's Activity list, newest first, as text: "Opened RITM0001234
 /// — NORTH\a.admin, SECOPS-WS02, Nov 18, 2026, 2:02 PM". Empty when
 /// no action ran on it.
@@ -2944,7 +2978,9 @@ fn plan_section(h: &mut String, r: &ReportInput, links: &PlanLinks) {
 fn findings_section(h: &mut String, r: &ReportInput, links: &PlanLinks) {
     panel_open(h, "findings", "Findings");
     if r.findings.is_empty() {
-        h.push_str(r#"<p class="lead">No findings.</p></section>"#);
+        h.push_str(r#"<p class="lead">No findings.</p>"#);
+        fixed_open_card(h, &r.history.fixed_open);
+        h.push_str("</section>");
         return;
     }
     let _ = write!(
@@ -3028,6 +3064,7 @@ fn findings_section(h: &mut String, r: &ReportInput, links: &PlanLinks) {
             .then(a.0.cmp(b.0))
     });
 
+    fixed_open_card(h, &r.history.fixed_open);
     h.push_str(r#"<div class="rows groups card">"#);
     for (rule, fs) in &groups {
         let title = titles.get(rule).copied().unwrap_or(fs[0].title.as_str());

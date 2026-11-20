@@ -705,3 +705,124 @@ fn a_removal_past_the_remembered_ones_counts_as_made() {
 fn the_left_sealed_words_name_the_key_file() {
     assert!(LEFT_SEALED_WORDS.contains(crate::crypt::KEY_FILE));
 }
+
+/// A tracked finding of `rule`: fixed at `fixed` (Unix time), or open.
+fn tracked(rule: &str, fixed: Option<i64>, title: Option<&str>) -> crate::state::TrackedFinding {
+    serde_json::from_value(serde_json::json!({
+        "rule": rule,
+        "severity": "high",
+        "category": "attack_path",
+        "status": if fixed.is_some() { "resolved" } else { "open" },
+        "first_seen": 1,
+        "last_seen": 1,
+        "resolved_at": fixed,
+        "times_seen": 1,
+        "title": title,
+    }))
+    .unwrap()
+}
+
+/// A record of `fp` with ticket `number`, open or closed.
+fn record_on(file: &mut ActionsFile, fp: &str, number: &str, status: &str, open: bool) {
+    file.findings
+        .entry(fp.into())
+        .or_default()
+        .records
+        .push(ActionRecord {
+            action: "service-desk/open".into(),
+            record: Record {
+                id: format!("sys-{number}"),
+                number: Some(number.into()),
+                status: Some(status.into()),
+                open,
+                ..Record::default()
+            },
+            by: None,
+            on: None,
+            at: "2026-11-18T14:02:11.000Z".into(),
+            updated_at: "2026-11-18T14:02:11.000Z".into(),
+        });
+}
+
+#[test]
+fn fixed_findings_with_an_open_record_newest_fix_first() {
+    let mut state = crate::state::FindingsState::default();
+    let mut file = ActionsFile::default();
+    // Nothing fixed: nothing listed.
+    assert!(fixed_open(&state, &file).is_empty());
+
+    // Fixed, with an open record: listed, with the state's title.
+    state.findings.insert(
+        "PW-006-a".into(),
+        tracked("PW-006", Some(1_795_000_000), Some("SVC-SQL01@NORTH.LAB")),
+    );
+    record_on(&mut file, "PW-006-a", "RITM0010816", "Open", true);
+    // Fixed later, with two open records and a closed one; no title kept,
+    // so its rule's.
+    state.findings.insert(
+        "PW-012-b".into(),
+        tracked("PW-012", Some(1_795_100_000), None),
+    );
+    record_on(
+        &mut file,
+        "PW-012-b",
+        "RITM0010822",
+        "Work in Progress",
+        true,
+    );
+    record_on(
+        &mut file,
+        "PW-012-b",
+        "RITM0010823",
+        "Closed Complete",
+        false,
+    );
+    record_on(&mut file, "PW-012-b", "RITM0010824", "Open", true);
+    // Fixed, with only a closed record: not listed.
+    state.findings.insert(
+        "PW-003-c".into(),
+        tracked("PW-003", Some(1_795_200_000), None),
+    );
+    record_on(&mut file, "PW-003-c", "RITM0010790", "Closed", false);
+    // Open, with an open record: not listed.
+    state
+        .findings
+        .insert("PW-001-d".into(), tracked("PW-001", None, None));
+    record_on(&mut file, "PW-001-d", "RITM0010700", "Open", true);
+    // Resolved because its rule was turned off: not fixed.
+    let mut off = tracked("PW-002", Some(1_795_300_000), None);
+    off.rule_off = true;
+    state.findings.insert("PW-002-e".into(), off);
+    record_on(&mut file, "PW-002-e", "RITM0010701", "Open", true);
+    // A record of a finding the state doesn't have: not listed.
+    record_on(&mut file, "PW-009-f", "RITM0010702", "Open", true);
+
+    let list = fixed_open(&state, &file);
+    let fps: Vec<&str> = list.iter().map(|f| f.fingerprint.as_str()).collect();
+    assert_eq!(fps, ["PW-012-b", "PW-006-a"]);
+    assert_eq!(list[0].fixed_at, 1_795_100_000);
+    assert_eq!(list[0].rule, "PW-012");
+    let pw012 = crate::findings::rules()
+        .iter()
+        .find(|r| r.id == "PW-012")
+        .unwrap()
+        .title;
+    assert_eq!(list[0].title, pw012);
+    let chips: Vec<String> = list[0]
+        .records
+        .iter()
+        .map(|r| chip(&r.record, false))
+        .collect();
+    assert_eq!(
+        chips,
+        ["RITM0010822 · Work in Progress", "RITM0010824 · Open"]
+    );
+    assert_eq!(list[1].title, "SVC-SQL01@NORTH.LAB");
+    assert_eq!(list[1].records.len(), 1);
+
+    // Every record of the fixed findings, closed ones too (`--fixed`).
+    let all = fixed_records(&state, &file, false);
+    let fps: Vec<&str> = all.iter().map(|f| f.fingerprint.as_str()).collect();
+    assert_eq!(fps, ["PW-003-c", "PW-012-b", "PW-006-a"]);
+    assert_eq!(all[1].records.len(), 3);
+}
