@@ -319,7 +319,7 @@ fn scalar_text(v: &Value) -> Option<String> {
 }
 
 /// The button and form for a plugin other than ServiceNow and Jira: what
-/// it can add. Without `--allow-destinations` that is only a plugin
+/// it can add. With `--lock-destinations` that is only a plugin
 /// program (`pathwarden-output-<name>`), not a script.
 fn other_title(allow_commands: bool) -> &'static str {
     if allow_commands {
@@ -471,8 +471,8 @@ fn servicenow_form(o: &OutputConfig, locked: bool) -> String {
     )
 }
 
-/// The lock note on the ServiceNow and Jira forms without
-/// `--allow-destinations`: where findings go can't be changed here.
+/// The lock note on the ServiceNow and Jira forms with
+/// `--lock-destinations`: where findings go can't be changed here.
 fn destination_lock(locked: bool) -> String {
     if locked {
         pages::lock_note("lock-destinations", plugin_form::DESTINATION_LOCKED)
@@ -707,7 +707,7 @@ fn command_form(o: &OutputConfig, allow_commands: bool) -> String {
         Some(argv) if !argv.is_empty() => (argv[0].clone(), argv[1..].join("\n")),
         _ => (String::new(), String::new()),
     };
-    // Without --allow-destinations a new plugin can only be a plugin
+    // With --lock-destinations a new plugin can only be a plugin
     // program, and an existing command is shown but can't be edited.
     let has_command = o.command.as_ref().is_some_and(|c| !c.is_empty());
     let by_name = o.command.is_none() || (!allow_commands && !has_command);

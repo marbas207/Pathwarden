@@ -717,8 +717,8 @@ fn destinations_of(
         .unwrap_or_default()
 }
 
-/// What a save may change. Without `allow` (the app without
-/// `--allow-destinations`) a save may keep a command the file already
+/// What a save may change. Without `allow` (the app with
+/// `--lock-destinations`) a save may keep a command the file already
 /// has, but not add or change one: a page session must not be able to make
 /// Pathwarden run a program of its choosing. Nor may it change where a
 /// plugin sends findings or its credentials, or which secrets it reads (its
@@ -770,7 +770,7 @@ pub const ACTIONS_LOCKED: &str = "Adding or changing action programs is turned o
 
 /// [`check_command`]'s rule for an `[[action]]` block, shared by the app
 /// and `pathwarden action add`, stricter than for outputs. Without `allow`
-/// (the app without `--allow-destinations`) a save may change only a
+/// (the app with `--lock-destinations`) a save may change only a
 /// block's name, `timeout_seconds` and filters (`min_severity`, `rules`,
 /// `categories`): not add a block, change its `plugin` or `command`, or
 /// set or remove any program setting. A setting may be where the program
@@ -965,7 +965,7 @@ mod tests {
         assert!(e
             .set
             .contains(&("timeout_seconds".into(), Setting::Int(30))));
-        // A page without --allow-destinations may not add a program; the
+        // A page with --lock-destinations may not add a program; the
         // terminal may, but not from a network path.
         assert_eq!(
             check_command(false, &mut e.clone(), None),

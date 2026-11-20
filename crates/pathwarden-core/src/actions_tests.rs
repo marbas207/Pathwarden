@@ -1109,7 +1109,7 @@ fn blocks_always_get_a_name() {
     );
 }
 
-/// Without --allow-destinations a page may change only a block's name,
+/// With --lock-destinations a page may change only a block's name,
 /// time limit and filters: not add one, its program or any setting.
 #[test]
 fn programs_and_secrets_of_actions_need_the_flag() {

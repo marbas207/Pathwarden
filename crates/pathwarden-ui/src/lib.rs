@@ -89,10 +89,10 @@ Security:
   extensions can't see the page; --browser default uses a normal tab.
   Closing the window doesn't stop Pathwarden: use Stop Pathwarden (the
   power button at the bottom of the left rail), or Ctrl+C here.
-  The app can't choose where findings and runs go (a plugin's program or
-  instance, where the run history is kept, connecting to a shared history)
-  unless you start with --allow-destinations, or use pathwarden.toml and the
-  command line.";
+  With --lock-destinations, the app can't choose where findings and runs go
+  (a plugin's or action's program or instance, where the run history is
+  kept, connecting to a shared history): only pathwarden.toml and the
+  command line can.";
 
 #[derive(Debug, Args)]
 #[command(after_help = AFTER_HELP)]
@@ -123,12 +123,15 @@ pub struct UiArgs {
     /// default).
     #[arg(long)]
     pub keep_uploads: bool,
-    /// Let the pages choose where findings and runs go: plugins that run a
-    /// program, a plugin's instance or project, where the run history is
-    /// kept, and connecting to a shared history (off: only pathwarden.toml
-    /// and the command line can).
+    /// Stop the pages choosing where findings and runs go: plugins and
+    /// actions that run a program, a plugin's instance or project, where the
+    /// run history is kept, and connecting to a shared history. Only
+    /// pathwarden.toml and the command line can then.
+    #[arg(long, conflicts_with = "allow_destinations")]
+    pub lock_destinations: bool,
+    /// The default since 1.0.0-rc.3; kept so older shortcuts still start.
     // `--allow-plugin-commands` was its name before 1.0.0-rc.1.
-    #[arg(long, alias = "allow-plugin-commands")]
+    #[arg(long, alias = "allow-plugin-commands", hide = true)]
     pub allow_destinations: bool,
     /// Sign out after this long without use, like 30m, 8h or 1d.
     #[arg(long, value_name = "TIME", default_value = "8h", value_parser = parse_duration)]
@@ -203,8 +206,8 @@ pub fn run(args: UiArgs) -> anyhow::Result<()> {
         for n in &notes {
             println!("{n}");
         }
-        if state.allow_destinations {
-            println!("The pages may choose where findings and runs go: plugin programs and instances, the run history (--allow-destinations).");
+        if !state.allow_destinations {
+            println!("The pages can't choose where findings and runs go: plugin and action programs and instances, the run history (--lock-destinations).");
         }
         println!("Keep this window open while you use Pathwarden. To stop, press Ctrl+C here or use Stop Pathwarden (the power button at the bottom of the left rail).");
         let opener = (!args.no_browser).then(|| launch::Opener::new(args.browser.unwrap_or_default(), &dir));
@@ -337,7 +340,7 @@ fn apply_args(state: &mut server::AppState, args: &UiArgs) -> anyhow::Result<()>
     }
     state.keep_uploads = args.keep_uploads;
     state.jobs.set_state_dir(args.state.clone());
-    state.allow_destinations = args.allow_destinations;
+    state.allow_destinations = !args.lock_destinations;
     state.sessions.policy.idle = args.idle_timeout;
     state.sessions.policy.absolute = args.session_limit.max(args.idle_timeout);
     state.limits.total = args.max_upload << 30;
@@ -547,6 +550,31 @@ async fn expire_launcher(state: Arc<server::AppState>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Unlocked by default since 1.0.0-rc.3; `--lock-destinations` locks;
+    /// the old `--allow-destinations` (and `--allow-plugin-commands`) still
+    /// parse, and can't be given with the lock.
+    #[test]
+    fn destinations_are_unlocked_unless_locked() {
+        #[derive(clap::Parser)]
+        struct Cli {
+            #[command(flatten)]
+            ui: UiArgs,
+        }
+        use clap::Parser;
+        let parse = |a: &[&str]| {
+            Cli::try_parse_from(std::iter::once("ui").chain(a.iter().copied())).map(|c| c.ui)
+        };
+        assert!(!parse(&[]).unwrap().lock_destinations);
+        assert!(parse(&["--lock-destinations"]).unwrap().lock_destinations);
+        assert!(!parse(&["--allow-destinations"]).unwrap().lock_destinations);
+        assert!(
+            !parse(&["--allow-plugin-commands"])
+                .unwrap()
+                .lock_destinations
+        );
+        assert!(parse(&["--allow-destinations", "--lock-destinations"]).is_err());
+    }
 
     #[test]
     fn durations() {

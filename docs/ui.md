@@ -195,9 +195,9 @@ name of an environment variable for each secret, never the secret.
 **Finding actions** lists each action program, its actions with their
 inputs, what they send and which findings they apply to, and **Test** (a
 dry run on the first matching finding of the latest analysis). **Add an
-action program** and **Remove** need `--allow-destinations`
-([Safety locks](#safety-locks)); without it the name, time limit and
-filters can still change.
+action program** and **Remove** are turned off with `--lock-destinations`
+([Safety locks](#safety-locks)); the name, time limit and filters can
+still change.
 
 ### History storage
 
@@ -216,12 +216,13 @@ optional. **Sync now** syncs at once.
 
 Moving the history (another repository, branch or folder), keeping full
 runs in a history that isn't encrypted, and connecting to a run history
-need the app started with `pathwarden ui --allow-destinations`. Without it,
-use `pathwarden history storage set` or `pathwarden env create --from-git`.
+are turned off in an app started with `pathwarden ui --lock-destinations`.
+Then use `pathwarden history storage set` or `pathwarden env create
+--from-git`.
 
 ### Connect to a run history
 
-This needs `pathwarden ui --allow-destinations` (see above).
+This is turned off with `pathwarden ui --lock-destinations` (see above).
 
 1. **Where is it?**: the repository URL and branch, or a shared folder.
    Click **Connect**. Pathwarden downloads a copy to show what the history
@@ -246,10 +247,10 @@ shares them.
 
 ## Safety locks
 
-Some changes would let a page choose a program for Pathwarden to run, or
-where findings and runs go. The app makes them only when it was started
-with `pathwarden ui --allow-destinations`; otherwise the page says the
-change is turned off in this app, with an (i) that links here:
+Some changes let a page choose a program for Pathwarden to run, or where
+findings and runs go. The app makes them unless it was started with
+`pathwarden ui --lock-destinations`. Then the page says the change is
+turned off in this app, with an (i) that links here:
 
 - adding or changing a plugin's program;
 - a plugin's destination: its instance, Jira `project`, ServiceNow
@@ -261,6 +262,11 @@ change is turned off in this app, with an (i) that links here:
 The command line can make all of these (`pathwarden plugins`,
 `pathwarden action`, `pathwarden history storage set`, `pathwarden env
 create --from-git`), as can editing `pathwarden.toml`.
+
+Lock them when people other than you may reach the app's page, or when
+only `pathwarden.toml` should decide where findings go. Before 1.0.0-rc.3
+the app was locked unless started with `--allow-destinations`; that flag
+is still accepted and changes nothing.
 
 ## Where your data goes
 

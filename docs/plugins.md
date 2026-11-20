@@ -23,8 +23,8 @@ example, leave out findings that already have a ticket.
 
 1. In the rail, under **Automate**, click **Plugins and actions**.
 2. Under **After each run**, click **Add ServiceNow**, **Add Jira**, or **Add a plugin program**
-   (**Add a script or program** when the app was started with
-   `--allow-destinations`).
+   (**Add a script or program** unless the app was started with
+   `--lock-destinations`).
 3. Fill in the form and click **Save plugin**.
 4. Click **Test** to run the plugin as a dry run on the latest analysis.
 
@@ -34,9 +34,9 @@ as a percentage (default 50). A run that would go over a limit does none of
 those creates or closes and says why, so a first run on a big domain or a
 collection that missed a domain can't flood or empty the queue.
 
-Some changes in the app need `pathwarden ui --allow-destinations`
-([Safety locks](ui.md#safety-locks)); without it the page says the change
-is turned off in this app:
+Some changes are turned off in an app started with `pathwarden ui
+--lock-destinations` ([Safety locks](ui.md#safety-locks)); the page then
+says the change is turned off in this app:
 
 - adding a script or program;
 - a plugin's instance, its Jira `project` or ServiceNow `table`,

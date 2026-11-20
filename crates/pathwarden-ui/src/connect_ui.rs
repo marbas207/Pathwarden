@@ -610,7 +610,7 @@ fn error(status: StatusCode, message: impl Into<String>) -> Response {
     (status, Json(serde_json::json!({ "error": message.into() }))).into_response()
 }
 
-/// Why Connect refuses without `--allow-destinations`: looking at a history
+/// Why Connect refuses with `--lock-destinations`: looking at a history
 /// makes Pathwarden reach (and maybe sign in to) the place the page named,
 /// and connecting sends this computer's runs there.
 pub const CONNECT_LOCKED: &str = "Connecting to a run history is turned off in this app. You can still open the runs this computer has, and add a history on the command line.";

@@ -162,12 +162,10 @@ No problems: its describe and every dry run passed the checks.
 
 #### In the app
 
-1. Start the app with `pathwarden ui --allow-destinations`. Without the
-   flag, the app can't add an action.
-2. In the rail, under **Automate**, click **Plugins and actions**.
-3. Under **Finding actions**, add the program: the command below, and the
+1. In the rail, under **Automate**, click **Plugins and actions**.
+2. Under **Finding actions**, add the program: the command below, and the
    setting `webhook_env` = `PATHWARDEN_ALERT_WEBHOOK`.
-4. Click **Test**: a dry run on the latest run's first finding it applies
+3. Click **Test**: a dry run on the latest run's first finding it applies
    to.
 
 #### On the command line
@@ -359,8 +357,8 @@ Two sets of filters decide which findings an action is offered on. Both
 must match.
 
 - The block's `min_severity`, `rules` and `categories`, set by whoever adds
-  the action. They can be changed in the app without
-  `--allow-destinations`.
+  the action. They can be changed in the app even with
+  `--lock-destinations`.
 - The action's own `applies_to`, with the same three keys, set by whoever
   writes the program.
 
@@ -768,7 +766,7 @@ from which computer. What leaves the computer is up to the program.
   travel through the run history, so a change pushed to the history can't
   add an action or change its program. Each computer that runs an action
   sets it up.
-- The app without `--allow-destinations` can change only a block's name,
+- The app started with `--lock-destinations` can change only a block's name,
   time limit and filters. It can't add a block, change its program, or set
   or remove any of the program's settings, `*_env` included. The command
   line can, as can anyone who edits `pathwarden.toml`.

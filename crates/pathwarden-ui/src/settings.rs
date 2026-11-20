@@ -1732,8 +1732,8 @@ impl NewPlaceRefused {
 /// history is kept, or to start sharing full runs without encryption.
 pub const HISTORY_LOCKED: &str = "Moving the run history, or sharing full runs and settings without encryption, is turned off in this app. You can still sync it and encrypt it.";
 
-/// What a page session may save to `[state]` without
-/// `--allow-destinations` ([`HISTORY_LOCKED`]): not another repository,
+/// What a page session may save to `[state]` with
+/// `--lock-destinations` ([`HISTORY_LOCKED`]): not another repository,
 /// branch or folder, since every run would then go there (full runs with
 /// their reports too), and a share is signed in to; nor full runs and
 /// settings kept in a history that isn't encrypted. Everything else on the

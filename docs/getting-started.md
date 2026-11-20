@@ -74,8 +74,7 @@ On the command line: `pathwarden posture`, `findings`, `plan` and `report
 Follow [Schedule nightly runs](tasks.md#schedule-nightly-runs). Each run
 tracks findings (new, fixed, back) in a run history and can open tickets in
 ServiceNow or Jira. To open a run history teammates already record, run
-`pathwarden env create --from-git <repository URL> --use`, or start the app
-with `pathwarden ui --allow-destinations` and click **Connect to a run
-history** on **Home**.
+`pathwarden env create --from-git <repository URL> --use`, or click
+**Connect to a run history** on **Home** in the app.
 
 More: [Running Pathwarden](running.md), [Tasks, step by step](tasks.md).

@@ -6,8 +6,8 @@
 //! terminal and the app offer the same actions and send the same request.
 //!
 //! As with `pathwarden plugins`, the terminal may add a block or change its
-//! program (the file could be edited anyway); the app needs
-//! `--allow-destinations` for that ([`plugin_form::check_action`]).
+//! program (the file could be edited anyway); the app can't with
+//! `--lock-destinations` ([`plugin_form::check_action`]).
 
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::Path;

@@ -482,8 +482,8 @@ async fn cancel_api(State(st): State<Shared>, Path(id): Path<String>) -> Respons
 
 /// The Finding actions section of Plugins and actions: each block's
 /// program, its actions with their inputs, what they send and which
-/// findings they apply to, and Test; Add and Remove with
-/// `--allow-destinations`, a lock note without.
+/// findings they apply to, and Test; Add and Remove, or a lock
+/// note with `--lock-destinations`.
 pub fn settings_section(st: &AppState, blocks: &[ActionConfig]) -> String {
     let ws = st.ws();
     let locked = !st.allow_destinations;
@@ -796,7 +796,7 @@ async fn edit_page(State(st): State<Shared>, Path(index): Path<usize>) -> Respon
 /// Add an action program, or change one: its name, what it runs (a plugin
 /// program `pathwarden-action-<name>`, or a script or program with its
 /// arguments), its settings, its time limit and which findings it is
-/// for. Without `--allow-destinations` only the name, time limit and
+/// for. With `--lock-destinations` only the name, time limit and
 /// filters can change ([`plugin_form::check_action`]), and nothing can be
 /// added.
 fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
@@ -1094,8 +1094,8 @@ struct RemoveBody {
     expect: String,
 }
 
-/// `DELETE /api/actions/{index}`: removes an `[[action]]` block (with
-/// `--allow-destinations`, as adding one).
+/// `DELETE /api/actions/{index}`: removes an `[[action]]` block (not with
+/// `--lock-destinations`, as adding one).
 async fn remove_api(
     State(st): State<Shared>,
     Path(index): Path<usize>,

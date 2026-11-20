@@ -70,10 +70,11 @@ pub struct AppState {
     /// Keep uploaded collector files after analysis (off by default).
     pub keep_uploads: bool,
     /// Whether the pages may choose where findings and runs go
-    /// (`--allow-destinations`): a plugin's program or destination, where the
-    /// run history is kept, connecting to a shared history. Off by default: a
-    /// UI session then cannot make Pathwarden run a program, or send data or
-    /// sign in somewhere, of its choosing.
+    /// (unless `--lock-destinations`): a plugin's program or destination,
+    /// where the run history is kept, connecting to a shared history. Off,
+    /// a UI session cannot make Pathwarden run a program, or send data or
+    /// sign in somewhere, of its choosing. `pathwarden ui` turns it on unless
+    /// locked; it is off here so tests opt in.
     pub allow_destinations: bool,
     /// Whether `Host: localhost:PORT` is accepted: not when another program
     /// holds `[::1]` on this port, where browsers try `localhost` first.

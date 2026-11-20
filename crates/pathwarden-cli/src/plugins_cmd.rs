@@ -4,9 +4,9 @@
 //! Save does (`ConfigDoc::upsert_output`), and `test` is the page's Test, a
 //! dry run on the latest analysis.
 //!
-//! One difference, on purpose: the page needs `pathwarden ui
-//! --allow-destinations` to choose the program a plugin runs, so that a
-//! browser session can't make Pathwarden run a program. From the terminal
+//! One difference, on purpose: with `pathwarden ui --lock-destinations`
+//! the page can't choose the program a plugin runs, so that a browser
+//! session can't make Pathwarden run a program. From the terminal
 //! you could edit pathwarden.toml anyway, so `add command` may name one
 //! (never on a network path).
 
