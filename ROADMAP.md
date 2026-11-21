@@ -9,12 +9,12 @@ what is next. The open issues on GitHub are the detailed list.
 
 ## 1.0 release candidates
 
-1.0.0-rc.4 is out: clearer wording across the app, fixed findings whose
-ticket is still open, and plain LDAP where LDAPS fails. From here to 1.0,
-release candidates carry fixes and making existing features easier to use.
+1.0.0-rc.4 is out: clearer wording across the app, plain LDAP where LDAPS
+fails, a simpler way to add plugins and actions, and plugin tickets shown on
+their findings. From here to 1.0, release candidates carry fixes and making
+existing features easier to use.
 
-- **1.0.0-rc.5:** add a finding action from a shipped example, and a guide
-  for using finding actions. Fixes reported against rc.4.
+- **1.0.0-rc.5:** fixes reported against rc.4.
 - **1.0:** when the release candidates have run without new problems.
 
 ## After 1.0
