@@ -271,16 +271,16 @@ pub fn clean_text(s: &str, max: usize, lines: bool) -> (String, bool) {
 }
 
 /// Problems found reading a document, as `path: what`.
-struct Problems(Vec<String>);
+pub(crate) struct Problems(pub(crate) Vec<String>);
 
 impl Problems {
-    fn add(&mut self, path: &str, what: impl std::fmt::Display) {
+    pub(crate) fn add(&mut self, path: &str, what: impl std::fmt::Display) {
         self.0.push(format!("{path} {what}"));
     }
 }
 
 /// A JSON value's type in words.
-fn type_of(v: &Value) -> &'static str {
+pub(crate) fn type_of(v: &Value) -> &'static str {
     match v {
         Value::Null => "null",
         Value::Bool(_) => "true or false",
@@ -293,7 +293,7 @@ fn type_of(v: &Value) -> &'static str {
 
 /// Text field `key` of `o`, cleaned and cut to `max` (a cut is a problem).
 /// `None` when it is missing (a problem when `required`) or not text.
-fn text_field(
+pub(crate) fn text_field(
     o: &Map<String, Value>,
     key: &str,
     path: &str,
@@ -328,7 +328,12 @@ fn text_field(
 }
 
 /// Bool field `key` of `o`: false when missing.
-fn bool_field(o: &Map<String, Value>, key: &str, path: &str, p: &mut Problems) -> Option<bool> {
+pub(crate) fn bool_field(
+    o: &Map<String, Value>,
+    key: &str,
+    path: &str,
+    p: &mut Problems,
+) -> Option<bool> {
     match o.get(key) {
         None | Some(Value::Null) => Some(false),
         Some(Value::Bool(b)) => Some(*b),
@@ -1071,7 +1076,7 @@ pub fn https_url(s: &str) -> Result<String, &'static str> {
 }
 
 /// Reads one record of a result. `None` when it can't be kept.
-fn record_of(v: &Value, path: &str, p: &mut Problems) -> Option<Record> {
+pub(crate) fn record_of(v: &Value, path: &str, p: &mut Problems) -> Option<Record> {
     let Some(o) = v.as_object() else {
         p.add(path, format!("must be an object, not {}", type_of(v)));
         return None;
@@ -1493,8 +1498,9 @@ fn may_offer(config: &ActionConfig, def: &ActionDef, f: &FindingContext) -> bool
 /// program's order: those whose block filters and `applies_to` match,
 /// that aren't only for records (`for: "record"`), whose `when` lists
 /// where `f` stands (without one: open, held or accepted, never fixed),
-/// and, for `once`, while `f` has no open record from that action.
-/// `records` are `f`'s records.
+/// and, for `once`, while `f` has no open record from that action or from
+/// an output plugin ([`crate::output_result`]). `records` are `f`'s
+/// records.
 pub fn offered(programs: &[Program], f: &FindingContext, records: &[ActionRecord]) -> Vec<Offered> {
     let mut out = Vec::new();
     for p in programs {
@@ -1503,10 +1509,15 @@ pub fn offered(programs: &[Program], f: &FindingContext, records: &[ActionRecord
                 continue;
             }
             let o = offer(p.config, def);
+            // An open record of its own, or a ticket an output plugin keeps
+            // for the finding (the plugins skip a finding with an open
+            // action record the same way): never two tickets.
             if def.once
-                && records
-                    .iter()
-                    .any(|r| r.record.open && r.action.eq_ignore_ascii_case(&o.address))
+                && records.iter().any(|r| {
+                    r.record.open
+                        && (r.action.eq_ignore_ascii_case(&o.address)
+                            || crate::output_result::is_plugin_source(&r.action))
+                })
             {
                 continue;
             }
@@ -1879,16 +1890,28 @@ impl Drop for AnswerFile {
 
 /// A fresh answer file name in the private folder programs start in.
 fn answer_path(dir: &Path) -> PathBuf {
+    result_path(dir, "action-result")
+}
+
+/// A fresh result file name, `<prefix>-<random>.json`, in `dir`.
+pub(crate) fn result_path(dir: &Path, prefix: &str) -> PathBuf {
     let mut rnd = [0u8; 12];
     let _ = getrandom::getrandom(&mut rnd);
     let hex: String = rnd.iter().map(|b| format!("{b:02x}")).collect();
-    dir.join(format!("action-result-{hex}.json"))
+    dir.join(format!("{prefix}-{hex}.json"))
 }
 
 /// The answer file, when the program wrote one: refused unless it is a
 /// plain file (a pipe or device could block the read, a link point
 /// elsewhere), at most [`MAX_ANSWER_BYTES`].
 fn read_answer(path: &Path) -> Option<Result<Vec<u8>, String>> {
+    read_result_file(path, MAX_ANSWER_BYTES)
+}
+
+/// A result file a program wrote ([`read_answer`]; an output plugin's,
+/// [`crate::output_result`]): `None` when there is none, refused unless it
+/// is a plain file, at most `max` bytes.
+pub(crate) fn read_result_file(path: &Path, max: u64) -> Option<Result<Vec<u8>, String>> {
     match std::fs::symlink_metadata(path) {
         Ok(m) if m.file_type().is_file() => {}
         Ok(_) => return Some(Err("The result file isn't a plain file.".into())),
@@ -1913,11 +1936,14 @@ fn read_answer(path: &Path) -> Option<Result<Vec<u8>, String>> {
         _ => return Some(Err("The result file isn't a plain file.".into())),
     }
     let mut bytes = Vec::new();
-    if let Err(e) = f.take(MAX_ANSWER_BYTES + 1).read_to_end(&mut bytes) {
+    if let Err(e) = f.take(max + 1).read_to_end(&mut bytes) {
         return Some(Err(format!("The result file couldn't be read: {e}")));
     }
-    if bytes.len() as u64 > MAX_ANSWER_BYTES {
-        return Some(Err("The result file is larger than 1 MiB.".into()));
+    if bytes.len() as u64 > max {
+        return Some(Err(format!(
+            "The result file is larger than {} MiB.",
+            max >> 20
+        )));
     }
     Some(Ok(bytes))
 }

@@ -43,6 +43,7 @@ pub mod mgmt;
 pub mod model;
 pub mod object_index;
 pub mod opengraph;
+pub mod output_result;
 pub mod owned;
 pub mod pack_origin;
 mod par;

@@ -4173,17 +4173,31 @@ fn run_cmd(
              the run history first, so this run's event is older than the history."
         );
     } else if let (true, Some(text)) = (run_outputs, &rec.event_json) {
+        let mut reported = Vec::new();
         for output in &config.outputs {
-            if let Err(e) = outputs::run(output, text) {
-                let red = ui::severity(Severity::Critical);
-                eprintln!(
-                    "  {red}Plugin {} failed:{red:#} {}",
-                    ui::safe(&output.plugin),
-                    ui::safe_text(&format!("{e:#}"))
-                );
-                failed.push(output.plugin.clone());
+            match outputs::run(output, text) {
+                Ok(r) => reported.extend(r),
+                Err(e) => {
+                    let red = ui::severity(Severity::Critical);
+                    eprintln!(
+                        "  {red}Plugin {} failed:{red:#} {}",
+                        ui::safe(&output.plugin),
+                        ui::safe_text(&format!("{e:#}"))
+                    );
+                    failed.push(output.plugin.clone());
+                }
             }
         }
+        // The tickets the plugins keep, on their findings for everyone who
+        // shares the history. Not saving them never fails the run.
+        save_plugin_tickets(
+            &store,
+            &reported,
+            text,
+            &previous,
+            &rec.run_id,
+            !no_push && config.state.pushes(),
+        );
     }
     // Recorded, but not pushed: the run fails too (exit code 2, whatever
     // --fail-on says), so a schedule notices. The warning above said why.
@@ -4208,6 +4222,66 @@ fn run_cmd(
         bail!("{u}");
     }
     Ok(code)
+}
+
+/// Saves the tickets output plugins reported in their result files on
+/// the findings ([`pathwarden_core::output_result::save_all`]): on this
+/// run's findings and those the history had before. Says what happened;
+/// a save that fails is a warning, never a failed run.
+fn save_plugin_tickets(
+    store: &store::Store,
+    reported: &[pathwarden_core::output_result::Reported],
+    event_json: &str,
+    previous: &pathwarden_core::state::FindingsState,
+    run_id: &str,
+    push: bool,
+) {
+    use pathwarden_core::output_result;
+    if reported.iter().all(|r| r.records.is_empty()) {
+        return;
+    }
+    let warn = ui::severity(Severity::Medium);
+    if store.is_git() && !push {
+        anstream::eprintln!(
+            "  {warn}Note:{warn:#} The plugins' tickets weren't saved on the findings: this run              doesn't push to the run history."
+        );
+        return;
+    }
+    let in_event = output_result::event_fingerprints(event_json);
+    let known = |fp: &str| in_event.contains(fp) || previous.findings.contains_key(fp);
+    match output_result::save_all(store, reported, &known, Some(run_id), push) {
+        Ok(s) => {
+            if s.unknown > 0 {
+                anstream::eprintln!(
+                    "  {warn}Warning:{warn:#} {} left out: not on a finding of this run history.",
+                    pathwarden_core::text::count(
+                        s.unknown,
+                        "plugin ticket was",
+                        "plugin tickets were"
+                    )
+                );
+            }
+            if s.findings > 0 {
+                let gr = ui::GREEN;
+                println!(
+                    "  {gr}Plugin tickets{gr:#} updated on {}{}.",
+                    pathwarden_core::text::count(s.findings, "finding", "findings"),
+                    if s.saved.pushed {
+                        ""
+                    } else {
+                        ", on this computer for now"
+                    }
+                );
+            }
+            for n in &s.saved.notes {
+                anstream::eprintln!("  {warn}Note:{warn:#} {}", ui::safe_text(n));
+            }
+        }
+        Err(e) => anstream::eprintln!(
+            "  {warn}Warning:{warn:#} The plugins' tickets weren't saved on the findings: {}",
+            ui::safe_text(&format!("{e:#}"))
+        ),
+    }
 }
 
 /// The error a command ends with when its run was recorded but not pushed

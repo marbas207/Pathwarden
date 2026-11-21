@@ -1092,9 +1092,12 @@ fn print_record(r: &actions::ActionRecord, indent: &str) {
         on: r.on.clone(),
         ..Default::default()
     };
+    // A plugin's ticket by the plugin ("ServiceNow plugin"), an action's
+    // by its address.
+    let by = pathwarden_core::output_result::source_label(&r.action).unwrap_or(r.action.clone());
     println!(
         "{indent}  {d}by {} · {}{d:#}",
-        ui::safe(&r.action),
+        ui::safe(&by),
         ui::safe(&first.who_when())
     );
 }

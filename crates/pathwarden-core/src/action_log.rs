@@ -264,6 +264,15 @@ impl Activity {
                     first(&self.message)
                 }
             ),
+            // A plugin's ticket says whose it is: "ServiceNow plugin:
+            // INC0012345 · Open".
+            Kind::Run
+                if self.ok
+                    && !self.message.trim().is_empty()
+                    && crate::output_result::is_plugin_source(&self.action) =>
+            {
+                format!("{}: {}", self.label, first(&self.message))
+            }
             Kind::Run if self.ok && !self.message.trim().is_empty() => first(&self.message),
             Kind::Run if self.ok => self.label.clone(),
             Kind::Run if self.message.trim().is_empty() => format!("{} failed", self.label),
@@ -1027,6 +1036,18 @@ pub fn save_reporting(store: &Store, change: &Change, push: bool) -> Result<Save
 struct Pending {
     #[serde(default)]
     changes: Vec<Change>,
+    /// What output plugins reported ([`save_plugin_records`]), one entry
+    /// per finding, merged as more runs add to it. An older release
+    /// doesn't read it (it drops it when it writes the file again; the
+    /// plugin's next run reports its tickets again).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    records: Vec<RecordsChange>,
+}
+
+impl Pending {
+    fn is_empty(&self) -> bool {
+        self.changes.is_empty() && self.records.is_empty()
+    }
 }
 
 /// The start of an age file: a sealed pending file.
@@ -1180,7 +1201,7 @@ fn remove_pending(store: &Store, change: &Change) -> Result<()> {
 /// Writes the saves kept here: encrypted with the history's key when the
 /// history is encrypted, as its own files are.
 fn write_pending(store: &Store, p: &Pending) -> Result<()> {
-    if p.changes.is_empty() {
+    if p.is_empty() {
         store.remove_local_file(PENDING_FILE)?;
         return Ok(());
     }
@@ -1317,15 +1338,18 @@ pub fn replay_pending(store: &Store) -> Option<String> {
             return Some(notes.join(" "));
         }
     };
-    if p.changes.is_empty() {
+    if p.is_empty() {
         return (!notes.is_empty()).then(|| notes.join(" "));
     }
     let result = (|| -> Result<()> {
         let mut file = load(store)?;
-        if p.changes.iter().all(|c| c.is_in(&file)) {
+        if p.changes.iter().all(|c| c.is_in(&file)) && p.records.iter().all(|c| c.is_in(&file)) {
             return Ok(());
         }
         for c in &p.changes {
+            c.apply(&mut file);
+        }
+        for c in &p.records {
             c.apply(&mut file);
         }
         crate::store::write_state_file(&store.dir, FILE, &file.to_bytes())?;
@@ -1342,7 +1366,7 @@ pub fn replay_pending(store: &Store) -> Option<String> {
 
 /// After a push: the saves it carried are dropped from those kept here.
 pub fn prune_pending(store: &Store) {
-    if read_pending(store).changes.is_empty() {
+    if read_pending(store).is_empty() {
         return;
     }
     // A log that can't be read prunes nothing (and refused saves never
@@ -1352,9 +1376,10 @@ pub fn prune_pending(store: &Store) {
     };
     let _ = with_pending_lock(store, || {
         let mut p = try_read_pending(store)?;
-        let before = p.changes.len();
+        let before = (p.changes.len(), p.records.len());
         p.changes.retain(|c| !c.is_in(&file));
-        if p.changes.len() != before {
+        p.records.retain(|c| !c.is_in(&file));
+        if (p.changes.len(), p.records.len()) != before {
             write_pending(store, &p)?;
         }
         Ok(())
@@ -1363,7 +1388,8 @@ pub fn prune_pending(store: &Store) {
 
 /// How many saves are kept on this computer for the next push.
 pub fn pending_count(store: &Store) -> usize {
-    read_pending(store).changes.len()
+    let p = read_pending(store);
+    p.changes.len() + p.records.len()
 }
 
 /// Saves `change` at once without the network, for a run someone stopped
@@ -1384,6 +1410,306 @@ pub fn save_here(store: &Store, change: &Change, locked: bool) -> Result<Vec<Str
         bail!("the run history is in use, so the cancelled run wasn't saved");
     }
     add_pending(store, change)
+}
+
+// ------------------------------------------------------- output plugins
+
+/// The commit message of a save of what output plugins reported (fixed:
+/// it names no finding or person).
+pub const PLUGIN_MESSAGE: &str = "pathwarden: save the tickets output plugins keep";
+
+/// What output plugins changed on one finding: its plugin records that
+/// are new or changed, and an entry of activity when a ticket was first
+/// seen, closed or reopened. A run that changed nothing makes none, so a
+/// plugin's thousands of tickets don't rewrite the file every run.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RecordsChange {
+    pub fingerprint: String,
+    #[serde(default)]
+    pub records: Vec<ActionRecord>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub activity: Vec<Activity>,
+}
+
+impl RecordsChange {
+    /// Makes the change in `file` as [`merge`] would: a record is matched
+    /// by its source and ID, the newer `updated_at` winning, and a removal
+    /// wins over any record made before it. Making it twice is making it
+    /// once.
+    pub fn apply(&self, file: &mut ActionsFile) {
+        let log = file.findings.entry(self.fingerprint.clone()).or_default();
+        for a in &self.activity {
+            add_activity(log, a);
+        }
+        for r in &self.records {
+            put_record(log, r);
+        }
+    }
+
+    /// Whether `file` holds it already: each record there as new as it
+    /// (or removed), each entry of activity there (or dropped as older
+    /// than the latest [`MAX_ACTIVITY`]).
+    fn is_in(&self, file: &ActionsFile) -> bool {
+        let Some(log) = file.findings.get(&self.fingerprint) else {
+            return false;
+        };
+        let records = self.records.iter().all(|r| {
+            log.removed.iter().any(|t| t.covers(r))
+                || log.records.iter().any(|x| {
+                    x.action == r.action
+                        && x.record.id == r.record.id
+                        && x.updated_at >= r.updated_at
+                })
+        });
+        let activity = self.activity.iter().all(|a| {
+            log.activity.iter().any(|x| x.key() == a.key())
+                || (log.activity.len() >= MAX_ACTIVITY && log.activity.iter().all(|x| x.at > a.at))
+        });
+        records && activity
+    }
+
+    /// Takes in a later change of the same finding (kept for a push):
+    /// its records replace older ones of the same source and ID, its
+    /// activity is added.
+    fn absorb(&mut self, later: &RecordsChange) {
+        for r in &later.records {
+            match self
+                .records
+                .iter_mut()
+                .find(|x| x.action == r.action && x.record.id == r.record.id)
+            {
+                Some(x) if r.updated_at > x.updated_at => *x = r.clone(),
+                Some(_) => {}
+                None => self.records.push(r.clone()),
+            }
+        }
+        for a in &later.activity {
+            if !self.activity.iter().any(|x| x.key() == a.key()) {
+                self.activity.push(a.clone());
+            }
+        }
+        let over = self.activity.len().saturating_sub(MAX_ACTIVITY);
+        self.activity.drain(..over);
+    }
+}
+
+/// Whether two records say the same (their own fields; what a later
+/// release keeps on one isn't compared).
+fn same_record(a: &Record, b: &Record) -> bool {
+    a.kind == b.kind
+        && a.label == b.label
+        && a.number == b.number
+        && a.url == b.url
+        && a.status == b.status
+        && a.open == b.open
+        && a.fields == b.fields
+}
+
+/// The changes one run of an output plugin makes with the records it
+/// reported, against what `file` holds. `source` is the plugin's
+/// ([`crate::output_result::source`]) and `label` its words ("ServiceNow
+/// plugin"). A record not there yet is added (made by `who`, at `at`);
+/// one that says something else now is updated (`updated_at`, keeping who
+/// first made it); one that says the same is left alone. A finding gets
+/// one entry of activity for the run when a ticket is first seen
+/// ("INC0012345 · Open"), closed ("Closed INC0012345 · Resolved") or
+/// reopened, and none for a run that only saw it again. Records on
+/// fingerprints `known` doesn't take are left out: a plugin can't put
+/// records on findings the history never had.
+#[allow(clippy::too_many_arguments)]
+pub fn plugin_changes(
+    file: &ActionsFile,
+    source: &str,
+    label: &str,
+    reported: &[crate::output_result::OutputRecord],
+    known: &dyn Fn(&str) -> bool,
+    who: &Actor,
+    at: &str,
+    run_id: Option<&str>,
+) -> Vec<RecordsChange> {
+    let mut by_fp: BTreeMap<&str, Vec<&Record>> = BTreeMap::new();
+    for r in reported.iter().filter(|r| known(&r.fingerprint)) {
+        by_fp.entry(&r.fingerprint).or_default().push(&r.record);
+    }
+    let mut out = Vec::new();
+    for (fp, records) in by_fp {
+        let log = file.findings.get(fp);
+        let mut change = RecordsChange {
+            fingerprint: fp.to_string(),
+            records: Vec::new(),
+            activity: Vec::new(),
+        };
+        let mut said = Vec::new();
+        let mut ids = Vec::new();
+        for r in records {
+            let mut r = r.clone();
+            sanitize_record(&mut r);
+            let had = log.and_then(|l| {
+                l.records
+                    .iter()
+                    .find(|x| x.action == source && x.record.id == r.id)
+            });
+            if had.is_some_and(|x| same_record(&x.record, &r)) {
+                continue;
+            }
+            let name = r
+                .number
+                .clone()
+                .or_else(|| r.label.clone())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| r.id.clone());
+            let status = r
+                .status
+                .clone()
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| if r.open { "Open" } else { "Closed" }.to_string());
+            match had {
+                None => said.push(format!("{name} · {status}")),
+                Some(x) if x.record.open && !r.open => {
+                    said.push(format!("Closed {name} · {status}"))
+                }
+                Some(x) if !x.record.open && r.open => {
+                    said.push(format!("Reopened {name} · {status}"))
+                }
+                Some(_) => {}
+            }
+            ids.push(r.id.clone());
+            if let Some(x) = had {
+                r.other = x.record.other.clone();
+            }
+            change.records.push(ActionRecord {
+                action: source.to_string(),
+                by: had.map_or_else(|| who.user.clone(), |x| x.by.clone()),
+                on: had.map_or_else(|| who.computer.clone(), |x| x.on.clone()),
+                at: had.map_or_else(|| at.to_string(), |x| x.at.clone()),
+                updated_at: at.to_string(),
+                record: r,
+            });
+        }
+        if !said.is_empty() {
+            change.activity.push(Activity {
+                at: at.to_string(),
+                by: who.user.clone(),
+                on: who.computer.clone(),
+                run_id: run_id.map(str::to_string),
+                action: source.to_string(),
+                label: label.to_string(),
+                ok: true,
+                message: said.join("; "),
+                record_ids: ids,
+                ..Activity::default()
+            });
+        }
+        if !change.records.is_empty() {
+            out.push(change);
+        }
+    }
+    out
+}
+
+/// Makes `changes` in the history's file and writes it; refused, before
+/// anything is written, when the file was saved by a newer Pathwarden.
+fn write_records(store: &Store, changes: &[RecordsChange]) -> Result<Vec<String>> {
+    let mut file = load(store)?;
+    for c in changes {
+        c.apply(&mut file);
+    }
+    store.write_state_file(FILE, &file.to_bytes())
+}
+
+/// Saves what output plugins reported ([`plugin_changes`]) in the history
+/// at once, as [`save_reporting`] saves what an action did: written, and
+/// when `push` and the history is in git, committed and pushed in one
+/// commit ([`PLUGIN_MESSAGE`]); made again on what another computer pushed
+/// first; kept on this computer for the next sync when the push fails for
+/// a reason that can go away. Hold the history's lock and pull first.
+/// Nothing to do without changes.
+pub fn save_plugin_records(store: &Store, changes: &[RecordsChange], push: bool) -> Result<Saved> {
+    if changes.is_empty() {
+        return Ok(Saved {
+            notes: Vec::new(),
+            pushed: true,
+        });
+    }
+    if store.is_git() && !push {
+        bail!(
+            "This computer only reads the run history, so the plugins' tickets aren't saved there."
+        );
+    }
+    let mut notes = write_records(store, changes)?;
+    notes.extend(add_pending_records(store, changes)?);
+    if store.is_git() {
+        let pushed = match store.publish_with(PLUGIN_MESSAGE, || {
+            write_records(store, changes)?;
+            Ok(Some(PLUGIN_MESSAGE.to_string()))
+        }) {
+            Ok(p) => {
+                notes.extend(p.notes);
+                true
+            }
+            Err(e) => match e.downcast::<KeptUnpushed>() {
+                Ok(kept) => {
+                    notes.extend(kept.notes.clone());
+                    notes.push(kept.sentence("The plugins' tickets are saved"));
+                    false
+                }
+                Err(e) if is_refusal(&e) => {
+                    let _ = remove_pending_records(store, changes);
+                    return Err(e);
+                }
+                Err(e) => {
+                    notes.push(format!("{NOT_PUSHED_WORDS} ({e:#})"));
+                    false
+                }
+            },
+        };
+        return Ok(Saved {
+            notes: crate::store::once_each(notes),
+            pushed,
+        });
+    }
+    Ok(Saved {
+        notes: crate::store::once_each(notes),
+        pushed: true,
+    })
+}
+
+/// Keeps `changes` until a push carries them, each merged into what is
+/// kept for its finding already ([`RecordsChange::absorb`]), so a history
+/// that can't be reached for many runs keeps one entry per finding.
+fn add_pending_records(store: &Store, changes: &[RecordsChange]) -> Result<Vec<String>> {
+    if !store.is_git() {
+        return Ok(Vec::new());
+    }
+    with_pending_lock(store, || {
+        let mut p = try_read_pending(store)?;
+        for c in changes {
+            match p
+                .records
+                .iter_mut()
+                .find(|x| x.fingerprint == c.fingerprint)
+            {
+                Some(x) => x.absorb(c),
+                None => p.records.push(c.clone()),
+            }
+        }
+        write_pending(store, &p)
+    })?;
+    Ok(take_notes(store))
+}
+
+/// Drops `changes` from what is kept here (the remote's log refused them).
+fn remove_pending_records(store: &Store, changes: &[RecordsChange]) -> Result<()> {
+    if !store.is_git() {
+        return Ok(());
+    }
+    with_pending_lock(store, || {
+        let mut p = try_read_pending(store)?;
+        let fps: std::collections::HashSet<&str> =
+            changes.iter().map(|c| c.fingerprint.as_str()).collect();
+        p.records.retain(|c| !fps.contains(c.fingerprint.as_str()));
+        write_pending(store, &p)
+    })
 }
 
 /// Sets what actions did on each of `findings` and `resolved` from `file`

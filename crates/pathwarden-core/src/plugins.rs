@@ -807,9 +807,60 @@ pub fn run(
     event_json: &str,
     max_time: Option<Duration>,
 ) -> Result<PluginRun, PluginError> {
+    run_in(output, event_json, max_time, None)
+}
+
+/// What a real run of an output plugin left ([`run_reporting`]): what it
+/// printed, and its result file ([`crate::output_result`]).
+#[derive(Debug)]
+pub struct ReportedRun {
+    pub ran: PluginRun,
+    /// The result file's bytes: `None` when it wrote none (or the run is
+    /// a dry run, which isn't asked for one), `Err` when it can't be read
+    /// (not a plain file, too large).
+    pub result: Option<Result<Vec<u8>, String>>,
+}
+
+/// [`run`] for a scheduled or command-line run: the plugin is also given
+/// [`crate::output_result::RESULT_ENV`], a fresh file in its private
+/// folder ([`work_dir`]), and what it wrote there is read once it exited
+/// (and the file removed). A plugin set to `dry_run` isn't given it.
+pub fn run_reporting(output: &OutputConfig, event_json: &str) -> Result<ReportedRun, PluginError> {
+    if crate::output_result::is_dry_run(output) {
+        return Ok(ReportedRun {
+            ran: run(output, event_json, None)?,
+            result: None,
+        });
+    }
+    let dir = work_dir()?;
+    let path = ResultFile(crate::actions::result_path(&dir, "output-result"));
+    let _ = std::fs::remove_file(&path.0);
+    let ran = run_in(output, event_json, None, Some(&path.0))?;
+    let result = crate::actions::read_result_file(&path.0, crate::output_result::MAX_BYTES);
+    Ok(ReportedRun { ran, result })
+}
+
+/// Removes a result file when dropped, whatever happened.
+struct ResultFile(PathBuf);
+
+impl Drop for ResultFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn run_in(
+    output: &OutputConfig,
+    event_json: &str,
+    max_time: Option<Duration>,
+    result: Option<&Path>,
+) -> Result<PluginRun, PluginError> {
     let mut cmd = command_for(output)?;
     apply_env(&mut cmd, output);
     cmd.current_dir(work_dir()?);
+    if let Some(path) = result {
+        cmd.env(crate::output_result::RESULT_ENV, path);
+    }
     let settings = serde_json::to_string(&output.settings)
         .map_err(|e| PluginError::Setup(format!("settings: {e}")))?;
     crate::proc_tree::prepare(&mut cmd);

@@ -88,3 +88,78 @@ fn a_fixed_findings_view_offers_its_follow_ups() {
     assert_eq!(v.offered, ["desk/open"]);
     assert!(v.records.is_empty() && v.activity.is_empty());
 }
+
+/// A ticket an output plugin reported: a chip like an action's record,
+/// no follow-ups (no `[[action]]` block made it), its activity named by
+/// the plugin, and while it is open the `once` action isn't offered.
+#[test]
+fn a_plugins_ticket_shows_without_follow_ups_and_hides_once() {
+    let c = Config::parse("[[action]]\nplugin = \"desk\"\n").unwrap();
+    let (d, _) = parse_describe(
+        br#"{"schema":"pathwarden.action-describe.v1","actions":[
+          {"id":"open","label":"Open","sends":"x","once":true,"follow_ups":["status"]},
+          {"id":"status","label":"Status","sends":"x","for":"record"},
+          {"id":"note","label":"Note","sends":"x"}]}"#,
+    )
+    .unwrap();
+    let programs = [Program {
+        config: &c.actions[0],
+        describe: &d,
+    }];
+    let event = json!({
+        "schema": "pathwarden.event.v1",
+        "run": { "run_id": "R2" },
+        "findings": [ { "rule": "PW-001", "fingerprint": "PW-001-aaaa", "title": "Open one",
+                        "severity": "high", "category": "attack_path" } ],
+        "resolved": [ { "fingerprint": "PW-003-cccc", "rule": "PW-003", "severity": "high",
+                        "first_seen": 1, "resolved_at": 2 } ],
+    });
+    let all = actions::findings_in_event(&event);
+    let (open, fixed) = (&all[0], &all[1]);
+    let mut file = ActionsFile::default();
+    let reported = |fp: &str, open: bool| pathwarden_core::output_result::OutputRecord {
+        fingerprint: fp.into(),
+        record: Record {
+            id: format!("sys-{fp}"),
+            kind: Some("ticket".into()),
+            number: Some("INC0012345".into()),
+            url: Some("https://contoso.service-now.com/incident.do?sys_id=1".into()),
+            status: Some(if open { "Open" } else { "Resolved" }.into()),
+            open,
+            ..Record::default()
+        },
+    };
+    for c in action_log::plugin_changes(
+        &file,
+        "plugin:servicenow",
+        "ServiceNow plugin",
+        &[reported("PW-001-aaaa", true), reported("PW-003-cccc", true)],
+        &|_| true,
+        &Actor {
+            user: Some(r"CORP\svc-pathwarden".into()),
+            computer: Some("PW01".into()),
+        },
+        "2026-11-21T10:00:00.000Z",
+        Some("R2"),
+    ) {
+        c.apply(&mut file);
+    }
+    let v = view(&file, &programs, open);
+    assert_eq!(
+        v.offered,
+        ["desk/note"],
+        "once is hidden by the open ticket"
+    );
+    assert_eq!(v.records[0].chip, "INC0012345 · Open");
+    assert!(v.records[0].follow_ups.is_empty());
+    assert!(
+        v.activity[0]
+            .line
+            .starts_with(r"ServiceNow plugin: INC0012345 · Open · CORP\svc-pathwarden, PW01, "),
+        "{}",
+        v.activity[0].line
+    );
+    let v = view(&file, &programs, fixed);
+    assert_eq!(v.records[0].chip, "Fixed · INC0012345 still Open");
+    assert!(v.records[0].follow_ups.is_empty());
+}

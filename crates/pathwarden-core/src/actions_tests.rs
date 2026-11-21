@@ -634,6 +634,42 @@ fn the_right_actions_in_config_order() {
     assert!(follow_ups(&programs, &open, &rec("gone/open", true)).is_empty());
 }
 
+/// `once` across sources: an open ticket an output plugin keeps on the
+/// finding hides a `once` action as its own open record would (the
+/// plugins skip a finding with an open action record the same way); a
+/// closed one doesn't, nor does it hide an action without `once`. A
+/// plugin's record offers no follow-ups.
+#[test]
+fn once_counts_a_plugins_open_ticket() {
+    let c = config();
+    let (d, a) = (desk(), alert());
+    let programs = [
+        Program {
+            config: &c.actions[0],
+            describe: &d,
+        },
+        Program {
+            config: &c.actions[1],
+            describe: &a,
+        },
+    ];
+    let e = event();
+    let open = finding_in_event(&e, "PW-001-aaaa").unwrap();
+    assert_eq!(
+        addresses(&offered(
+            &programs,
+            &open,
+            &[rec("plugin:servicenow", true)]
+        )),
+        ["teams-alert/alert"]
+    );
+    assert_eq!(
+        addresses(&offered(&programs, &open, &[rec("plugin:jira", false)])),
+        ["service-desk/open", "teams-alert/alert"]
+    );
+    assert!(follow_ups(&programs, &open, &rec("plugin:servicenow", true)).is_empty());
+}
+
 /// `when: "fixed"` behind a categories filter: a fixed finding takes its
 /// category from the rule, so it shows.
 #[test]

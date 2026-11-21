@@ -921,3 +921,128 @@ fn records_of_fixed_findings_whose_ticket_is_still_open() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A stand-in output plugin in `dir`: reports one open ticket for each
+/// finding of the event in its result file (`broken`: a file that isn't
+/// JSON).
+fn fake_output_plugin(dir: &Path, broken: bool) -> Vec<String> {
+    let script = if cfg!(windows) {
+        let p = dir.join(if broken { "broken.ps1" } else { "tickets.ps1" });
+        let body = if broken {
+            "[IO.File]::WriteAllText($env:PATHWARDEN_OUTPUT_RESULT, 'not json')\nWrite-Output 'wrote junk'\n".to_string()
+        } else {
+            "$ev = [Console]::In.ReadToEnd() | ConvertFrom-Json\n\
+             $n = 0\n\
+             $recs = @($ev.findings | ForEach-Object { $n++; [ordered]@{ fingerprint = $_.fingerprint; id = ('t-' + $_.fingerprint); kind = 'ticket'; number = ('INC' + $n); url = ('https://desk.example.com/' + $n); status = 'Open'; open = $true } })\n\
+             $doc = [ordered]@{ schema = 'pathwarden.output-result.v1'; records = $recs }\n\
+             [IO.File]::WriteAllText($env:PATHWARDEN_OUTPUT_RESULT, ($doc | ConvertTo-Json -Depth 5))\n\
+             Write-Output ('reported ' + $recs.Count)\n"
+                .to_string()
+        };
+        std::fs::write(&p, body).unwrap();
+        p
+    } else {
+        let p = dir.join(if broken { "broken.sh" } else { "tickets.sh" });
+        let body = if broken {
+            "printf 'not json' > \"$PATHWARDEN_OUTPUT_RESULT\"\necho 'wrote junk'\n".to_string()
+        } else {
+            r#"ev=$(cat)
+fps=$(printf '%s' "$ev" | tr ',' '\n' | grep -o '"fingerprint": *"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' | sort -u)
+n=0; out=''
+for fp in $fps; do n=$((n+1)); [ -n "$out" ] && out="$out,"; out="$out{\"fingerprint\":\"$fp\",\"id\":\"t-$fp\",\"kind\":\"ticket\",\"number\":\"INC$n\",\"status\":\"Open\",\"open\":true}"; done
+printf '{"schema":"pathwarden.output-result.v1","records":[%s]}' "$out" > "$PATHWARDEN_OUTPUT_RESULT"
+echo "reported $n"
+"#
+            .to_string()
+        };
+        std::fs::write(&p, body).unwrap();
+        p
+    };
+    command_of(&std::path::absolute(script).unwrap())
+}
+
+/// An output plugin's result file puts its tickets on the findings in the
+/// history: `action records` lists them by the plugin, a second run that
+/// sees the same tickets saves nothing, and a result that can't be read is
+/// a warning while the run still succeeds.
+#[test]
+fn an_output_plugins_tickets_show_on_the_findings() {
+    let (dir, ws, critical, _) = workspace_named("-plugin-tickets");
+    let forest = repo("testdata/forest");
+    let forest = forest.to_str().unwrap();
+    let toml = dir.join("ws").join("pathwarden.toml");
+    let quoted = |c: Vec<String>| {
+        c.iter()
+            .map(|a| format!("{:?}", a))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mut text = std::fs::read_to_string(&toml).unwrap_or_default();
+    text.push_str(&format!(
+        "\n[[output]]\nplugin = \"servicenow\"\ncommand = [{}]\n",
+        quoted(fake_output_plugin(&dir, false))
+    ));
+    std::fs::write(&toml, &text).unwrap();
+    let first = ok(&run(&dir, &["run", "--workspace", &ws, "-i", forest]));
+    assert!(first.contains("[servicenow] reported"), "{first}");
+    assert!(first.contains("Plugin tickets updated on"), "{first}");
+    let recs = json(&run(
+        &dir,
+        &["action", "--workspace", &ws, "records", &critical, "--json"],
+    ));
+    assert_eq!(recs.as_array().unwrap().len(), 1, "{recs}");
+    assert_eq!(recs[0]["action"], "plugin:servicenow");
+    assert_eq!(recs[0]["id"], format!("t-{critical}"));
+    assert_eq!(recs[0]["open"], true);
+    let out = ok(&run(
+        &dir,
+        &["action", "--workspace", &ws, "records", &critical],
+    ));
+    assert!(out.contains("by ServiceNow plugin"), "{out}");
+    let act = json(&run(
+        &dir,
+        &[
+            "action",
+            "--workspace",
+            &ws,
+            "activity",
+            &critical,
+            "--json",
+        ],
+    ));
+    assert_eq!(act.as_array().unwrap().len(), 1, "{act}");
+    assert_eq!(act[0]["label"], "ServiceNow plugin");
+
+    // The same tickets again: nothing to save, no more activity.
+    let second = ok(&run(&dir, &["run", "--workspace", &ws, "-i", forest]));
+    assert!(!second.contains("Plugin tickets updated"), "{second}");
+    let act = json(&run(
+        &dir,
+        &[
+            "action",
+            "--workspace",
+            &ws,
+            "activity",
+            &critical,
+            "--json",
+        ],
+    ));
+    assert_eq!(act.as_array().unwrap().len(), 1, "{act}");
+
+    // A broken result file: a warning, and the run still succeeds.
+    text.push_str(&format!(
+        "\n[[output]]\nplugin = \"junk\"\ncommand = [{}]\n",
+        quoted(fake_output_plugin(&dir, true))
+    ));
+    std::fs::write(&toml, &text).unwrap();
+    let out = run(&dir, &["run", "--workspace", &ws, "-i", forest]);
+    let said = text_of(&out);
+    assert!(out.status.success(), "{said}");
+    assert!(said.contains("Plugin junk:"), "{said}");
+    assert!(said.contains("result file wasn't read"), "{said}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn text_of(out: &std::process::Output) -> String {
+    text(out)
+}
