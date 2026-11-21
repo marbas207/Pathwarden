@@ -23,6 +23,8 @@ pub struct Issue {
     pub resolution: Option<String>,
     /// Account ID (Cloud) or user name (Data Center) of the creator.
     pub creator: Option<String>,
+    /// Its status name ("In Progress"), when Jira gave one.
+    pub status: Option<String>,
 }
 
 /// What a new issue says; the API layer turns it into Jira fields.
@@ -595,6 +597,7 @@ mod tests {
             active,
             resolution: None,
             creator: None,
+            status: None,
         }
     }
 

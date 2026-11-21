@@ -11,6 +11,7 @@
 mod api;
 mod event;
 mod reconcile;
+mod result;
 mod settings;
 
 use std::io::Read;
@@ -114,6 +115,8 @@ fn run() -> Result<bool> {
     }
     let (mut created, mut commented, mut reopened, mut resolved, mut failed) = (0, 0, 0, 0, 0);
     let mut skipped = 0;
+    // The tickets this run leaves on the findings, for Pathwarden.
+    let mut tracker = result::Tracker::new(&event, &tickets, &settings);
     for action in &guarded.actions {
         if let Action::Info {
             ticket,
@@ -131,6 +134,7 @@ fn run() -> Result<bool> {
         {
             println!("skipped {fingerprint}: {}", reconcile::skip_reason(record));
             skipped += 1;
+            tracker.done(action, None);
             continue;
         }
         if settings.dry_run || client.is_none() {
@@ -145,13 +149,15 @@ fn run() -> Result<bool> {
             continue;
         }
         let client = client.as_ref().expect("live client outside a dry run");
+        let mut made = None;
         let result = match action {
             Action::Create {
                 fingerprint,
                 fields,
-            } => client
-                .create(fields)
-                .map(|n| println!("created {n} for {fingerprint}")),
+            } => client.create(fields).map(|(n, sys_id)| {
+                println!("created {n} for {fingerprint}");
+                made = Some((n, sys_id));
+            }),
             Action::Comment {
                 ticket,
                 sys_id,
@@ -181,13 +187,27 @@ fn run() -> Result<bool> {
                 failed += 1;
                 eprintln!("servicenow: {e:#}");
             }
-            Ok(()) => count(
-                action,
-                &mut created,
-                &mut commented,
-                &mut reopened,
-                &mut resolved,
-            ),
+            Ok(()) => {
+                tracker.done(action, made);
+                count(
+                    action,
+                    &mut created,
+                    &mut commented,
+                    &mut reopened,
+                    &mut resolved,
+                )
+            }
+        }
+    }
+    // What Pathwarden shows on the findings: only from a run that changed
+    // ServiceNow, and only when it asked for it.
+    if let Some(path) = result::path_for(
+        settings.dry_run,
+        client.is_some(),
+        std::env::var_os(result::ENV),
+    ) {
+        if let Err(e) = result::write(&path, &tracker.records(&settings)) {
+            eprintln!("servicenow: warning: the tickets weren't handed to Pathwarden: {e:#}");
         }
     }
     println!(

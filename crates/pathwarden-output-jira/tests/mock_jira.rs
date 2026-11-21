@@ -490,3 +490,86 @@ fn offline_dry_run_and_refusals() {
     assert!(!ok && err.contains("findings"), "{err}");
     assert!(fake.lock().unwrap().log.is_empty());
 }
+
+/// [`plugin`] with Pathwarden's result file named: what it wrote there,
+/// `None` when it wrote nothing.
+fn plugin_reporting(url: &str, extra: Value, event: &str) -> (bool, Option<Value>) {
+    let dir = std::env::temp_dir().join(format!(
+        "pw-jira-result-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("output-result.json");
+    let mut settings = json!({ "instance": url, "project": "SEC" });
+    for (k, v) in extra.as_object().unwrap() {
+        settings[k] = v.clone();
+    }
+    let mut child = Command::new(env!("CARGO_BIN_EXE_pathwarden-output-jira"))
+        .env("PATHWARDEN_OUTPUT_SETTINGS", settings.to_string())
+        .env("PATHWARDEN_JIRA_USER", "svc@contoso.com")
+        .env("PATHWARDEN_JIRA_TOKEN", "s3cret-token")
+        .env("PATHWARDEN_OUTPUT_RESULT", &path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(event.as_bytes())
+        .unwrap();
+    let ok = child.wait().unwrap().success();
+    let got = std::fs::read(&path)
+        .ok()
+        .map(|b| serde_json::from_slice(&b).unwrap());
+    std::fs::remove_dir_all(&dir).unwrap();
+    (ok, got)
+}
+
+/// A real run hands Pathwarden the issues it keeps (created, closed);
+/// a dry run writes nothing.
+#[test]
+fn the_result_file_lists_the_issues_on_real_runs_only() {
+    let (url, _fake) = start();
+    let (a, b) = ("PW-003-aaaaaaaaaaaaaaaa", "PW-003-bbbbbbbbbbbbbbbb");
+    let ev = event(
+        "R1",
+        vec![finding(a, "new", "critical"), finding(b, "new", "high")],
+    );
+    let (ok, got) = plugin_reporting(&url, json!({ "dry_run": true }), &ev);
+    assert!(ok);
+    assert_eq!(got, None, "a dry run writes no result");
+
+    let (ok, got) = plugin_reporting(&url, json!({}), &ev);
+    assert!(ok);
+    let got = got.expect("a real run writes its result");
+    assert_eq!(got["schema"], "pathwarden.output-result.v1");
+    let recs = got["records"].as_array().unwrap();
+    assert_eq!(recs.len(), 2, "{got}");
+    assert_eq!(recs[0]["fingerprint"], a);
+    assert_eq!(recs[0]["number"], "SEC-1");
+    assert_eq!(recs[0]["open"], true);
+    // A plain-http (loopback) instance gets no link.
+    assert!(recs[0].get("url").is_none(), "{got}");
+
+    // The first finding is fixed: its issue is closed, and said so.
+    let ev2 = event("R2", vec![finding(b, "open", "high")]);
+    let (ok, got) = plugin_reporting(&url, json!({}), &ev2);
+    assert!(ok);
+    let got = got.unwrap();
+    let recs = got["records"].as_array().unwrap();
+    let closed = recs.iter().find(|r| r["fingerprint"] == a).unwrap();
+    assert_eq!(closed["open"], false);
+    assert_eq!(closed["status"], "Done");
+    let open = recs.iter().find(|r| r["fingerprint"] == b).unwrap();
+    assert_eq!(
+        (open["number"].as_str(), open["open"].as_bool()),
+        (Some("SEC-2"), Some(true))
+    );
+}

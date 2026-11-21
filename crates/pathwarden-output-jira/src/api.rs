@@ -297,6 +297,7 @@ impl Client {
             key: key.to_string(),
             fingerprint,
             active: f["status"]["statusCategory"]["key"].as_str() != Some("done"),
+            status: f["status"]["name"].as_str().map(str::to_string),
             resolution: f["resolution"]["name"].as_str().map(str::to_string),
             creator,
         })

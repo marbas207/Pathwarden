@@ -12,6 +12,7 @@
 mod api;
 mod event;
 mod reconcile;
+mod result;
 mod settings;
 
 use std::io::Read;
@@ -135,6 +136,8 @@ fn run() -> Result<bool> {
         eprintln!("jira: warning: {w}");
     }
     let mut counts = Counts::default();
+    // The issues this run leaves on the findings, for Pathwarden.
+    let mut tracker = result::Tracker::new(&event, &issues);
     for action in &guarded.actions {
         if let Action::Info {
             key,
@@ -152,6 +155,7 @@ fn run() -> Result<bool> {
         {
             println!("skipped {fingerprint}: {}", reconcile::skip_reason(record));
             counts.add(action);
+            tracker.done(action, None);
             continue;
         }
         let Some(client) = client.as_ref().filter(|_| !settings.dry_run) else {
@@ -160,14 +164,26 @@ fn run() -> Result<bool> {
             continue;
         };
         match perform(client, &settings, action) {
-            Ok(line) => {
+            Ok((line, created)) => {
                 println!("{line}");
                 counts.add(action);
+                tracker.done(action, created);
             }
             Err(e) => {
                 counts.failed += 1;
                 eprintln!("jira: {e:#}");
             }
+        }
+    }
+    // What Pathwarden shows on the findings: only from a run that changed
+    // Jira, and only when it asked for it.
+    if let Some(path) = result::path_for(
+        settings.dry_run,
+        client.is_some(),
+        std::env::var_os(result::ENV),
+    ) {
+        if let Err(e) = result::write(&path, &tracker.records(&settings)) {
+            eprintln!("jira: warning: the issues weren't handed to Pathwarden: {e:#}");
         }
     }
     println!(
@@ -192,12 +208,23 @@ fn run() -> Result<bool> {
     Ok(counts.failed == 0 && !guarded.flagged)
 }
 
-fn perform(client: &api::Client, settings: &Settings, action: &Action) -> Result<String> {
+/// Does `action` in Jira: the line to print, and a new issue's key.
+fn perform(
+    client: &api::Client,
+    settings: &Settings,
+    action: &Action,
+) -> Result<(String, Option<String>)> {
+    if let Action::Create { fingerprint, issue } = action {
+        let key = client.create(issue, settings)?;
+        return Ok((format!("created {key} for {fingerprint}"), Some(key)));
+    }
+    Ok((perform_change(client, settings, action)?, None))
+}
+
+/// [`perform`] for an action on an existing issue.
+fn perform_change(client: &api::Client, settings: &Settings, action: &Action) -> Result<String> {
     Ok(match action {
-        Action::Create { fingerprint, issue } => {
-            let key = client.create(issue, settings)?;
-            format!("created {key} for {fingerprint}")
-        }
+        Action::Create { .. } => String::new(),
         Action::Comment {
             key,
             fingerprint,

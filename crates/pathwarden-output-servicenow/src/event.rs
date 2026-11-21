@@ -8,6 +8,9 @@ use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use serde_json::Value;
 
+/// The start of a record's `action` when an output plugin reported it.
+pub const PLUGIN_SOURCE: &str = "plugin:";
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Event {
@@ -137,12 +140,21 @@ impl Finding {
     /// still open in the other system (as Pathwarden last heard), named by
     /// its number, label or ID. Any kind counts (`ticket`, `request`, ...):
     /// the kind is free text an action chooses, and an open record means
-    /// someone is already tracking the finding there.
+    /// someone is already tracking the finding there. Records an output
+    /// plugin reported (their `action` is `plugin:<name>`, this plugin's
+    /// own tickets among them) don't count: they aren't a finding
+    /// action's, and counting its own would make the plugin skip every
+    /// finding it keeps a ticket for.
     pub fn open_action_record(&self) -> Option<String> {
         let records = self.actions.as_ref()?.get("records")?.as_array()?;
         records
             .iter()
             .filter(|r| r.get("open").and_then(Value::as_bool) == Some(true))
+            .filter(|r| {
+                !r.get("action")
+                    .and_then(Value::as_str)
+                    .is_some_and(|a| a.starts_with(PLUGIN_SOURCE))
+            })
             .map(|r| {
                 ["number", "label", "id"]
                     .iter()
@@ -192,5 +204,22 @@ mod tests {
             got,
             [Some("RITM2".into()), Some("x9".into()), None, None, None]
         );
+    }
+
+    /// This plugin's own tickets come back on the findings in `actions`
+    /// (Pathwarden saves what the result file said): they never count as
+    /// a finding action's ticket, or the plugin would skip every finding
+    /// it keeps a ticket for. Another plugin's don't either.
+    #[test]
+    fn own_and_other_plugin_records_are_not_action_tickets() {
+        let text = r#"{"schema":"pathwarden.event.v1","run":{"run_id":"R1"},"findings":[
+            {"fingerprint":"A","actions":{"records":[
+                {"action":"plugin:servicenow","id":"s1","number":"INC1","open":true}]}},
+            {"fingerprint":"B","actions":{"records":[
+                {"action":"plugin:jira","id":"SEC-1","number":"SEC-1","open":true},
+                {"action":"service-desk/open","id":"r","number":"RITM9","open":true}]}}]}"#;
+        let e = Event::parse(text).unwrap();
+        let got: Vec<_> = e.findings.iter().map(Finding::open_action_record).collect();
+        assert_eq!(got, [None, Some("RITM9".into())]);
     }
 }

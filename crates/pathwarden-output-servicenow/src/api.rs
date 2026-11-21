@@ -136,8 +136,9 @@ impl Client {
         bail!("listing tickets: more than {max_pages} pages; refusing to continue")
     }
 
-    /// Creates a ticket; returns its number.
-    pub fn create(&self, fields: &Map<String, Value>) -> Result<String> {
+    /// Creates a ticket; returns its number and, when ServiceNow gave a
+    /// valid one, its sys_id.
+    pub fn create(&self, fields: &Map<String, Value>) -> Result<(String, Option<String>)> {
         let resp = self
             .agent
             .post(&self.base)
@@ -145,7 +146,9 @@ impl Client {
             .set("Authorization", &self.auth)
             .send_json(Value::Object(fields.clone()));
         let body = read(resp, "creating a ticket")?;
-        Ok(text(&body["result"]["number"]).unwrap_or_else(|| "(unknown number)".into()))
+        let number = text(&body["result"]["number"]).unwrap_or_else(|| "(unknown number)".into());
+        let sys_id = text(&body["result"]["sys_id"]).filter(|s| valid_sys_id(s));
+        Ok((number, sys_id))
     }
 
     pub fn update(&self, sys_id: &str, fields: &Map<String, Value>) -> Result<()> {

@@ -140,6 +140,26 @@ open`); a dry run shows the same. Set `skip_action_tickets = false` to
 create tickets regardless. Skipped findings don't count towards
 `max_create`.
 
+A plugin's own tickets come back in the event as records too (see below);
+they never count as an action's ticket, so the plugin never skips a
+finding because of its own ticket, nor because of another plugin's.
+
+## Tickets on the findings
+
+On a real run (not a dry run or Test), the plugin tells Pathwarden the
+ticket it keeps for each finding of the event, in the result file
+Pathwarden names in `PATHWARDEN_OUTPUT_RESULT`
+([docs/plugins.md](../../docs/plugins.md#telling-pathwarden-what-it-did)).
+Each finding then shows `INC0012345 · Open` with a link to the ticket, for
+everyone who shares the run history, and `pathwarden action records`
+lists it by the ServiceNow plugin. Listed: tickets created this run,
+still open, reopened, closed this run (because the finding is gone or was
+accepted as a risk), and closed ones the finding still has. Not listed:
+findings the skip rule above left to an action's ticket. The link is
+`<instance>/<table>.do?sys_id=<sys_id>`, only for an `https://` instance; the status is Open, or
+Resolved or Closed. An action with `once` (an "Open a ticket" button) shows no
+button while the finding has an open ticket from the plugin.
+
 ### Safety limits
 
 A run that would resolve a large share of the open tickets usually means an

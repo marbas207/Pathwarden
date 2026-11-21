@@ -120,6 +120,26 @@ open`); a dry run shows the same. Set `skip_action_tickets = false` to
 create tickets regardless. Skipped findings don't count towards
 `max_create`.
 
+A plugin's own issues come back in the event as records too (see below);
+they never count as an action's ticket, so the plugin never skips a
+finding because of its own issue, nor because of another plugin's.
+
+## Tickets on the findings
+
+On a real run (not a dry run or Test), the plugin tells Pathwarden the
+issue it keeps for each finding of the event, in the result file
+Pathwarden names in `PATHWARDEN_OUTPUT_RESULT`
+([docs/plugins.md](../../docs/plugins.md#telling-pathwarden-what-it-did)).
+Each finding then shows `SEC-123 · Open` with a link to the issue, for
+everyone who shares the run history, and `pathwarden action records`
+lists it by the Jira plugin. Listed: issues created this run,
+still open, reopened, closed this run (because the finding is gone or was
+accepted as a risk), and closed ones the finding still has. Not listed:
+findings the skip rule above left to an action's ticket. The link is
+`<instance>/browse/<key>`, only for an `https://` instance; the status is Open, or
+its status name, or Done. An action with `once` (an "Open a ticket" button) shows no
+button while the finding has an open issue from the plugin.
+
 ## Security
 
 - **Transport:** `https://` only; plain `http://` only to `localhost`,
