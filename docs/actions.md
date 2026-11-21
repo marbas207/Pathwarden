@@ -302,6 +302,9 @@ usually a ticket: its `id` in the other system, its `number`, `status` and
   kept, not only the ones that changed; a field left out is gone.
 - `open: true` keeps a `once` action hidden, and makes a fixed finding's
   chip read "Fixed — DESK0001 still Open".
+- The saved report's Findings tab lists the fixed findings whose record is
+  still open, in a **Fixed, ticket still open** card: rule, title, chip and
+  when it was fixed, newest fix first. Without any, there is no card.
 
 ### Activity
 
@@ -310,6 +313,17 @@ newest first: who ran which action, from which computer, when, whether it
 worked and its message. Failed runs are listed too. Pathwarden keeps the
 latest 100 per finding. `pathwarden action activity FINDING_ID` prints
 them, and `pathwarden action records FINDING_ID` the records.
+
+`pathwarden action records` takes two filters:
+
+| Flag | Lists |
+|---|---|
+| `--open` | Open records only. |
+| `--fixed` | Records of findings the latest run found fixed, newest fix first, each with when it was fixed. |
+| `--open --fixed` | The fixed findings whose ticket is still open: the report's card. |
+
+With `--json`, `--fixed` adds `rule`, `title` and `fixed_at` (Unix time)
+to each record.
 
 ### Follow-ups
 

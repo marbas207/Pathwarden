@@ -161,7 +161,9 @@ holds its records with their follow-ups (such as **Check status**) and
 the latest three entries of **Activity** (**Show all** for the rest).
 Once a finding is fixed, its chip turns amber (`Fixed — RITM10816190
 still Open`) and a follow-up meant for that (such as **Close request**)
-comes first.
+comes first. The saved report leaves fixed findings out, so its Findings
+tab lists those whose ticket is still open in a **Fixed, ticket still
+open** card.
 
 On **Findings**, **Records** (**Any**, **Has a record**, **No record**)
 filters by records; on the Overview, the **Open findings** tile links

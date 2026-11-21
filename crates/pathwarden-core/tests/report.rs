@@ -276,6 +276,94 @@ fn findings_are_grouped_by_rule() {
     }
 }
 
+/// A fixed finding whose ticket is still open is listed on the Findings
+/// tab, above the findings, with its records' chips and when it was fixed;
+/// the card is left out when there are none.
+#[test]
+fn fixed_findings_with_an_open_ticket_are_listed() {
+    use pathwarden_core::action_log::FixedFinding;
+    use pathwarden_core::actions::{ActionRecord, Record};
+    let rec = |number: &str, status: &str| ActionRecord {
+        action: "desk/open".into(),
+        record: Record {
+            id: format!("sys-{number}"),
+            number: Some(number.into()),
+            status: Some(status.into()),
+            open: true,
+            ..Record::default()
+        },
+        by: None,
+        on: None,
+        at: String::new(),
+        updated_at: String::new(),
+    };
+    let fixed = vec![
+        FixedFinding {
+            fingerprint: "PW-012-b".into(),
+            rule: "PW-012".into(),
+            severity: findings::Severity::High,
+            title: "Unconstrained delegation on <FS02>.NORTH.LAB".into(),
+            fixed_at: NOW,
+            records: vec![
+                rec("RITM0010822", "Work in Progress"),
+                rec("RITM0010824", "Open"),
+            ],
+        },
+        FixedFinding {
+            fingerprint: "PW-006-a".into(),
+            rule: "PW-006".into(),
+            severity: findings::Severity::Critical,
+            title: "Kerberoastable account SVC-SQL01@NORTH.LAB is Tier Zero".into(),
+            fixed_at: NOW - 6 * 86_400,
+            records: vec![rec("RITM0010816", "Open")],
+        },
+    ];
+    let (html, _, _) = render_with("forest", |_| ReportHistory {
+        fixed_open: fixed.clone(),
+        ..ReportHistory::default()
+    });
+    let findings_tab = html.split(r#"<section id="findings""#).nth(1).unwrap();
+    let card = findings_tab
+        .split(r#"<section class="card fixed-open""#)
+        .nth(1)
+        .and_then(|s| s.split("</section>").next())
+        .expect("the card");
+    assert!(card.contains("Fixed, ticket still open"), "{card}");
+    let items: Vec<&str> = card.split("<li>").skip(1).collect();
+    assert_eq!(items.len(), 2);
+    // Newest fix first, as given; the title escaped.
+    assert!(
+        items[0].contains(
+            r#"<span class="rule">PW-012</span>Unconstrained delegation on &lt;FS02&gt;.NORTH.LAB"#
+        ),
+        "{}",
+        items[0]
+    );
+    assert!(items[0].contains(r#"<span class="ac-chip">RITM0010822 · Work in Progress</span><span class="ac-chip">RITM0010824 · Open</span>"#), "{}", items[0]);
+    let today = pathwarden_core::report::short_date(NOW);
+    assert!(
+        items[0].contains(&format!(
+            r#"Fixed <time data-unix="{NOW}" data-fmt="day">{today}</time></span>"#
+        )),
+        "{}",
+        items[0]
+    );
+    assert!(items[1].contains("RITM0010816 · Open"));
+    let earlier = pathwarden_core::report::short_date(NOW - 6 * 86_400);
+    assert!(items[1].contains(&format!(">{earlier}</time></span>")));
+    // Between the filters and the findings.
+    let at = |s: &str| findings_tab.find(s).unwrap();
+    assert!(at(r#"class="filters card""#) < at("fixed-open"));
+    assert!(at("fixed-open") < at(r#"<div class="rows groups card">"#));
+    // Its styles are the report's.
+    assert!(html.contains(".fixed-open li {"));
+
+    // None: no card.
+    let html = render("forest");
+    assert!(!html.contains(r#"class="card fixed-open""#));
+    assert!(!html.contains(r#"id="fo-h""#));
+}
+
 /// Layout A without a run history: the hero (badge, count, reason) on its
 /// own, four cards, findings by severity, the tiers, the collection note
 /// and the definitions last. No trend and no "since the last run"; the
@@ -580,6 +668,7 @@ fn what_changed_names_in_full_with_its_settings() {
             state: Some(std::borrow::Cow::Owned(state)),
             context: vec!["-c".into(), "x 2.toml".into()],
             state_dir: None,
+            fixed_open: Vec::new(),
         }
     });
     let o = overview(&html);
@@ -653,6 +742,7 @@ fn what_changed_and_tiers_escape_names() {
                 state: Some(std::borrow::Cow::Owned(state)),
                 context: vec!["-c".into(), path.into()],
                 state_dir: None,
+                fixed_open: Vec::new(),
             }
         },
     );

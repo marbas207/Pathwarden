@@ -166,6 +166,27 @@ pub fn log(ws: &Workspace) -> Result<ActionsFile, String> {
     action_log::load(&loc.store).map_err(|e| format!("{e:#}"))
 }
 
+/// The fixed findings with records, newest fix first, with those records
+/// (only the open ones when `open_only`), from the findings state the
+/// latest run left and what actions did, as the history holds them here
+/// ([`action_log::fixed_records`]): what the report's "Fixed, ticket still
+/// open" card lists, for `pathwarden action records --fixed`. Empty when
+/// there is no run yet.
+pub fn fixed_records(
+    ws: &Workspace,
+    log: &ActionsFile,
+    open_only: bool,
+) -> Result<Vec<action_log::FixedFinding>, String> {
+    let loc = crate::history_ui::locate(ws, None)?;
+    if !loc.dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let state = pathwarden_core::history::findings_state_in(&loc.dir)?;
+    Ok(state
+        .map(|s| action_log::fixed_records(&s, log, open_only))
+        .unwrap_or_default())
+}
+
 /// The records kept on finding `fingerprint`, in the order they were made
 /// (none when the history can't be read). Everything that offers actions
 /// reads them from here.

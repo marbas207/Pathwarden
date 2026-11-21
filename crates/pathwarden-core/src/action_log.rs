@@ -508,14 +508,19 @@ pub fn sanitize_record(r: &mut Record) {
 /// says so, and `pathwarden action log import` takes it in when someone
 /// decides to ([`import_plain`]).
 pub fn load(store: &Store) -> Result<ActionsFile> {
-    let dir = &store.dir;
+    load_in(&store.dir)
+}
+
+/// [`load`] from the history in `dir`, for a folder known only by its path
+/// (the report's history: [`crate::history::for_report_in`]).
+pub fn load_in(dir: &std::path::Path) -> Result<ActionsFile> {
     let sealed = dir.join(format!("{FILE}{}", crypt::SUFFIX));
     let there = |p: &std::path::Path| std::fs::symlink_metadata(p).is_ok();
     if !crypt::is_encrypted(dir) {
         if there(&sealed) {
             bail!(LEFT_SEALED_WORDS);
         }
-        return match store.read_state_file(FILE)? {
+        return match crate::store::read_state_file(dir, FILE)? {
             None => Ok(ActionsFile::default()),
             Some(bytes) => Ok(parse(&bytes)?),
         };
@@ -523,7 +528,7 @@ pub fn load(store: &Store) -> Result<ActionsFile> {
     if !there(&sealed) {
         return Ok(ActionsFile::default());
     }
-    match store.read_state_file(FILE) {
+    match crate::store::read_state_file(dir, FILE) {
         Ok(Some(bytes)) => Ok(parse(&bytes)?),
         Ok(None) => Ok(ActionsFile::default()),
         Err(e) if e.downcast_ref::<crate::store::TooLarge>().is_some() => Err(e),
@@ -1390,6 +1395,83 @@ pub fn annotate(
     for r in resolved {
         r.actions = file.for_finding(&r.fingerprint);
     }
+}
+
+/// A fixed finding and its records ([`fixed_records`]).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct FixedFinding {
+    pub fingerprint: String,
+    pub rule: String,
+    pub severity: crate::findings::Severity,
+    /// The finding's title as the findings state kept it, else its rule's.
+    pub title: String,
+    /// Unix time of the run that found it fixed.
+    pub fixed_at: i64,
+    /// Its records (only the open ones, for [`fixed_open`]), in the order
+    /// they were made.
+    pub records: Vec<ActionRecord>,
+}
+
+/// The findings `state` has as fixed that have a record in `file` (an open
+/// one, when `open_only`), newest fix first, with those records. A finding
+/// resolved because its rule was turned off isn't fixed, and isn't listed.
+/// `pathwarden action records --fixed` (and `--open`).
+pub fn fixed_records(
+    state: &crate::state::FindingsState,
+    file: &ActionsFile,
+    open_only: bool,
+) -> Vec<FixedFinding> {
+    let mut out: Vec<FixedFinding> = file
+        .findings
+        .iter()
+        .filter_map(|(fp, log)| {
+            let t = state.findings.get(fp)?;
+            if t.status != crate::state::Status::Resolved || t.rule_off {
+                return None;
+            }
+            let records: Vec<ActionRecord> = log
+                .records
+                .iter()
+                .filter(|r| !open_only || r.record.open)
+                .cloned()
+                .collect();
+            if records.is_empty() {
+                return None;
+            }
+            let title = t
+                .title
+                .clone()
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| {
+                    crate::findings::rules()
+                        .iter()
+                        .find(|r| r.id.eq_ignore_ascii_case(&t.rule))
+                        .map(|r| r.title.to_string())
+                })
+                .unwrap_or_else(|| t.rule.clone());
+            Some(FixedFinding {
+                fingerprint: fp.clone(),
+                rule: t.rule.clone(),
+                severity: t.severity,
+                title,
+                fixed_at: t.resolved_at.unwrap_or(t.last_seen),
+                records,
+            })
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        b.fixed_at
+            .cmp(&a.fixed_at)
+            .then_with(|| a.fingerprint.cmp(&b.fingerprint))
+    });
+    out
+}
+
+/// The fixed findings that still have an open record (a ticket), newest
+/// fix first, with only their open records: the report's "Fixed, ticket
+/// still open" card and `pathwarden action records --open --fixed`.
+pub fn fixed_open(state: &crate::state::FindingsState, file: &ActionsFile) -> Vec<FixedFinding> {
+    fixed_records(state, file, true)
 }
 
 #[cfg(test)]

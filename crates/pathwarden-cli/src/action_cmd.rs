@@ -170,6 +170,8 @@ enum ActionWhat {
     },
     /// What finding actions created or look after (a ticket), kept on each
     /// finding in the run history: one finding's, or every finding's.
+    /// `--open --fixed` lists the fixed findings whose ticket is still open,
+    /// as the report's "Fixed, ticket still open" card does.
     Records {
         #[command(subcommand)]
         what: Option<RecordsWhat>,
@@ -177,6 +179,13 @@ enum ActionWhat {
         /// PW-006-8ae0b31a46eacada).
         #[arg(value_name = "FINDING_ID")]
         fingerprint: Option<String>,
+        /// Only open records.
+        #[arg(long)]
+        open: bool,
+        /// Only records of findings the latest run found fixed, newest fix
+        /// first.
+        #[arg(long)]
+        fixed: bool,
         /// Print JSON instead of text.
         #[arg(long)]
         json: bool,
@@ -419,8 +428,10 @@ pub(crate) fn run(a: ActionArgs) -> Result<ExitCode> {
                 ActionWhat::Records {
                     what: None,
                     fingerprint,
+                    open,
+                    fixed,
                     json,
-                } => records(&t, fingerprint.as_deref(), json),
+                } => records(&t, fingerprint.as_deref(), open, fixed, json),
                 ActionWhat::Activity { fingerprint, json } => {
                     activity(&t, fingerprint.as_deref(), json)
                 }
@@ -1149,10 +1160,21 @@ fn import_log(t: &Target, yes: bool) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn records(t: &Target, fingerprint: Option<&str>, json: bool) -> Result<ExitCode> {
+/// `open`: only open records; `fixed`: only records of the findings the
+/// latest run found fixed (both: the report's "Fixed, ticket still open").
+fn records(
+    t: &Target,
+    fingerprint: Option<&str>,
+    open: bool,
+    fixed: bool,
+    json: bool,
+) -> Result<ExitCode> {
     let ws = workspace(t)?;
     note_plain(ws);
     let log = actions_ui::log(ws).map_err(anyhow::Error::msg)?;
+    if fixed {
+        return fixed_records(t, ws, &log, fingerprint, open, json);
+    }
     let mut rows: Vec<(String, Vec<actions::ActionRecord>)> = match fingerprint {
         Some(fp) => {
             let key = finding_key(&log, fp);
@@ -1166,6 +1188,11 @@ fn records(t: &Target, fingerprint: Option<&str>, json: bool) -> Result<ExitCode
             .map(|(fp, l)| (fp.clone(), l.records.clone()))
             .collect(),
     };
+    if open {
+        for (_, rs) in rows.iter_mut() {
+            rs.retain(|r| r.record.open);
+        }
+    }
     rows.retain(|(_, r)| fingerprint.is_some() || !r.is_empty());
     if json {
         let list: Vec<Value> = rows
@@ -1182,15 +1209,77 @@ fn records(t: &Target, fingerprint: Option<&str>, json: bool) -> Result<ExitCode
         return Ok(ExitCode::SUCCESS);
     }
     if rows.iter().all(|(_, r)| r.is_empty()) {
+        let which = if open { "open records" } else { "records" };
         match fingerprint {
-            Some(fp) => println!("{} has no records.", ui::safe(fp.trim())),
-            None => println!("No finding has records in {}.", t.label),
+            Some(fp) => println!("{} has no {which}.", ui::safe(fp.trim())),
+            None => println!("No finding has {which} in {}.", t.label),
         }
         return Ok(ExitCode::SUCCESS);
     }
     for (fp, rs) in &rows {
         println!("{}:", ui::safe(fp));
         for r in rs {
+            print_record(r, "  ");
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `records --fixed`: the findings the latest run found fixed that have
+/// records (open ones, with `open`), newest fix first
+/// ([`actions_ui::fixed_records`]). Its JSON is the records, each with
+/// its finding's `fingerprint`, `rule`, `title` and `fixed_at` (Unix
+/// time).
+fn fixed_records(
+    t: &Target,
+    ws: &pathwarden_ui::workspace::Workspace,
+    log: &pathwarden_core::action_log::ActionsFile,
+    fingerprint: Option<&str>,
+    open: bool,
+    json: bool,
+) -> Result<ExitCode> {
+    let mut list = actions_ui::fixed_records(ws, log, open).map_err(anyhow::Error::msg)?;
+    if let Some(fp) = fingerprint {
+        list.retain(|f| f.fingerprint.eq_ignore_ascii_case(fp.trim()));
+    }
+    if json {
+        let rows: Vec<Value> = list
+            .iter()
+            .flat_map(|f| {
+                f.records.iter().map(move |r| {
+                    let mut v = serde_json::to_value(r).unwrap_or_default();
+                    v["fingerprint"] = json!(f.fingerprint);
+                    v["rule"] = json!(f.rule);
+                    v["title"] = json!(f.title);
+                    v["fixed_at"] = json!(f.fixed_at);
+                    v
+                })
+            })
+            .collect();
+        emit_json(&rows)?;
+        return Ok(ExitCode::SUCCESS);
+    }
+    if list.is_empty() {
+        let which = if open { "an open record" } else { "records" };
+        match fingerprint {
+            Some(fp) => println!(
+                "{} isn't a fixed finding with {which}.",
+                ui::safe(fp.trim())
+            ),
+            None => println!("No fixed finding has {which} in {}.", t.label),
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    let d = ui::DIM;
+    for f in &list {
+        println!(
+            "{}  {} {}  {d}fixed {}{d:#}",
+            ui::safe(&f.fingerprint),
+            ui::safe(&f.rule),
+            ui::safe(&f.title),
+            pathwarden_core::report::short_date(f.fixed_at)
+        );
+        for r in &f.records {
             print_record(r, "  ");
         }
     }

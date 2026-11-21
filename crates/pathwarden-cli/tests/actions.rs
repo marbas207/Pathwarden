@@ -813,3 +813,111 @@ fn a_failed_action_run_logs_a_failure() {
     assert_eq!(seen, 2);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `records --fixed` and `--open`: the findings the latest run left fixed
+/// that have records, newest fix first; `--open --fixed` is the report's
+/// "Fixed, ticket still open" list.
+#[test]
+fn records_of_fixed_findings_whose_ticket_is_still_open() {
+    let (dir, ws, critical, high) = workspace_named("-fixed");
+    let ws = ws.as_str();
+    let call = |args: &[&str]| {
+        let full: Vec<&str> = ["action", "--workspace", ws]
+            .into_iter()
+            .chain(args.iter().copied())
+            .collect();
+        run(&dir, &full)
+    };
+    // Nothing has records yet.
+    let out = ok(&call(&["records", "--open", "--fixed"]));
+    assert!(
+        out.contains("No fixed finding has an open record in "),
+        "{out}"
+    );
+    assert_eq!(
+        json(&call(&["records", "--open", "--fixed", "--json"])),
+        serde_json::json!([])
+    );
+
+    // The latest run's state, with the critical finding fixed.
+    fn find(dir: &Path) -> Option<PathBuf> {
+        for e in std::fs::read_dir(dir).ok()?.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                if let Some(f) = find(&p) {
+                    return Some(f);
+                }
+            } else if p.file_name().is_some_and(|n| n == "findings.json") {
+                return Some(p);
+            }
+        }
+        None
+    }
+    let path = find(&dir.join("ws")).expect("the history's findings.json");
+    let state_dir = path.parent().unwrap().to_path_buf();
+    let mut state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let t = &mut state["findings"][critical.as_str()];
+    assert!(t.is_object(), "{state}");
+    t["status"] = "resolved".into();
+    t["resolved_at"] = 1_795_000_000_i64.into();
+    std::fs::write(&path, serde_json::to_vec(&state).unwrap()).unwrap();
+    // A closed and an open ticket on it; an open one on the high finding,
+    // which isn't fixed.
+    let rec = |id: &str, status: &str, open: bool| {
+        serde_json::json!({"action": "desk/open", "id": id, "number": id.to_uppercase(),
+            "status": status, "open": open, "at": "2026-11-18T14:02:11.000Z",
+            "updated_at": "2026-11-18T14:02:11.000Z"})
+    };
+    let actions = serde_json::json!({"version": 1, "findings": {
+        critical.as_str(): {"records": [rec("fake-1", "Closed", false), rec("fake-2", "Open", true)]},
+        high.as_str(): {"records": [rec("fake-3", "Open", true)]},
+    }});
+    std::fs::write(
+        state_dir.join("actions.json"),
+        serde_json::to_vec(&actions).unwrap(),
+    )
+    .unwrap();
+
+    let out = ok(&call(&["records", "--open", "--fixed"]));
+    assert!(out.contains(&format!("{critical}  PW-")), "{out}");
+    assert!(out.contains("fixed Nov 18"), "{out}");
+    assert!(out.contains("fake-2  FAKE-2 · Open"), "{out}");
+    assert!(!out.contains("fake-1"), "{out}");
+    assert!(!out.contains(&high), "{out}");
+    let j = json(&call(&["records", "--open", "--fixed", "--json"]));
+    let list = j.as_array().unwrap();
+    assert_eq!(list.len(), 1, "{j}");
+    assert_eq!(list[0]["id"], "fake-2");
+    assert_eq!(list[0]["fingerprint"], critical.as_str());
+    assert_eq!(list[0]["fixed_at"], 1_795_000_000_i64);
+    assert_eq!(list[0]["open"], true);
+    assert!(list[0]["rule"].as_str().unwrap().starts_with("PW-"), "{j}");
+    assert!(!list[0]["title"].as_str().unwrap().is_empty(), "{j}");
+
+    // `--fixed`: every record of the fixed findings.
+    let j = json(&call(&["records", "--fixed", "--json"]));
+    let ids: Vec<&str> = j
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, ["fake-1", "fake-2"]);
+    // `--open`: open records, fixed or not.
+    let j = json(&call(&["records", "--open", "--json"]));
+    let mut ids: Vec<&str> = j
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_str().unwrap())
+        .collect();
+    ids.sort_unstable();
+    assert_eq!(ids, ["fake-2", "fake-3"]);
+    let out = ok(&call(&["records", "--open", "--fixed", &high]));
+    assert!(
+        out.contains("isn't a fixed finding with an open record."),
+        "{out}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
