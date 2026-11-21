@@ -616,11 +616,12 @@ pub fn collected_words(c: &CollectionInfo) -> (String, String) {
     )
 }
 
-/// How a run reached its domain controllers: LDAPS; LDAP as the Windows
-/// account (signed and encrypted by Kerberos); plain LDAP with a password
-/// (a domain controller whose LDAPS failed, or LDAPS turned off).
+/// How a run reached its domain controllers: LDAPS, with plain LDAP
+/// where it failed; LDAP as the Windows account (signed and encrypted by
+/// Kerberos); plain LDAP with a password and LDAPS turned off.
 fn connection_words(c: &CollectionInfo) -> &'static str {
     match (c.ldaps, c.current_user) {
+        (true, _) if c.plain_fallback => "LDAPS (plain LDAP where it failed)",
         (true, _) => "LDAPS",
         (false, true) => "LDAP",
         (false, false) => "plain LDAP",

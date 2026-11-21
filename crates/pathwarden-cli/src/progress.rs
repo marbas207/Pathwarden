@@ -995,10 +995,8 @@ pub fn collect(
     pathwarden_ui::collect::record_domains(&mut info, &results, &names);
     let outcome = pathwarden_collect::merged(&results);
     // As the app records it: a domain controller read over plain LDAP
-    // after its LDAPS failed makes the run plain LDAP.
-    if outcome.plain_ldap {
-        info.ldaps = false;
-    }
+    // after its LDAPS failed.
+    info.plain_fallback = outcome.plain_ldap;
     let several = results.len() > 1;
     let failed = results.iter().filter(|r| r.outcome.is_err()).count();
 

@@ -2463,6 +2463,8 @@ mod tests {
         let mut s = crate::history_ui::point_summary(&p, &[]);
         s.collection = Some(crate::workspace::CollectionInfo {
             read_started: None,
+            plain_allowed: false,
+            plain_fallback: false,
             method: "builtin".into(),
             scope: "dc-only".into(),
             domain: "contoso.local".into(),

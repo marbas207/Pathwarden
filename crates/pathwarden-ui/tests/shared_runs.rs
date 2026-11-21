@@ -1539,6 +1539,8 @@ fn a_loaded_run_is_shown_not_trusted() {
     a.publish(&[bundle_with(&p1, shared_runs::MAX_FILE_BYTES, |s, _| {
         s.collection = Some(pathwarden_ui::workspace::CollectionInfo {
             read_started: None,
+            plain_allowed: false,
+            plain_fallback: false,
             method: "builtin".into(),
             scope: "all".into(),
             domain: "evil.example".into(),

@@ -864,6 +864,8 @@ pub fn read_streams(ws: Option<&Workspace>) -> Option<usize> {
 pub fn collection_info(req: &CollectRequest) -> CollectionInfo {
     CollectionInfo {
         read_started: None,
+        plain_allowed: req.allow_unencrypted_ldap,
+        plain_fallback: false,
         method: match req.method {
             Method::Builtin => "builtin",
             Method::External { .. } => "sharphound",
@@ -1820,10 +1822,8 @@ impl CollectJob {
         let outcome = pathwarden_collect::merged(&results);
         self.info.read_started = outcome.read_started;
         // LDAPS failed on a domain controller, read over plain LDAP: the
-        // run says plain LDAP (its warnings say where).
-        if outcome.plain_ldap {
-            self.info.ldaps = false;
-        }
+        // run says so (its warnings say where); `ldaps` stays as asked.
+        self.info.plain_fallback = outcome.plain_ldap;
 
         let warnings: Vec<String> = outcome.warnings.iter().map(|w| capitalize(w)).collect();
         if let Some(l) = &log {

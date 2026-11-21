@@ -651,11 +651,7 @@ pub(crate) fn plan(req: &CollectRequest) -> anyhow::Result<Plan> {
         );
     }
     if req.ldaps && req.insecure_skip_tls_verify {
-        warnings.push(
-            "LDAPS certificates were not checked, so a machine in the middle could read or \
-             change the collection and capture the sign-in."
-                .into(),
-        );
+        warnings.push(UNCHECKED_CERTIFICATES.into());
     }
     // Opting out of Kerberos only or required signing. Every
     // built-in collection reads at least SYSVOL over SMB.
@@ -693,6 +689,19 @@ pub(crate) fn plan(req: &CollectRequest) -> anyhow::Result<Plan> {
         }
     };
     Ok(Plan { method, warnings })
+}
+
+/// The run warning with the LDAPS certificate not checked. Dropped when the
+/// domain controller was read over plain LDAP instead ([`fall_back`]).
+const UNCHECKED_CERTIFICATES: &str =
+    "LDAPS certificates were not checked, so a machine in the middle could read or change the \
+     collection and capture the sign-in.";
+
+/// A collection's warnings once LDAPS failed on its domain controller and
+/// it was read over plain LDAP (`w`): no certificate was used.
+fn fell_back_in(warnings: &mut Vec<String>, w: String) {
+    warnings.retain(|x| x != UNCHECKED_CERTIFICATES);
+    warnings.push(w);
 }
 
 /// The run warning when the domain controller wasn't named by its full name:
@@ -1427,7 +1436,7 @@ pub(crate) fn run(
             }
             Ok(Msg::FellBack(w)) => {
                 rep.log(format!("warning: {w}"));
-                warnings.push(w);
+                fell_back_in(&mut warnings, w);
                 plain_ldap = true;
             }
             Ok(Msg::Timings(t)) => saved_timings = Some(*t),
@@ -1456,7 +1465,7 @@ pub(crate) fn run(
             }
             Msg::FellBack(w) => {
                 rep.log(format!("warning: {w}"));
-                warnings.push(w);
+                fell_back_in(&mut warnings, w);
                 plain_ldap = true;
             }
             _ => {}
@@ -4682,6 +4691,29 @@ mod tests {
         let mut job = job_for(&req, method).unwrap();
         assert_eq!(falls_back_with(&mut job, None).0, None);
         assert_eq!(job.url, "ldap://DC01.CONTOSO.LOCAL:389");
+    }
+
+    /// A domain controller read over plain LDAP after its LDAPS failed:
+    /// the certificate warning goes, the fallback's is said.
+    #[test]
+    fn a_fallback_drops_the_certificate_warning() {
+        let mut r = password_req();
+        r.ldaps = true;
+        r.allow_unencrypted_ldap = true;
+        r.insecure_skip_tls_verify = true;
+        let mut warnings = plan(&r).unwrap().warnings;
+        assert!(warnings.iter().any(|w| w == UNCHECKED_CERTIFICATES));
+        let before = warnings.len();
+        fell_back_in(
+            &mut warnings,
+            fell_back_warning("dc01.contoso.local", "x", true),
+        );
+        assert!(!warnings.iter().any(|w| w == UNCHECKED_CERTIFICATES));
+        assert_eq!(warnings.len(), before);
+        assert!(warnings
+            .last()
+            .unwrap()
+            .starts_with("LDAPS failed on dc01.contoso.local"));
     }
 
     /// LDAPS's errors in a few plain words.

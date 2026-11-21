@@ -95,6 +95,8 @@ fn save_with(
         label: None,
         collection: collected.then(|| CollectionInfo {
             read_started,
+            plain_allowed: false,
+            plain_fallback: false,
             method: "builtin".into(),
             scope: "all".into(),
             domain: "kestrelüber.local".into(),

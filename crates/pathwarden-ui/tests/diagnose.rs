@@ -106,6 +106,8 @@ fn save_run(ws: &Workspace, input: &Path, t: Option<CollectionTimings>) -> Strin
         label: None,
         collection: Some(CollectionInfo {
             read_started: None,
+            plain_allowed: false,
+            plain_fallback: false,
             method: "builtin".into(),
             scope: "all".into(),
             domain: "kestrelüber.local".into(),

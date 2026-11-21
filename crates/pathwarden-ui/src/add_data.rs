@@ -244,6 +244,8 @@ mod tests {
             smb_signing: None,
             domains: Vec::new(),
             read_started: None,
+            plain_allowed: false,
+            plain_fallback: false,
         });
         r
     }
