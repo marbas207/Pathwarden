@@ -737,7 +737,7 @@ pub fn render(
     }
     let _ = writeln!(
         out,
-        "\nSteps: plan steps of the remediation path. -: not recorded then.\n\
+        "\nSteps: steps of the remediation path. -: not recorded then.\n\
          Protected: % of Tier Zero objects that no open attack path finding leads to.\n\
          Collected: % of computers with sessions / % of member computers with local groups{}.",
         if points.iter().any(|p| p

@@ -1009,7 +1009,7 @@ fn a_full_run_a_failed_push_kept_goes_with_the_next_pull() {
         text.contains("Its full run is waiting to be shared."),
         "{text}"
     );
-    assert!(!text.contains("Numbers only"), "{text}");
+    assert!(!text.contains("Numbers with names"), "{text}");
 
     // The app's next pull (no sign-in prompt) pushes it.
     let pulled = pathwarden_ui::auto_pull::pull_env(&ws, None).unwrap();

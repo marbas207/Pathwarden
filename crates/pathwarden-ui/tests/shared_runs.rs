@@ -1132,7 +1132,7 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
             "{list}"
         );
     }
-    assert!(!list.contains("Numbers only"), "{list}");
+    assert!(!list.contains("Numbers with names"), "{list}");
     let loc = pathwarden_ui::history_ui::locate(&reader, None).unwrap();
     let snap = pathwarden_ui::history_ui::Snapshot {
         history: pathwarden_ui::history_ui::read(&loc),

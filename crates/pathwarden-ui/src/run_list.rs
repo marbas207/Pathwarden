@@ -79,7 +79,7 @@ impl Tag {
             Tag::LocalOnly => "This computer only",
             Tag::Scheduled => "Scheduled",
             Tag::Recorded => "Recorded",
-            Tag::NumbersWithNames => "Numbers only",
+            Tag::NumbersWithNames => "Numbers with names",
             Tag::FromRepository => "From the run history",
             Tag::Newer => "Needs a newer Pathwarden",
         }
@@ -431,7 +431,7 @@ pub fn row_html(r: &RunRow) -> String {
                     "tip-nf-{}",
                     r.id.replace(|c: char| !c.is_ascii_alphanumeric(), "")
                 ),
-                "Numbers only",
+                "Numbers with names",
                 NO_FULL_TIP,
             );
             match n {
@@ -622,7 +622,7 @@ pub fn full_runs_words(f: &FullRuns, locked: bool) -> String {
         s.push_str(" · 1 opens the schedule's report");
     }
     if f.numbers_only > 0 {
-        let _ = write!(s, " · {} numbers only", num(f.numbers_only));
+        let _ = write!(s, " · {} numbers with names", num(f.numbers_only));
     }
     s
 }
@@ -947,7 +947,7 @@ mod tests {
             NoFull::of(Keep::Names, None).line(),
             "Only its numbers are kept, so there's no report or graph."
         );
-        assert_eq!(Tag::NumbersWithNames.words(), "Numbers only");
+        assert_eq!(Tag::NumbersWithNames.words(), "Numbers with names");
         assert_eq!(Source::NumbersOnly.key(), "numbers-only");
     }
 

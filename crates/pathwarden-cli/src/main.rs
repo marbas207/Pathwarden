@@ -226,7 +226,7 @@ as the app's API returns them (/api/runs/<id>/explore/forest): --run ID, or the 
     /// How many accounts in each domain have an attack path to Tier Zero (or
     /// a zone).
     #[command(
-        after_help = "For a run saved in the app's workspace, `pathwarden runs show ID` shows its exposure, findings and plan steps, as its page does."
+        after_help = "For a run saved in the app's workspace, `pathwarden runs show ID` shows its exposure, findings and remediation path, as its page does."
     )]
     Exposure {
         #[command(flatten)]
@@ -419,7 +419,7 @@ does: --run ID, or the latest run of --env NAME (--workspace DIR for another wor
     /// The remediation path: the fewest plan steps that cut every account off
     /// from Tier Zero.
     #[command(
-        after_help = "For a run saved in the app's workspace, `pathwarden runs show ID` shows its exposure, findings and plan steps, as its page does."
+        after_help = "For a run saved in the app's workspace, `pathwarden runs show ID` shows its exposure, findings and remediation path, as its page does."
     )]
     Plan {
         #[command(flatten)]
@@ -440,7 +440,7 @@ does: --run ID, or the latest run of --env NAME (--workspace DIR for another wor
     /// Tier Zero status, exposure, the share of Tier Zero protected, findings
     /// by category, and collection completeness.
     #[command(
-        after_help = "For a run saved in the app's workspace, `pathwarden runs show ID` shows its exposure, findings and plan steps, as its page does."
+        after_help = "For a run saved in the app's workspace, `pathwarden runs show ID` shows its exposure, findings and remediation path, as its page does."
     )]
     Posture(Input),
     /// Open the app: collect or upload data, analyze, and browse reports.
@@ -3073,13 +3073,11 @@ fn findings_by_fix(input: &Input, ev: &Evaluated, filter: &FindingsFilter) -> Re
     print_posture_header(&ev.posture());
     println!();
     if plan.fixes.is_empty() {
-        println!(
-            "No account outside Tier Zero has an attack path to it, so no plan step is needed."
-        );
+        println!("No account outside Tier Zero has an attack path to it, so no step is needed.");
     } else {
         print!(
             "{} every attack path to Tier Zero.",
-            count(plan.fixes.len(), "plan step cuts", "plan steps cut")
+            count(plan.fixes.len(), "step cuts", "steps cut")
         );
         let (closed, cut) = (groups.closed(), groups.cut_only());
         if closed + cut > 0 {
@@ -3090,7 +3088,7 @@ fn findings_by_fix(input: &Input, ev: &Evaluated, filter: &FindingsFilter) -> Re
             print!(".");
         }
         println!(
-            " The plan steps that take care of the most findings come first; step numbers are those of `pathwarden plan`."
+            " The steps that take care of the most findings come first; step numbers are those of `pathwarden plan`."
         );
     }
     // Up to this many findings under each change.
@@ -3149,8 +3147,8 @@ fn findings_by_fix(input: &Input, ev: &Evaluated, filter: &FindingsFilter) -> Re
             "{} without a finding of their own; see `pathwarden plan`.",
             count(
                 groups.without_findings,
-                "other plan step cuts paths",
-                "other plan steps cut paths"
+                "other step cuts paths",
+                "other steps cut paths"
             )
         );
     }
@@ -3162,7 +3160,7 @@ fn findings_by_fix(input: &Input, ev: &Evaluated, filter: &FindingsFilter) -> Re
     }
     println!();
     println!(
-        "`pathwarden findings` lists each finding with its fix. A weak account whose path a plan step cuts is still roastable: it needs its own fix too."
+        "`pathwarden findings` lists each finding with its fix. A weak account whose path a step cuts is still roastable: it needs its own fix too."
     );
     Ok(())
 }
@@ -3198,10 +3196,10 @@ fn plan(input: &Input, zone: Option<&str>, top: Option<usize>, no_findings: bool
         } else {
             "have"
         },
-        count(plan.fixes.len(), "plan step", "plan steps")
+        count(plan.fixes.len(), "step", "steps")
     );
     println!(
-        "Exposure to {label}: {} → {} ({:.2} points), as a new run after the plan steps would count it (of {} → {} active users and computers).",
+        "Exposure to {label}: {} → {} ({:.2} points), as a new run after the steps would count it (of {} → {} active users and computers).",
         pct(plan.exposure_before),
         pct(plan.exposure_after),
         plan.exposure_delta,
@@ -3242,7 +3240,7 @@ fn plan(input: &Input, zone: Option<&str>, top: Option<usize>, no_findings: bool
         println!();
         println!(
             "… and {} more. Run without --top for all of them, or with --json.",
-            count(plan.fixes.len() - shown, "plan step", "plan steps")
+            count(plan.fixes.len() - shown, "step", "steps")
         );
     }
     if plan.exposed_after > 0 {
@@ -3923,7 +3921,7 @@ fn report_cmd(input: &Input, output: &std::path::Path, history: HistoryFrom) -> 
         "{g}Wrote{g:#} {} ({}, {}).",
         output.display(),
         count(a.findings.len(), "finding", "findings"),
-        count(a.plan.fixes.len(), "plan step", "plan steps")
+        count(a.plan.fixes.len(), "step", "steps")
     );
     Ok(())
 }

@@ -742,7 +742,7 @@ async fn numbers_only_runs_open_their_small_page() {
     assert!(body.contains(&format!(r#"href="/runs/{point}""#)), "{body}");
     assert!(body.contains(&format!(r#"href="/runs/{first}""#)), "{body}");
     assert!(!body.contains("/progress?env="), "{body}");
-    assert!(body.contains("Numbers only"), "{body}");
+    assert!(body.contains("Numbers with names"), "{body}");
     assert!(!body.contains("no full run"), "the tag says it: {body}");
     assert!(body.contains(r#"class="runrow numbers-only""#), "{body}");
 
@@ -772,7 +772,7 @@ async fn numbers_only_runs_open_their_small_page() {
     let (_, _, body) = a.get("/automate/history").await;
     assert!(body.contains("<dt>Full runs</dt>"), "{body}");
     assert!(
-        body.contains("1 of 2 runs open in full on this computer · 1 numbers only"),
+        body.contains("1 of 2 runs open in full on this computer · 1 numbers with names"),
         "{body}"
     );
     // And the run's line no longer says only its numbers are kept.
