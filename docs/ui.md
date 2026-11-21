@@ -47,8 +47,10 @@ job runs at a time; Home links back to it.
 1. **Where**: the domain and its domain controller. **Trusted domains**
    adds other domains to the run.
 2. **Who**: **Use my Windows account** or **Enter a user and password**
-   (needs **Encrypt with LDAPS (port 636)**). Leave **Kerberos only** and
-   **Require SMB signing** on.
+   (needs **Encrypt with LDAPS (port 636)**, unless **Advanced** ›
+   **Allow plain LDAP** is ticked:
+   [plain LDAP when LDAPS fails](collect.md#plain-ldap-when-ldaps-fails)).
+   Leave **Kerberos only** and **Require SMB signing** on.
 3. **How deep**: **Quick** reads the directory only. **Full** adds sessions
    and local groups from every computer.
 4. **Check**: a connection check. A failure says which screen to fix.

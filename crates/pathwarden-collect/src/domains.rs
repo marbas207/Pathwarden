@@ -478,6 +478,7 @@ pub fn merged(results: &[DomainResult]) -> Outcome {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         };
+        out.plain_ldap |= o.plain_ldap;
     }
     out
 }
@@ -841,6 +842,7 @@ mod tests {
             timings: None,
             signed_in_as: Some("CONTOSO\\svc".into()),
             read_started: None,
+            plain_ldap: false,
         };
         let results = vec![
             DomainResult {

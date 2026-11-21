@@ -721,6 +721,10 @@ pub struct Outcome {
     /// When the read started, when it resumed an earlier one (Unix time):
     /// the run is dated by when it finished.
     pub read_started: Option<i64>,
+    /// LDAPS was asked for but failed on a domain controller, which was
+    /// read over plain LDAP (`--ldaps` with `--allow-unencrypted-ldap`);
+    /// the warnings name it.
+    pub plain_ldap: bool,
 }
 
 /// Returned (inside `anyhow::Error`) when the `cancel` flag stopped a
