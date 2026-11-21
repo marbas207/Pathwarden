@@ -133,12 +133,12 @@ fn env_help() -> String {
 pub const PROGRAM_HINT: &str =
     "A full path, or powershell, pwsh, python, node, bash, sh or cmd. Not a network path.";
 
-/// The page's title and rail entry: the output plugins (After each run)
+/// The page's title and rail entry: the output plugins
 /// and finding actions.
 pub const PAGE_TITLE: &str = "Plugins and actions";
 
 /// Plugins and actions (`/automate/ticketing`, in the Automate area): the
-/// output plugins (After each run) and finding actions.
+/// output plugins and finding actions.
 pub(crate) async fn list_page(State(st): State<Shared>) -> Html<String> {
     let runs = st.ws().runs();
     let ctx = pages::Ctx::new(&st, &runs);
@@ -148,7 +148,7 @@ pub(crate) async fn list_page(State(st): State<Shared>) -> Html<String> {
         r#"<div class="page-head"><div><p class="eyebrow">Automate</p><h1 class="panel-title">{PAGE_TITLE}</h1>
 <p class="lead">Send scheduled run results to other systems, and add your own buttons to findings.</p></div></div>
 {file}
-<div class="ac-sect" id="after-each-run"><div><h2 class="sub">After each run</h2><p class="muted">A ticket per finding in ServiceNow or Jira, or a plugin of your own.</p></div>
+<div class="ac-sect" id="after-each-run"><div><h2 class="sub">Plugins</h2><p class="muted">Run on scheduled runs, not when you use Analyze in the app.</p></div>
 <div class="rh-actions"><a class="btn primary" href="/plugins/new?kind=servicenow">{plus} Add ServiceNow</a><a class="btn primary" href="/plugins/new?kind=jira">{plus} Add Jira</a><a class="btn" href="/plugins/new?kind=command">{plus} {other}</a></div></div>"#,
         plus = icon("i-plus"),
         other = esc(other_title(st.allow_destinations)),

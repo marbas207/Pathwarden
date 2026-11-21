@@ -519,7 +519,7 @@ async fn plugins_and_actions_shows_programs_tests_them_and_locks_changes() {
         "the rail"
     );
     assert!(!page.contains("Ticketing and alerts"));
-    assert!(page.contains(">After each run</h2>"));
+    assert!(page.contains(">Plugins</h2>"));
     assert!(page.contains(">Finding actions</h2>"));
     // The program, its action with inputs, what it sends, what it
     // applies to, its follow-ups and Test.

@@ -192,8 +192,9 @@ administrator copies them and runs the commands shown
 ([Schedule nightly runs](tasks.md#schedule-nightly-runs)). The page then
 shows the last scheduled run and says when it is late.
 
-**Plugins and actions** has two sections. **After each run** sends results
-to ServiceNow, Jira or a script. ServiceNow and Jira each have a form, with
+**Plugins and actions** has two sections. The **Plugins** section sends results
+to ServiceNow, Jira or a script on scheduled runs; Analyze in the app
+doesn't run them. ServiceNow and Jira each have a form, with
 **Safety limits** on how many tickets one run may open or close. Give the
 name of an environment variable for each secret, never the secret.
 **Finding actions** lists each action program, its actions with their

@@ -7,7 +7,10 @@ alerts, SIEM, email or anything you write. The
 Pathwarden. For tools that import files instead, see
 [integrations.md](integrations.md).
 
-Output plugins run on every run, by themselves. To run your own program
+Output plugins run on every `pathwarden run`: the scheduled task, or the
+command run by hand. Analyze in the app doesn't run them, so you can try
+things there without opening tickets; to see what a plugin would do with
+your latest analysis, use **Test** (a dry run). To run your own program
 for one finding when someone asks (open a ticket, alert a team), write a
 finding action instead: [Writing an action](actions.md).
 What each action did is saved on its finding in the run history
@@ -22,7 +25,7 @@ example, leave out findings that already have a ticket.
 ### In the app
 
 1. In the rail, under **Automate**, click **Plugins and actions**.
-2. Under **After each run**, click **Add ServiceNow**, **Add Jira**, or **Add a plugin program**
+2. Under **Plugins**, click **Add ServiceNow**, **Add Jira**, or **Add a plugin program**
    (**Add a script or program** unless the app was started with
    `--lock-destinations`).
 3. Fill in the form and click **Save**.
