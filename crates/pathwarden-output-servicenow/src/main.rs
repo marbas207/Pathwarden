@@ -99,7 +99,7 @@ fn run() -> Result<bool> {
         Err(e) if settings.dry_run => {
             println!(
                 "offline preview: existing tickets not read; every finding at or above \
-                 min_severity would be created ({e:#})"
+                 min_severity without an open action ticket would be created ({e:#})"
             );
             (None, Vec::new())
         }
