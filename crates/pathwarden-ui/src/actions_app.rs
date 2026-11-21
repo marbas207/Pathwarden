@@ -490,25 +490,21 @@ async fn cancel_api(State(st): State<Shared>, Path(id): Path<String>) -> Respons
 
 // ------------------------------------------------- Plugins and actions
 
-/// The Finding actions section of Plugins and actions: each block's
-/// program, its actions with their inputs, what they send and which
-/// findings they apply to, and Test; Add and Remove, or a lock
-/// note with `--lock-destinations`.
+/// The guide for people who add actions, on pathwarden.org.
+pub const GUIDE: &str = "docs/finding-actions.md";
+
+/// The Actions section of Plugins and actions: each block's program, its
+/// actions with their inputs, what they send and which findings they
+/// apply to, and Test; Remove, or a lock note with `--lock-destinations`.
+/// The page's one Add (`/plugins/add`) adds actions too.
 pub fn settings_section(st: &AppState, blocks: &[ActionConfig]) -> String {
     let ws = st.ws();
     let locked = !st.allow_destinations;
     let mut b = format!(
         r#"{SPRITE}<section class="ac-section" id="finding-actions" aria-labelledby="finding-actions-h">
-<div class="ac-sect"><div><h2 class="sub" id="finding-actions-h">Finding actions</h2><p class="muted">Buttons on a finding that run a program of yours when someone clicks them.</p></div>{add}</div>
+<div class="ac-sect"><div><h2 class="sub" id="finding-actions-h">Actions</h2><p class="muted">Buttons to trigger actions on a finding. {how}</p></div></div>
 {lock}{notes}"#,
-        add = if locked {
-            String::new()
-        } else {
-            format!(
-                r#"<div class="rh-actions"><a class="btn" href="/actions/new">{} Add a finding action</a></div>"#,
-                icon("i-plus")
-            )
-        },
+        how = pages::repo_link(GUIDE, "How actions work"),
         lock = if locked {
             pages::lock_note("lock-actions", plugin_form::ACTIONS_LOCKED)
         } else {
@@ -525,7 +521,7 @@ pub fn settings_section(st: &AppState, blocks: &[ActionConfig]) -> String {
     if blocks.is_empty() {
         let _ = write!(
             b,
-            r#"<div class="empty card">{}<p><strong>No finding actions yet.</strong><br><span class="muted">Each is a button on the findings it applies to.</span></p></div></section>"#,
+            r#"<div class="empty card">{}<p><strong>No actions yet.</strong><br><span class="muted">Each is a button on the findings it applies to.</span></p></div></section>"#,
             icon("i-plug")
         );
         return b;
@@ -795,7 +791,7 @@ fn applies_words(a: &ActionConfig, def: &actions::ActionDef) -> String {
 // ---------------------------------------------------------- the form
 
 async fn new_page(State(st): State<Shared>) -> Response {
-    form_page(&st, None).into_response()
+    form_page(&st, None, None).into_response()
 }
 
 async fn edit_page(State(st): State<Shared>, Path(index): Path<usize>) -> Response {
@@ -803,7 +799,17 @@ async fn edit_page(State(st): State<Shared>, Path(index): Path<usize>) -> Respon
     if loaded.config.actions.get(index).is_none() {
         return (StatusCode::NOT_FOUND, Html(pages::not_found())).into_response();
     }
-    form_page(&st, Some(index)).into_response()
+    form_page(&st, Some(index), None).into_response()
+}
+
+/// What the Add flow (`/plugins/add`) puts on a new action's form: the
+/// choice made, with Change, a line pointing to the guide, the name's
+/// placeholder, and whether "A script or program" starts selected.
+pub(crate) struct AddIntro<'a> {
+    pub picked: String,
+    pub guide: String,
+    pub name_placeholder: &'a str,
+    pub command: bool,
 }
 
 /// Add an action program, or change one: its name, what it runs (a plugin
@@ -811,8 +817,12 @@ async fn edit_page(State(st): State<Shared>, Path(index): Path<usize>) -> Respon
 /// arguments), its settings, its time limit and which findings it is
 /// for. With `--lock-destinations` only the name, time limit and
 /// filters can change ([`plugin_form::check_action`]), and nothing can be
-/// added.
-fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
+/// added. `intro` is the Add flow's choice above the form.
+pub(crate) fn form_page(
+    st: &AppState,
+    index: Option<usize>,
+    intro: Option<&AddIntro>,
+) -> Html<String> {
     let runs = st.ws().runs();
     let ctx = pages::Ctx::new(st, &runs);
     let loaded = settings::load(st);
@@ -825,7 +835,7 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
         .unwrap_or(&blank);
     let locked = !st.allow_destinations;
     let title = match index {
-        None => "Add a finding action".to_string(),
+        None => ADD_TITLE.to_string(),
         Some(_) => format!("Edit {}", a.name),
     };
     let ro = if locked { " readonly" } else { "" };
@@ -834,7 +844,10 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
         Some(argv) if !argv.is_empty() => (argv[0].clone(), argv[1..].join("\n")),
         _ => (String::new(), String::new()),
     };
-    let by_plugin = a.command.is_none();
+    let by_plugin = match (index, intro) {
+        (None, Some(i)) => !i.command,
+        _ => a.command.is_none(),
+    };
     let mut settings_rows = String::new();
     let mut rows: Vec<(String, String)> = a
         .settings
@@ -888,13 +901,13 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
     let body = format!(
         r#"<div class="page-head"><div><p class="eyebrow"><a href="/automate/ticketing#finding-actions">{page}</a></p><h1 class="panel-title">{title}</h1></div></div>
 <form class="card setting plugin-form ac-form-page" id="action-form" data-action-form="{meta}" novalidate>
-{lock}<div class="field"><label for="af-name">Name</label><input class="input mono" id="af-name" value="{name}" placeholder="service-desk" maxlength="64" autocomplete="off" spellcheck="false"><p class="hint">Lowercase letters, digits and dashes.</p></div>
+{picked}{lock}<div class="field"><label for="af-name">Name</label><input class="input mono" id="af-name" value="{name}" placeholder="{name_ph}" maxlength="64" autocomplete="off" spellcheck="false"><p class="hint">Lowercase letters, digits and dashes.</p></div>
 <fieldset class="choice"><legend>What to run</legend>
-  <label class="option card"><input type="radio" name="af-how" value="plugin"{plugin_on}{dis}><span><strong>A plugin program</strong><span class="muted">An action plugin from the plugins folder.</span></span></label>
+  <label class="option card"><input type="radio" name="af-how" value="plugin"{plugin_on}{dis}><span><strong>From the plugins folder</strong><span class="muted">A program in Pathwarden&#39;s plugins folder.</span></span></label>
   <label class="option card"><input type="radio" name="af-how" value="command"{cmd_on}{dis}><span><strong>A script or program</strong><span class="muted">PowerShell, Python or any program, with its arguments.</span></span></label>
 </fieldset>
-<div class="field" data-when-how="plugin"><label for="af-plugin">Plugin</label><input class="input mono" id="af-plugin" value="{plugin}" placeholder="teams-alert" autocomplete="off" spellcheck="false"{ro}></div>
-<div class="fields2" data-when-how="command">
+<div class="field" data-when-how="plugin"{plugin_hidden}><label for="af-plugin">Name in the folder</label><input class="input mono" id="af-plugin" value="{plugin}" placeholder="teams-alert" autocomplete="off" spellcheck="false"{ro}></div>
+<div class="fields2" data-when-how="command"{cmd_hidden}>
   <div class="field"><label for="af-program">Program</label><input class="input mono" id="af-program" value="{program}" placeholder="python" autocomplete="off" spellcheck="false"{ro}><p class="hint">{program_hint}</p></div>
   <div class="field"><label for="af-args">Arguments, one per line</label><textarea class="input mono" id="af-args" rows="3" spellcheck="false"{ro}>{args}</textarea><p class="hint">Give scripts by their full path.</p></div>
 </div>
@@ -921,6 +934,12 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
             String::new()
         },
         name = pages::attr(if index.is_some() { &a.name } else { "" }),
+        picked = intro
+            .map(|i| format!("{SPRITE}{}{}", i.picked, i.guide))
+            .unwrap_or_default(),
+        name_ph = pages::attr(intro.map_or("service-desk", |i| i.name_placeholder)),
+        plugin_hidden = if by_plugin { "" } else { " hidden" },
+        cmd_hidden = if by_plugin { " hidden" } else { "" },
         plugin_on = if by_plugin { " checked" } else { "" },
         cmd_on = if by_plugin { "" } else { " checked" },
         plugin = pages::attr(a.plugin.as_deref().unwrap_or_default()),
@@ -953,6 +972,9 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
         &body,
     ))
 }
+
+/// A new action's form title.
+pub const ADD_TITLE: &str = "Add an action";
 
 /// What the form saves.
 #[derive(Debug, Deserialize)]

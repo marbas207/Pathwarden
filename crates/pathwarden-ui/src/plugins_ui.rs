@@ -32,6 +32,7 @@ type Shared = Arc<AppState>;
 
 pub fn routes() -> Router<Shared> {
     Router::new()
+        .route("/plugins/add", get(add_page))
         .route("/plugins/new", get(new_page))
         .route("/plugins/{index}/edit", get(edit_page))
         .route("/api/plugins", post(save))
@@ -145,13 +146,11 @@ pub(crate) async fn list_page(State(st): State<Shared>) -> Html<String> {
     let loaded = settings::load(&st);
     let latest = run_data::latest_with(&st.ws(), run_data::EVENT_FILE);
     let mut b = format!(
-        r#"<div class="page-head"><div><p class="eyebrow">Automate</p><h1 class="panel-title">{PAGE_TITLE}</h1>
-<p class="lead">Send scheduled run results to other systems, and add your own buttons to findings.</p></div></div>
+        r#"<div class="page-head"><div><p class="eyebrow">Automate</p><h1 class="panel-title">{PAGE_TITLE}</h1></div>
+<div class="rh-actions"><a class="btn primary" id="add-btn" href="{ADD_PATH}">{plus} Add</a></div></div>
 {file}
-<div class="ac-sect" id="after-each-run"><div><h2 class="sub">Plugins</h2><p class="muted">Run on scheduled runs, not when you use Analyze in the app.</p></div>
-<div class="rh-actions"><a class="btn primary" href="/plugins/new?kind=servicenow">{plus} Add ServiceNow</a><a class="btn primary" href="/plugins/new?kind=jira">{plus} Add Jira</a><a class="btn" href="/plugins/new?kind=command">{plus} {other}</a></div></div>"#,
+<div class="ac-sect" id="after-each-run"><div><h2 class="sub">Plugins</h2><p class="muted">Run on scheduled runs, not when you use Analyze in the app.</p></div></div>"#,
         plus = icon("i-plus"),
-        other = esc(other_title(st.allow_destinations)),
         file = settings::file_line_if_there(&st, &loaded),
     );
     let outputs = &loaded.config.outputs;
@@ -260,6 +259,11 @@ async fn new_page(State(st): State<Shared>, Query(q): Query<NewQuery>) -> Html<S
         "jira" => Kind::Jira,
         _ => Kind::ServiceNow,
     };
+    new_form(&st, kind, "")
+}
+
+/// A new plugin's form, with `picked` (the Add flow's choice) above it.
+fn new_form(st: &AppState, kind: Kind, picked: &str) -> Html<String> {
     let blank = OutputConfig {
         plugin: match kind {
             Kind::ServiceNow => SERVICENOW.into(),
@@ -269,13 +273,13 @@ async fn new_page(State(st): State<Shared>, Query(q): Query<NewQuery>) -> Html<S
         command: (kind == Kind::Command).then(Vec::new),
         settings: serde_json::Map::new(),
     };
-    form_page(&st, None, &blank, kind)
+    form_page(st, None, &blank, kind, picked)
 }
 
 async fn edit_page(State(st): State<Shared>, Path(index): Path<usize>) -> Response {
     let loaded = settings::load(&st);
     match loaded.config.outputs.get(index) {
-        Some(o) => form_page(&st, Some(index), o, Kind::of(o)).into_response(),
+        Some(o) => form_page(&st, Some(index), o, Kind::of(o), "").into_response(),
         None => (StatusCode::NOT_FOUND, Html(pages::not_found())).into_response(),
     }
 }
@@ -318,7 +322,13 @@ fn other_title(allow_commands: bool) -> &'static str {
     }
 }
 
-fn form_page(st: &AppState, index: Option<usize>, o: &OutputConfig, kind: Kind) -> Html<String> {
+fn form_page(
+    st: &AppState,
+    index: Option<usize>,
+    o: &OutputConfig,
+    kind: Kind,
+    picked: &str,
+) -> Html<String> {
     let runs = st.ws().runs();
     let ctx = pages::Ctx::new(st, &runs);
     let title = match (index, kind) {
@@ -339,7 +349,7 @@ fn form_page(st: &AppState, index: Option<usize>, o: &OutputConfig, kind: Kind) 
         Kind::Command => command_form(o, st.allow_destinations),
     };
     let page = format!(
-        r#"{head}<form class="card setting plugin-form" id="plugin-form" data-plugin="{meta}" novalidate>{body}
+        r#"{head}<form class="card setting plugin-form" id="plugin-form" data-plugin="{meta}" novalidate>{picked}{body}
 <div class="card-actions"><button type="submit" class="btn primary">{check} Save</button><a class="btn" href="/automate/ticketing">Cancel</a><span class="save-status muted small" aria-live="polite"></span></div>
 </form>
 {help}{saved}<script src="/static/config.js" defer></script>"#,
@@ -760,6 +770,356 @@ fn command_form(o: &OutputConfig, allow_commands: bool) -> String {
             )
         },
     )
+}
+
+// ------------------------------------------------------------------- Add
+
+/// The page's one Add: what should happen, then (for tickets and your own
+/// program) when, then the form. Each step is a page of its own, from the
+/// query: `/plugins/add`, `?what=servicenow`, then
+/// `?what=servicenow&when=scheduled`. `/plugins/new?kind=…` and
+/// `/actions/new` still open their forms.
+pub const ADD_PATH: &str = "/plugins/add";
+
+/// What Add can make.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum What {
+    ServiceNow,
+    Jira,
+    Alert,
+    Owner,
+    Own,
+}
+
+/// A plugin, an action, or either (asked in the When step).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Makes {
+    Plugin,
+    Action,
+    Either,
+}
+
+impl What {
+    const ALL: [What; 5] = [
+        What::ServiceNow,
+        What::Jira,
+        What::Alert,
+        What::Owner,
+        What::Own,
+    ];
+
+    fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|w| w.key() == s)
+    }
+    fn key(self) -> &'static str {
+        match self {
+            What::ServiceNow => "servicenow",
+            What::Jira => "jira",
+            What::Alert => "alert",
+            What::Owner => "owner",
+            What::Own => "own",
+        }
+    }
+    fn title(self) -> &'static str {
+        match self {
+            What::ServiceNow => "ServiceNow tickets",
+            What::Jira => "Jira tickets",
+            What::Alert => "Alert a team",
+            What::Owner => "Look up an owner",
+            What::Own => "Your own program",
+        }
+    }
+    fn about(self) -> &'static str {
+        match self {
+            What::ServiceNow => "A ticket in ServiceNow for each finding.",
+            What::Jira => "An issue in Jira for each finding.",
+            What::Alert => {
+                "Post a finding to a chat channel: Teams, Slack, Google Chat and others."
+            }
+            What::Owner => "Show who owns a finding's objects, from a CSV file of owners.",
+            What::Own => "A script or program of yours, with its arguments.",
+        }
+    }
+    fn makes(self) -> Makes {
+        match self {
+            What::Alert | What::Owner => Makes::Action,
+            _ => Makes::Either,
+        }
+    }
+    fn icon(self) -> &'static str {
+        match self {
+            What::ServiceNow | What::Jira => "i-ticket",
+            What::Own => "i-plug",
+            _ => "i-bolt",
+        }
+    }
+    /// The When step's two lines: on each scheduled run, from a button.
+    fn when_about(self) -> (&'static str, &'static str) {
+        match self {
+            What::ServiceNow => (
+                "Opens a ticket per finding, and resolves it when the finding is fixed.",
+                "Opens a ticket for that finding. Needs a script of yours.",
+            ),
+            What::Jira => (
+                "Opens an issue per finding, and closes it when the finding is fixed.",
+                "Opens an issue for that finding. Needs a script of yours.",
+            ),
+            _ => (
+                "Gets each scheduled run's findings.",
+                "Gets that one finding.",
+            ),
+        }
+    }
+    /// The action form's line to the guide: the line, the link's words
+    /// and the guide's section.
+    fn guide(self) -> Option<(&'static str, &'static str, &'static str)> {
+        match self {
+            What::ServiceNow => Some((
+                "A ServiceNow button runs a script of yours.",
+                "Set up a ticket button",
+                "open-a-ticket",
+            )),
+            What::Jira => Some((
+                "A Jira button runs a script of yours.",
+                "Set up a ticket button",
+                "open-a-ticket",
+            )),
+            What::Alert => Some((
+                "Alert a team runs a script of yours.",
+                "Set up an alert",
+                "alert-a-team",
+            )),
+            What::Owner => Some((
+                "Look up an owner runs a script of yours.",
+                "Set up owner lookup",
+                "look-up-an-owner",
+            )),
+            What::Own => None,
+        }
+    }
+    fn name_placeholder(self) -> &'static str {
+        match self {
+            What::Alert => "team-chat",
+            What::Owner => "owners",
+            _ => "service-desk",
+        }
+    }
+}
+
+/// A kind's small tags: PLUGIN (the usual tag) and ACTION.
+fn kind_tags(makes: Makes) -> String {
+    let plugin = r#"<span class="tag">Plugin</span>"#;
+    let action = r#"<span class="tag act">Action</span>"#;
+    match makes {
+        Makes::Plugin => plugin.into(),
+        Makes::Action => action.into(),
+        Makes::Either => format!("{plugin}{action}"),
+    }
+}
+
+/// One choice of a step. `off` (with `--lock-destinations`) can't be
+/// picked.
+struct Card<'a> {
+    name: &'a str,
+    value: &'a str,
+    title: &'a str,
+    makes: Makes,
+    about: &'a str,
+    on: bool,
+    off: bool,
+}
+
+impl Card<'_> {
+    fn html(&self) -> String {
+        format!(
+            r#"<label class="option card{cls}"><input type="radio" name="{name}" value="{value}"{on}{dis}><span><strong class="opt-title">{title}{tags}</strong><span class="muted">{about}</span></span></label>"#,
+            cls = if self.off { " off" } else { "" },
+            name = self.name,
+            value = self.value,
+            on = if self.on && !self.off { " checked" } else { "" },
+            dis = if self.off { " disabled" } else { "" },
+            title = esc(self.title),
+            tags = kind_tags(self.makes),
+            about = esc(self.about),
+        )
+    }
+}
+
+/// The choice made, repeated above the next step, with Change.
+fn picked(what: What, makes: Makes) -> String {
+    format!(
+        r##"<div class="picked" id="add-picked"><svg class="ic" aria-hidden="true"><use href="#{ic}"/></svg><div><strong class="opt-title">{title}{tags}</strong><span class="muted">{about}</span></div><a class="btn small-btn" href="{ADD_PATH}?picked={key}">Change</a></div>"##,
+        ic = what.icon(),
+        title = esc(what.title()),
+        tags = kind_tags(makes),
+        about = esc(what.about()),
+        key = what.key(),
+    )
+}
+
+#[derive(Deserialize)]
+struct AddQuery {
+    #[serde(default)]
+    what: String,
+    #[serde(default)]
+    when: String,
+    #[serde(default)]
+    picked: String,
+}
+
+async fn add_page(State(st): State<Shared>, Query(q): Query<AddQuery>) -> Html<String> {
+    let locked = !st.allow_destinations;
+    let Some(what) = What::parse(&q.what) else {
+        return add_step(&st, &what_step(What::parse(&q.picked), locked));
+    };
+    let when = match (what.makes(), q.when.as_str()) {
+        (Makes::Action, _) | (_, "button") => Makes::Action,
+        (_, "scheduled") => Makes::Plugin,
+        _ => return add_step(&st, &when_step(what, locked)),
+    };
+    if when == Makes::Plugin {
+        let kind = match what {
+            What::ServiceNow => Kind::ServiceNow,
+            What::Jira => Kind::Jira,
+            _ => Kind::Command,
+        };
+        let strip = format!(
+            "{}{}",
+            crate::actions_app::SPRITE,
+            picked(what, Makes::Plugin)
+        );
+        return new_form(&st, kind, &strip);
+    }
+    let guide = what
+        .guide()
+        .map(|(line, link, section)| {
+            format!(
+                r#"<p class="guide-line">{}{} {}</p>"#,
+                esc(line),
+                // The ticket example speaks its own REST shape, not
+                // ServiceNow's or Jira's: a starting point, not a copy.
+                if matches!(what, What::ServiceNow | What::Jira) {
+                    ""
+                } else {
+                    " The guide has one to copy, with its setup."
+                },
+                pages::repo_link(&format!("{}#{section}", crate::actions_app::GUIDE), link),
+            )
+        })
+        .unwrap_or_default();
+    let intro = crate::actions_app::AddIntro {
+        picked: picked(what, Makes::Action),
+        guide,
+        name_placeholder: what.name_placeholder(),
+        command: what.guide().is_some(),
+    };
+    crate::actions_app::form_page(&st, None, Some(&intro))
+}
+
+/// Next and Cancel under a step.
+fn step_buttons() -> String {
+    format!(
+        r#"<div class="card-actions"><button type="submit" class="btn primary">Next {}</button><a class="btn" href="/automate/ticketing">Cancel</a></div>"#,
+        icon("i-arrow")
+    )
+}
+
+/// Step 1: what should happen. With `--lock-destinations` no action can
+/// be added, so the choices that are only actions are off.
+fn what_step(picked: Option<What>, locked: bool) -> String {
+    let pick = picked.unwrap_or(What::ServiceNow);
+    let opts: Vec<String> = What::ALL
+        .into_iter()
+        .map(|w| {
+            Card {
+                name: "what",
+                value: w.key(),
+                title: w.title(),
+                makes: w.makes(),
+                about: w.about(),
+                on: w == pick,
+                off: locked && w.makes() == Makes::Action,
+            }
+            .html()
+        })
+        .collect();
+    format!(
+        r#"<form class="card setting plugin-form add-step" id="add-what" method="get" action="{ADD_PATH}">
+{lock}<fieldset class="choice"><legend>What should happen?</legend>
+{opts}
+</fieldset>
+{buttons}
+</form>"#,
+        lock = actions_locked(locked),
+        opts = opts.join("\n"),
+        buttons = step_buttons(),
+    )
+}
+
+/// Step 2, for tickets and your own program: on each scheduled run (a
+/// plugin) or from a button on a finding (an action).
+fn when_step(what: What, locked: bool) -> String {
+    let (scheduled, button) = what.when_about();
+    let scheduled = Card {
+        name: "when",
+        value: "scheduled",
+        title: "Every finding, on each scheduled run",
+        makes: Makes::Plugin,
+        about: scheduled,
+        on: true,
+        off: false,
+    };
+    let button = Card {
+        name: "when",
+        value: "button",
+        title: "Only when someone clicks a button on a finding",
+        makes: Makes::Action,
+        about: button,
+        on: false,
+        off: locked,
+    };
+    format!(
+        r#"<form class="card setting plugin-form add-step" id="add-when" method="get" action="{ADD_PATH}">
+<input type="hidden" name="what" value="{key}">{picked}{lock}
+<fieldset class="choice"><legend>When?</legend>
+{a}
+{b}
+</fieldset>
+{buttons}
+</form>"#,
+        key = what.key(),
+        picked = picked(what, Makes::Either),
+        lock = actions_locked(locked),
+        a = scheduled.html(),
+        b = button.html(),
+        buttons = step_buttons(),
+    )
+}
+
+fn actions_locked(locked: bool) -> String {
+    if locked {
+        pages::lock_note("lock-actions", plugin_form::ACTIONS_LOCKED)
+    } else {
+        String::new()
+    }
+}
+
+/// A step of Add, in the page.
+fn add_step(st: &AppState, form: &str) -> Html<String> {
+    let runs = st.ws().runs();
+    let ctx = pages::Ctx::new(st, &runs);
+    let body = format!(
+        r#"{sprite}<div class="page-head"><div><p class="eyebrow"><a href="/automate/ticketing">{PAGE_TITLE}</a></p><h1 class="panel-title">Add</h1></div></div>
+{form}<script src="/static/config.js" defer></script>"#,
+        sprite = crate::actions_app::SPRITE,
+    );
+    Html(pages::shell(
+        &ctx,
+        Some(Nav::Plugins),
+        "Add",
+        "config",
+        &body,
+    ))
 }
 
 // ------------------------------------------------------------------- API

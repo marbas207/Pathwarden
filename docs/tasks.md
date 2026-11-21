@@ -163,8 +163,8 @@ pathwarden action list --fingerprint PW-006-5ca8fbd0a56628a3 --env Demo
 pathwarden action run PW-006-5ca8fbd0a56628a3 --action service-desk/open --input note="DBA team owns it" --env Demo
 ```
 
-Set up the programs on **Plugins and actions** (**Finding actions**) or
-with `pathwarden action add`.
+Set up the programs on **Plugins and actions** (**Add**) or with
+`pathwarden action add`: [Using finding actions](finding-actions.md).
 
 More: [Finding actions](ui.md#finding-actions).
 
@@ -233,18 +233,19 @@ More: [Run on a schedule](running.md#run-on-a-schedule).
 
 ### In the app
 
-1. Under **Automate**, click **Plugins and actions**, then, under **After
-   each run**, **Add ServiceNow** or **Add Jira**.
-2. Fill in the address and what to create:
+1. Under **Automate**, click **Plugins and actions**, then **Add**.
+2. Click **ServiceNow tickets** or **Jira tickets**, then **Next**. Keep
+   **Every finding, on each scheduled run**, and click **Next**.
+3. Fill in the address and what to create:
    - ServiceNow: **Instance URL**, **Create** and **Open tickets for**.
    - Jira: **Jira address**, **Jira** (Cloud or Data Center), **Project
      key**, **Issue type** and **Open issues for**.
-3. Under **Sign in with**, type the names of the environment variables that
+4. Under **Sign in with**, type the names of the environment variables that
    hold the secrets. For Jira Cloud that is your Atlassian email and an
    [API token](https://id.atlassian.com/manage-profile/security/api-tokens).
-4. Check the **Safety limits** (the defaults suit most domains) and click
+5. Check the **Safety limits** (the defaults suit most domains) and click
    **Save**.
-5. Set those variables where Pathwarden runs, and click **Test**.
+6. Set those variables where Pathwarden runs, and click **Test**.
 
 ### On the command line
 

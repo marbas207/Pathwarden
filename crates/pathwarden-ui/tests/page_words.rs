@@ -37,6 +37,10 @@ const PAGES: &[&str] = &[
     "/settings",
     "/plugins/new?kind=command",
     "/plugins/new?kind=servicenow",
+    "/plugins/add",
+    "/plugins/add?what=servicenow",
+    "/plugins/add?what=alert",
+    "/plugins/add?what=own&when=button",
 ];
 
 /// Subcommands a page must not tell people to run.

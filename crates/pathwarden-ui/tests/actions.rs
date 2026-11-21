@@ -520,7 +520,12 @@ async fn plugins_and_actions_shows_programs_tests_them_and_locks_changes() {
     );
     assert!(!page.contains("Ticketing and alerts"));
     assert!(page.contains(">Plugins</h2>"));
-    assert!(page.contains(">Finding actions</h2>"));
+    assert!(page.contains(">Actions</h2>"));
+    assert!(page.contains("Buttons to trigger actions on a finding."));
+    assert!(page.contains("pathwarden.org/docs/finding-actions.html"));
+    // One Add for the page, even locked: plugin programs can still be added.
+    assert!(page.contains(r#"id="add-btn" href="/plugins/add""#));
+    assert!(!page.contains("Add a finding action"));
     // The program, its action with inputs, what it sends, what it
     // applies to, its follow-ups and Test.
     assert!(page.contains("<strong>Open a ticket</strong>"));
@@ -541,6 +546,17 @@ async fn plugins_and_actions_shows_programs_tests_them_and_locks_changes() {
     assert!(!page.contains("--allow-destinations"));
     assert!(!page.contains("pathwarden ui"));
     assert!(!page.contains(r#"href="/actions/new""#));
+    // Add: the choices that are only actions are off, and so is a button.
+    let (s, add) = a.get("/plugins/add").await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(add.contains(r#"value="alert" disabled"#), "{add}");
+    assert!(add.contains(r#"value="owner" disabled"#));
+    assert!(add.contains(r#"value="servicenow" checked"#));
+    assert!(!add.contains(r#"value="own" disabled"#));
+    assert!(add.contains(&pathwarden_core::plugin_form::ACTIONS_LOCKED.replace('\'', "&#39;")));
+    let (_, when) = a.get("/plugins/add?what=jira").await;
+    assert!(when.contains(r#"value="button" disabled"#), "{when}");
+    assert!(when.contains(r#"value="scheduled" checked"#));
     assert!(
         page.contains(r#"data-ac-remove="0" data-name="fake" aria-label="Remove fake" disabled"#)
     );
@@ -673,11 +689,21 @@ async fn with_allow_destinations_a_program_is_added_and_removed() {
     let a = app("allow", true);
     a.analyze(&repo("testdata/forest")).await;
     let (_, page) = a.get("/automate/ticketing").await;
-    assert!(page.contains(r#"href="/actions/new""#));
+    assert!(page.contains(r#"href="/plugins/add""#));
     assert!(!page.contains(pathwarden_core::plugin_form::ACTIONS_LOCKED));
+    // The old address still opens the form, under its new words.
     let (s, page) = a.get("/actions/new").await;
     assert_eq!(s, StatusCode::OK);
     assert!(page.contains(r#"id="action-form""#));
+    assert!(page.contains(">Add an action</h1>"));
+    assert!(page.contains("<strong>From the plugins folder</strong>"));
+    assert!(page.contains(r#"<label for="af-plugin">Name in the folder</label>"#));
+    assert!(!page.contains("A plugin program"));
+    assert!(!page.contains(r#"id="add-picked""#));
+    // From Add: nothing is off without the lock.
+    let (_, add) = a.get("/plugins/add").await;
+    assert!(!add.contains(r#"value="alert" disabled"#), "{add}");
+    assert!(!add.contains("lock-actions"));
     let (s, v) = a
         .json(
             Method::POST,

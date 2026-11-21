@@ -301,6 +301,8 @@ pre.code { margin: 8px 0 0; max-height: 340px; overflow: auto; font: 0.8rem/1.5 
 .kv { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) 30px; gap: 8px; align-items: center; }
 .plugin-form .fields2 { margin-top: 16px; }
 .plugin-form > .field + .choice, .plugin-form > .choice + .fields2, .plugin-form > p + .fields2 { margin-top: 18px; }
+/* What to run's fields, under its cards (the other one is hidden). */
+.plugin-form > .choice + [data-when-how], .plugin-form > .choice + [hidden] + [data-when-how] { margin-top: 18px; }
 .plugin-form > .hint { margin-top: 10px; }
 .plugin-form > p.muted:first-of-type { margin-top: 0; }
 .kvs:not(:empty) { margin-top: 10px; }
@@ -448,3 +450,18 @@ fieldset.choice.has-clash .clash-row { margin: 0 0 10px; }
 .diag-has { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
 .diag-has li { font-size: 0.8rem; padding: 3px 9px; border-radius: 999px; background: var(--chip); color: var(--ink); }
 .diag-has-wrap + .perf-cards { margin-top: 16px; }
+
+/* Plugins and actions > Add: what should happen, then when, then the form. */
+.add-step .choice legend { font-size: 1rem; margin-bottom: 12px; }
+.option > span:has(> .opt-title) { align-content: start; }
+.opt-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.opt-title .tag { flex: none; margin: 0; }
+.opt-title .tag:first-of-type { margin-left: 4px; }
+.tag.act { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.picked { display: flex; align-items: center; gap: 12px; padding: 12px 15px; border-radius: 11px; border: 1px solid var(--line); background: var(--page); margin-bottom: 18px; }
+.picked > .ic { flex: none; width: 18px; height: 18px; color: var(--accent); }
+.picked > div { flex: 1; display: grid; gap: 2px; }
+.picked strong { font-size: 0.94rem; }
+.picked .muted { font-size: 0.84rem; }
+.add-step > .note.locked { margin-bottom: 18px; }
+.guide-line { margin: 0 0 18px; }

@@ -68,7 +68,7 @@ aren't closed.
 The Jira plugin creates an issue for each new finding, comments when one
 comes back, reopens issues closed while the finding is still there, and
 closes issues whose finding is fixed. It works with Jira Cloud and Data
-Center. Set it up in the app (**Plugins and actions** > **Add Jira**), with
+Center. Set it up in the app (**Plugins and actions** > **Add** > **Jira tickets**), with
 `pathwarden plugins add jira`, or in `pathwarden.toml`; every setting is in
 its [README](../crates/pathwarden-output-jira/README.md). Start with **Test**
 (a dry run) on a test project.

@@ -11,8 +11,8 @@ Output plugins run on every `pathwarden run`: the scheduled task, or the
 command run by hand. Analyze in the app doesn't run them, so you can try
 things there without opening tickets; to see what a plugin would do with
 your latest analysis, use **Test** (a dry run). To run your own program
-for one finding when someone asks (open a ticket, alert a team), write a
-finding action instead: [Writing an action](actions.md).
+for one finding when someone asks (open a ticket, alert a team), add a
+finding action instead: [Using finding actions](finding-actions.md).
 What each action did is saved on its finding in the run history
 (`pathwarden action records`, `pathwarden action activity`), and the event
 plugins get carries it as each finding's `actions`, so a plugin can, for
@@ -39,12 +39,14 @@ tickets for the skip rule.
 
 ### In the app
 
-1. In the rail, under **Automate**, click **Plugins and actions**.
-2. Under **Plugins**, click **Add ServiceNow**, **Add Jira**, or **Add a plugin program**
-   (**Add a script or program** unless the app was started with
-   `--lock-destinations`).
-3. Fill in the form and click **Save**.
-4. Click **Test** to see what the plugin would do with the latest run (a dry run).
+1. In the rail, under **Automate**, click **Plugins and actions**, then
+   **Add**.
+2. Click **ServiceNow tickets**, **Jira tickets** or **Your own program**,
+   then **Next**.
+3. Under **When?**, keep **Every finding, on each scheduled run**, and
+   click **Next**.
+4. Fill in the form and click **Save**.
+5. Click **Test** to see what the plugin would do with the latest run (a dry run).
 
 The ServiceNow and Jira forms have **Safety limits**: the most new tickets
 one run may open (default 100) and the most open tickets one run may close,
@@ -70,7 +72,7 @@ The same flag also turns off changing where the run history is kept on
 **History storage** (another repository, branch or folder), keeping full
 runs and settings in a history that isn't encrypted, **Connect to a run
 history**, and adding or removing a finding action's program under
-**Finding actions** on the same page.
+**Actions** on the same page.
 
 ### Passwords and tokens
 
@@ -102,7 +104,7 @@ reads the value from it when it runs.
 
 ### Finding actions in the app
 
-The **Finding actions** section of **Plugins and actions** lists each
+The **Actions** section of **Plugins and actions** lists each
 `[[action]]` block: its program (and whether it is found), the
 environment variables it names, and each action it offers with its
 inputs, what it sends, which findings it applies to (with how many of the
