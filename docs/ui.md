@@ -134,7 +134,7 @@ A finding's action bar has **Retest**, **Accept risk** (a **Reason** and an
 optional **Review by** date), **Add a note**, **Open in Explore** and **Copy
 ID**. After the review date an accepted risk counts as open again. A
 downloaded report has no actions. Your own buttons, such as **Open a
-ticket**, are finding actions: [Writing an action](actions.md).
+ticket**, are finding actions: [Using finding actions](finding-actions.md).
 
 ### Finding actions
 
@@ -192,17 +192,30 @@ administrator copies them and runs the commands shown
 ([Schedule nightly runs](tasks.md#schedule-nightly-runs)). The page then
 shows the last scheduled run and says when it is late.
 
-**Plugins and actions** has two sections. The **Plugins** section sends results
-to ServiceNow, Jira or a script on scheduled runs; Analyze in the app
-doesn't run them. ServiceNow and Jira each have a form, with
-**Safety limits** on how many tickets one run may open or close. Give the
-name of an environment variable for each secret, never the secret.
-**Finding actions** lists each action program, its actions with their
-inputs, what they send and which findings they apply to, and **Test** (a
-dry run on the first matching finding of the latest analysis). **Add a
-finding action** and **Remove** are turned off with `--lock-destinations`
-([Safety locks](#safety-locks)); the name, time limit and filters can
-still change.
+**Plugins and actions** has two sections. **Plugins** send results to
+ServiceNow, Jira or a script on scheduled runs; Analyze in the app doesn't
+run them. **Actions** are buttons on a finding that run a program of yours
+when someone clicks them. The **Actions** section lists each action
+program, its actions with their inputs, what they send and which findings
+they apply to, and **Test** (a dry run on the first matching finding of
+the latest analysis).
+
+**Add** starts from what should happen: **ServiceNow tickets**, **Jira
+tickets**, **Alert a team**, **Look up an owner** or **Your own program**.
+Each choice is tagged plugin, action or both. For tickets and your own
+program, **When?** picks **Every finding, on each scheduled run** (a
+plugin) or **Only when someone clicks a button on a finding** (an action).
+ServiceNow and Jira plugins each have a form, with **Safety limits** on
+how many tickets one run may open or close. The action form starts with
+**A script or program**, or **From the plugins folder** for a program in
+Pathwarden's plugins folder; **Alert a team**, **Look up an owner** and
+the ticket buttons link to the example to copy
+([Using finding actions](finding-actions.md)). Give the name of an
+environment variable for each secret, never the secret.
+
+With `--lock-destinations` ([Safety locks](#safety-locks)), **Add** offers
+only plugins, and an action's **Remove** is off; its name, time limit and
+filters can still change.
 
 ### History storage
 

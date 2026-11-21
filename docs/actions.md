@@ -6,8 +6,10 @@ check. Each action is a button on the finding in the app, and
 `pathwarden action run` on the command line. What it did is saved on the
 finding, so everyone who shares the run history sees it.
 
-This page takes you from nothing to a working button in about ten minutes,
-then covers everything you need for a solid one:
+To set up one of the examples without writing code, see
+[Using finding actions](finding-actions.md). This page takes you from
+nothing to a working button in about ten minutes, then covers everything
+you need for a solid one:
 
 - [What actions are](#what-actions-are)
 - [Quick start: alert a team](#quick-start-alert-a-team)
@@ -162,10 +164,14 @@ No problems: its describe and every dry run passed the checks.
 
 #### In the app
 
-1. In the rail, under **Automate**, click **Plugins and actions**.
-2. Under **Finding actions**, add the program: the command below, and the
-   setting `webhook_env` = `PATHWARDEN_ALERT_WEBHOOK`.
-3. Click **Test**: a dry run on the latest run's first finding it applies
+1. In the rail, under **Automate**, click **Plugins and actions**, then
+   **Add**.
+2. Click **Alert a team**, then **Next**.
+3. Fill in **Name** (`team-chat`), **Program** (`powershell`) and
+   **Arguments, one per line** (the arguments of the command below, one
+   per line), and the setting `webhook_env` = `PATHWARDEN_ALERT_WEBHOOK`.
+   Click **Save**.
+4. Click **Test**: a dry run on the latest run's first finding it applies
    to.
 
 #### On the command line
