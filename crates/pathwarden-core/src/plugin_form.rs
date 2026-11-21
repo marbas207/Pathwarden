@@ -53,7 +53,8 @@ pub const JIRA_RESERVED_FIELDS: [&str; 5] =
     ["project", "issuetype", "summary", "description", "labels"];
 
 /// Why the script form refuses `servicenow` with no program of its own.
-pub const SERVICENOW_FORM: &str = "The ServiceNow plugin has its own form: use Add ServiceNow.";
+pub const SERVICENOW_FORM: &str =
+    "The ServiceNow plugin has its own form: use Add, then ServiceNow tickets.";
 
 /// What "Test" asks before running a plugin that isn't shipped with
 /// Pathwarden: only those are known to honor `dry_run`.

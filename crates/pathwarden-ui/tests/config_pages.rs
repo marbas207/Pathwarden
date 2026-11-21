@@ -155,6 +155,9 @@ async fn pages_render_without_a_config_or_a_run() {
         "/plugins/new?kind=servicenow",
         "/plugins/new?kind=jira",
         "/plugins/new?kind=command",
+        "/plugins/add",
+        "/plugins/add?what=servicenow",
+        "/plugins/add?what=servicenow&when=scheduled",
     ] {
         let (s, body) = a.get(uri).await;
         assert_eq!(s, StatusCode::OK, "{uri}");
@@ -1215,8 +1218,8 @@ async fn plugins_dry_run_on_the_latest_run_and_secrets_stay_out() {
     // Jira gets its own form: the list offers it, a save writes the
     // plugin's settings (fields as JSON), and the edit page shows them.
     let (_, body) = a.get("/automate/ticketing").await;
-    assert!(body.contains(r#"href="/plugins/new?kind=jira""#));
-    assert!(body.contains("in ServiceNow or Jira"));
+    assert!(body.contains(r#"href="/plugins/add""#));
+    assert!(body.contains("Run on scheduled runs, not when you use Analyze in the app."));
     let (_, body) = a.get("/plugins/new?kind=jira").await;
     assert!(body.contains("Add Jira") && body.contains("PATHWARDEN_JIRA_TOKEN"));
     assert!(body.contains("Safety limits"));
@@ -1748,4 +1751,189 @@ async fn api_errors_are_json_sentences() {
         b.contains("<html") || b.contains("<!doctype") || b.contains("<!DOCTYPE"),
         "{b}"
     );
+}
+
+/// Plugins and actions has one Add, which starts from what should happen:
+/// tickets and your own program ask when (each scheduled run is a plugin,
+/// a button is an action), Alert a team and Look up an owner go straight
+/// to the action form with a line to the guide. The old addresses still
+/// open their forms.
+#[tokio::test]
+async fn add_starts_from_what_should_happen() {
+    let a = app_with("add-flow", true);
+    let (_, list) = a.get("/automate/ticketing").await;
+    assert!(list.contains(r#"id="add-btn" href="/plugins/add""#));
+    for gone in [
+        "Add ServiceNow",
+        "Add Jira",
+        "Add a script or program",
+        "Add a finding action",
+        "Send scheduled run results",
+        r#"class="lead""#,
+    ] {
+        assert!(!list.contains(gone), "{gone}");
+    }
+    assert!(list.contains(">Plugins</h2>"));
+    assert!(list.contains("Run on scheduled runs, not when you use Analyze in the app."));
+    assert!(list.contains("No plugins yet."));
+    assert!(list.contains("No actions yet."));
+
+    // Step 1: five choices, each tagged plugin, action or both.
+    let (s, what) = a.get("/plugins/add").await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(what.contains("What should happen?"));
+    assert!(what.contains(r#"id="add-what" method="get" action="/plugins/add""#));
+    for (key, title, tags) in [
+        (
+            "servicenow",
+            "ServiceNow tickets",
+            r#"<span class="tag">Plugin</span><span class="tag act">Action</span>"#,
+        ),
+        (
+            "jira",
+            "Jira tickets",
+            r#"<span class="tag">Plugin</span><span class="tag act">Action</span>"#,
+        ),
+        (
+            "alert",
+            "Alert a team",
+            r#"<span class="tag act">Action</span>"#,
+        ),
+        (
+            "owner",
+            "Look up an owner",
+            r#"<span class="tag act">Action</span>"#,
+        ),
+        (
+            "own",
+            "Your own program",
+            r#"<span class="tag">Plugin</span><span class="tag act">Action</span>"#,
+        ),
+    ] {
+        assert!(
+            what.contains(&format!(r#"name="what" value="{key}""#)),
+            "{key}"
+        );
+        assert!(what.contains(&format!("{title}{tags}</strong>")), "{key}");
+    }
+    assert!(what.contains(r#"value="servicenow" checked"#));
+    assert!(what.contains("Next"));
+    assert!(!what.contains('\u{2014}'), "no em dashes");
+    // Change comes back with the choice kept.
+    let (_, again) = a.get("/plugins/add?picked=owner").await;
+    assert!(again.contains(r#"value="owner" checked"#));
+    assert!(!again.contains(r#"value="servicenow" checked"#));
+
+    // Step 2 for tickets and your own program: when?
+    for key in ["servicenow", "jira", "own"] {
+        let (s, when) = a.get(&format!("/plugins/add?what={key}")).await;
+        assert_eq!(s, StatusCode::OK, "{key}");
+        assert!(when.contains("When?"), "{key}");
+        assert!(when.contains(&format!(
+            r#"<input type="hidden" name="what" value="{key}">"#
+        )));
+        assert!(when.contains(r#"value="scheduled" checked"#), "{key}");
+        assert!(when.contains("Every finding, on each scheduled run"));
+        assert!(when.contains("Only when someone clicks a button on a finding"));
+        assert!(when.contains(&format!(r#"href="/plugins/add?picked={key}">Change</a>"#)));
+        assert!(!when.contains(r#"id="plugin-form""#) && !when.contains(r#"id="action-form""#));
+    }
+
+    // Each scheduled run: today's plugin forms, under the choice.
+    for (key, form, title) in [
+        ("servicenow", "sn-instance", "Add ServiceNow"),
+        ("jira", "j-project", "Add Jira"),
+        ("own", "pl-program", "Add a script or program"),
+    ] {
+        let (s, page) = a
+            .get(&format!("/plugins/add?what={key}&when=scheduled"))
+            .await;
+        assert_eq!(s, StatusCode::OK, "{key}");
+        assert!(page.contains(r#"id="plugin-form""#), "{key}");
+        assert!(page.contains(&format!(r#"id="{form}""#)), "{key}");
+        assert!(page.contains(&format!(">{title}</h1>")), "{key}");
+        assert!(page.contains(r#"id="add-picked""#), "{key}");
+        assert!(
+            !page.contains(r#"<span class="tag act">"#),
+            "{key}: the plugin only"
+        );
+    }
+
+    // A button: the action form. Tickets point to the guide's REST
+    // example; your own program has no line.
+    for (key, section, how) in [
+        ("servicenow", "open-a-ticket", r#"value="command" checked"#),
+        ("jira", "open-a-ticket", r#"value="command" checked"#),
+        ("own", "", r#"value="plugin" checked"#),
+    ] {
+        let (s, page) = a.get(&format!("/plugins/add?what={key}&when=button")).await;
+        assert_eq!(s, StatusCode::OK, "{key}");
+        assert!(page.contains(r#"id="action-form""#), "{key}");
+        assert!(page.contains(">Add an action</h1>"), "{key}");
+        assert!(page.contains(r#"id="add-picked""#), "{key}");
+        assert!(page.contains(how), "{key}");
+        if section.is_empty() {
+            assert!(!page.contains("guide-line"), "{key}");
+        } else {
+            assert!(
+                page.contains(&format!(
+                    "pathwarden.org/docs/finding-actions.html#{section}"
+                )),
+                "{key}"
+            );
+        }
+    }
+
+    // Alert a team and Look up an owner: straight to the action form,
+    // with a script or program picked, the guide and a name to start from.
+    for (key, line, link, ph) in [
+        (
+            "alert",
+            "Alert a team runs a script of yours.",
+            "#alert-a-team",
+            "team-chat",
+        ),
+        (
+            "owner",
+            "Look up an owner runs a script of yours.",
+            "#look-up-an-owner",
+            "owners",
+        ),
+    ] {
+        let (s, page) = a.get(&format!("/plugins/add?what={key}")).await;
+        assert_eq!(s, StatusCode::OK, "{key}");
+        assert!(page.contains(r#"id="action-form""#), "{key}");
+        assert!(page.contains(line), "{key}");
+        assert!(page.contains("The guide has one to copy, with its setup."));
+        assert!(
+            page.contains(&format!("finding-actions.html{link}")),
+            "{key}"
+        );
+        assert!(page.contains(&format!(r#"placeholder="{ph}""#)), "{key}");
+        assert!(
+            page.contains(r#"name="af-how" value="command" checked"#),
+            "{key}"
+        );
+        assert!(page.contains(r#"data-when-how="plugin" hidden"#), "{key}");
+        assert!(!page.contains("When?"), "{key}");
+        assert!(!page.contains("pathwarden action"), "{key}: no commands");
+    }
+
+    // Anything else starts again at step 1.
+    let (s, page) = a.get("/plugins/add?what=nope&when=button").await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(page.contains("What should happen?"));
+
+    // The old addresses still open their forms.
+    for (uri, id) in [
+        ("/plugins/new?kind=servicenow", "sn-instance"),
+        ("/plugins/new?kind=jira", "j-project"),
+        ("/plugins/new?kind=command", "pl-program"),
+        ("/actions/new", "af-program"),
+    ] {
+        let (s, page) = a.get(uri).await;
+        assert_eq!(s, StatusCode::OK, "{uri}");
+        assert!(page.contains(&format!(r#"id="{id}""#)), "{uri}");
+        assert!(!page.contains(r#"id="add-picked""#), "{uri}");
+    }
 }
