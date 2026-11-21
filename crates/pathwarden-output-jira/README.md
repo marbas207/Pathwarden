@@ -19,7 +19,7 @@ keeps no state of its own; Jira is the record, so it is safe to rerun.
 
 ## Settings
 
-In the app: **Plugins and actions** > **Add Jira**. From the terminal:
+In the app: **Plugins and actions** > **Add** > **Jira tickets** > **Every finding, on each scheduled run**. From the terminal:
 `pathwarden plugins add jira --instance https://contoso.atlassian.net --project SEC`
 (`pathwarden plugins add jira --help` lists the options). Both write an
 `[[output]]` block like this one; the form covers every setting below except

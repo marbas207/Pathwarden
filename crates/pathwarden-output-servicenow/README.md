@@ -14,7 +14,7 @@ is safe to rerun: the same event produces no further changes.
 ## Settings
 
 Configured as an `[[output]]` entry in `pathwarden.toml`: in the app with
-**Plugins and actions** > **Add ServiceNow**, from the terminal with
+**Plugins and actions** > **Add** > **ServiceNow tickets** > **Every finding, on each scheduled run**, from the terminal with
 `pathwarden plugins add servicenow`, or by hand. Pathwarden passes the table to
 the plugin as JSON in `PATHWARDEN_OUTPUT_SETTINGS`.
 
