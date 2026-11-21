@@ -1881,6 +1881,9 @@ async fn add_starts_from_what_should_happen() {
                 )),
                 "{key}"
             );
+            // The REST example is a starting point for a desk, not a copy.
+            assert!(page.contains("button runs a script of yours. <a"), "{key}");
+            assert!(!page.contains("one to copy"), "{key}");
         }
     }
 

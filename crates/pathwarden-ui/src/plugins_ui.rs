@@ -994,8 +994,15 @@ async fn add_page(State(st): State<Shared>, Query(q): Query<AddQuery>) -> Html<S
         .guide()
         .map(|(line, link, section)| {
             format!(
-                r#"<p class="guide-line">{} The guide has one to copy, with its setup. {}</p>"#,
+                r#"<p class="guide-line">{}{} {}</p>"#,
                 esc(line),
+                // The ticket example speaks its own REST shape, not
+                // ServiceNow's or Jira's: a starting point, not a copy.
+                if matches!(what, What::ServiceNow | What::Jira) {
+                    ""
+                } else {
+                    " The guide has one to copy, with its setup."
+                },
                 pages::repo_link(&format!("{}#{section}", crate::actions_app::GUIDE), link),
             )
         })
