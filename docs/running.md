@@ -189,6 +189,15 @@ folder. It also refuses a folder that isn't empty and has no Pathwarden in
 it, and the Schedule page and `pathwarden schedule` refuse a drive or a
 Windows folder such as `C:\Program Files`.
 
+A folder made under `C:\` lets every local user change it, and whatever
+they put there would run as the gMSA. `setup-folder.ps1` lets the gMSA read
+the folder and write only to `reports` and `pathwarden-state`, and
+`run.ps1` refuses to run if anyone else can change the folder.
+
+To check a run, look at the task's last result
+(`Get-ScheduledTaskInfo -TaskName 'Pathwarden'`; `LastTaskResult` 0 means
+it worked) and its log in `C:\Pathwarden\reports\logs`.
+
 For an encrypted history, `setup-folder.ps1` asks for the passphrase.
 
 ### Linux systemd timer
@@ -197,6 +206,12 @@ For an encrypted history, `setup-folder.ps1` asks for the passphrase.
 2. Run `sudo sh setup.sh` there. It creates the user, stores the password
    for root only and turns on the timer.
 3. Run `sh test.sh`.
+
+To check a run: `journalctl -u pathwarden.service -e`.
+
+LDAPS checks the domain controller's certificate against the name it
+connects to. If the domain name isn't on the certificate, add `--server`
+with the domain controller's full name to `run.sh`.
 
 For an encrypted history, store the passphrase with `systemd-creds encrypt
 --name=pathwarden-history-passphrase` and add `LoadCredentialEncrypted=` to

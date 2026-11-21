@@ -153,7 +153,7 @@ More: [Actions on a finding](ui.md#actions-on-a-finding).
    actions**).
 3. Fill in what it asks for. **See exactly what's sent** shows the
    request; **Test only** makes it a dry run.
-4. Click **Run**, then **Done**. The record's chip shows under the
+4. Click **Start**, then **Close**. The record's chip shows under the
    finding's title, and the run is in the finding's **Activity**.
 
 ### On the command line
@@ -193,7 +193,7 @@ pathwarden config rules set --severity PW-002=critical --env Demo
 1. On a run page, click **Explore**.
 2. Click **Previous** and **Next** to page through the findings.
 3. Search for an object and pick it.
-4. Click **Path to Tier Zero** or **Who can reach this**.
+4. Click **Path to Tier Zero** or **Who can reach it**.
 
 ### On the command line
 
@@ -212,7 +212,7 @@ More: [Exploring a run](ui.md#exploring-a-run).
 
 1. Under **Automate**, click **Schedule**, then **Windows server** or
    **Linux server**.
-2. Under **Repeat the collection of**, pick a run and click **Use this
+2. Under **Based on run**, pick a run and click **Use this
    run**.
 3. Fill in **Folder on the server**, **Service account (gMSA)** or **Sign
    in as**, and **Time**. Click **Update the files**.
@@ -239,11 +239,11 @@ More: [Run on a schedule](running.md#run-on-a-schedule).
    - ServiceNow: **Instance URL**, **Create** and **Open tickets for**.
    - Jira: **Jira address**, **Jira** (Cloud or Data Center), **Project
      key**, **Issue type** and **Open issues for**.
-3. Under **Sign-in**, type the names of the environment variables that
+3. Under **Sign in with**, type the names of the environment variables that
    hold the secrets. For Jira Cloud that is your Atlassian email and an
    [API token](https://id.atlassian.com/manage-profile/security/api-tokens).
 4. Check the **Safety limits** (the defaults suit most domains) and click
-   **Save plugin**.
+   **Save**.
 5. Set those variables where Pathwarden runs, and click **Test**.
 
 ### On the command line

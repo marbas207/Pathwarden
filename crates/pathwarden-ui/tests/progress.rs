@@ -170,14 +170,14 @@ async fn progress_charts_the_history_over_a_range() {
     for want in [
         "With an attack path to Tier Zero · Critical",
         r#"<span class="kpi-value">31</span>"#,
-        "Plan steps",
+        "Remediation path",
         r#"<span class="kpi-value">1</span>"#,
         "Open findings",
         "Tier Zero protected",
         r#"<span class="kpi-value">90.00%</span>"#,
         "since the last run",
         r#"<span class="vh">down</span> 89"#,
-        r#"<span class="vh">up</span> 1.00 pts"#,
+        r#"<span class="vh">up</span> 1.00 points"#,
         // The change over the range, and the objects behind the share.
         r#"<span class="vh">down</span> 9,069</span> in 7 weeks"#,
         "45 of 50 objects",
@@ -201,7 +201,7 @@ async fn progress_charts_the_history_over_a_range() {
     // The five charts, each with a title, a subtitle and a legend.
     for title in [
         "Accounts with an attack path to each tier",
-        "Plan steps",
+        "Remediation path",
         "Open findings and attack paths",
         "Objects per tier",
         "Collection completeness",
@@ -219,7 +219,7 @@ async fn progress_charts_the_history_over_a_range() {
     );
     assert!(body.contains("pv-lin") && body.contains("pv-log"));
     // The attack path line is part of the bars, and the legend says so.
-    assert!(body.contains("Attack path findings (dashed line; counted in the bars too)"));
+    assert!(body.contains("Attack path findings (dashed)"));
     assert!(body.contains(r#"class="pv-line attack dashed""#), "{body}");
     // The dip below 80% is shaded, and says so in full even with eight
     // runs (a band narrower than its words).
@@ -251,7 +251,7 @@ async fn progress_charts_the_history_over_a_range() {
         "{body}"
     );
     assert!(
-        body.contains("didn't record the remediation plan"),
+        body.contains("didn't record the remediation path"),
         "{body}"
     );
     assert!(
@@ -292,7 +292,7 @@ async fn small_moves_are_linear() {
 }
 
 /// A Quick run after Full ones: the completeness lines end at the last
-/// Full run, its slot says "not targeted" (no "counts may be low"), the
+/// Full run, its slot says "not collected" (no "counts may be low"), the
 /// attack-path chart marks it, and the cards don't compare it with a Full
 /// run.
 #[tokio::test]
@@ -321,24 +321,28 @@ async fn a_quick_run_is_not_targeted_not_a_dip() {
     assert!(!body.contains("counts may be low</text>"), "{body}");
     // One label on each chart that marks it (the accounts chart twice: linear and log).
     assert_eq!(body.matches(r#"class="pv-nt""#).count(), 3, "{body}");
-    assert!(body.contains("Sessions not targeted"), "{body}");
-    assert!(body.contains("Local groups not targeted"), "{body}");
+    assert!(body.contains("Sessions not collected"), "{body}");
+    assert!(body.contains("Local groups not collected"), "{body}");
     assert!(
-        body.contains("Sessions and local groups not targeted"),
+        body.contains("Sessions and local groups not collected"),
         "{body}"
     );
     assert_eq!(
-        body.matches(r#"<td class="muted">Not targeted</td>"#)
+        body.matches(r#"<td class="muted">Not collected</td>"#)
             .count(),
         2,
         "{body}"
     );
-    assert!(body.contains("A run marked not targeted did not ask the collector to read them."));
+    assert!(
+        body.contains("Not collected: the run didn&#39;t ask for them.")
+            || body.contains("Not collected: the run didn't ask for them."),
+        "{body}"
+    );
     // The cards and What changed: not compared with the Full run.
     assert!(body.contains("not compared with the last run"), "{body}");
     assert!(!body.contains("since the last run</span>"), "{body}");
     assert!(
-        body.contains("Sessions and local groups were not targeted this run, so its counts are not compared with the last run."),
+        body.contains("Sessions and local groups weren&#39;t collected in this run, so this run&#39;s counts aren&#39;t compared with the last run."),
         "{body}"
     );
 }
@@ -351,12 +355,12 @@ async fn empty_and_single_runs_offer_an_action() {
     let (_, body) = a.get("/progress").await;
     assert!(body.contains("No runs yet."), "{body}");
     // The empty state Home has.
-    assert!(body.contains(r#"href="/collect""#) && body.contains("Collect or analyze"));
+    assert!(body.contains(r#"href="/collect""#) && body.contains("<strong>Analyze</strong>"));
 
     a.history(&[point(0, 31, 12, 1, 1, 2, 94.0, false)]);
     let (_, body) = a.get("/progress").await;
     assert!(body.contains("One run so far"), "{body}");
-    assert!(body.contains("Run an analysis"));
+    assert!(body.contains("> Analyze</a>"), "{body}");
     assert!(!body.contains(r#"<figure class="pv"#), "no charts: {body}");
     assert!(!body.contains("What changed since"), "{body}");
     assert!(body.contains("the first run"), "{body}");
@@ -440,12 +444,15 @@ async fn figures_no_run_recorded_are_not_charted() {
         3,
         "plan, objects, completeness: {body}"
     );
-    assert_eq!(body.matches("Run an analysis to record it").count(), 3);
+    assert_eq!(body.matches("Analyze again to record it").count(), 3);
     assert!(
-        body.contains("No run in this range recorded the remediation plan"),
+        body.contains("No run in this range recorded the remediation path"),
         "{body}"
     );
-    assert!(!body.contains("Changes in the plan"), "no legend: {body}");
+    assert!(
+        !body.contains(r#"<span class="sw plan">"#),
+        "no legend: {body}"
+    );
     assert!(!body.contains(r#"<span class="sw sess">"#), "{body}");
     // The accounts and findings still chart.
     assert_eq!(body.matches(r#"<ul class="pv-legend">"#).count(), 2);
@@ -532,7 +539,7 @@ async fn what_changed_over_a_period() {
         "{body}"
     );
     assert!(
-        body.contains(r#"range=3m&amp;changes=range">Over the 3 months</a>"#),
+        body.contains(r#"range=3m&amp;changes=range">Over 3 months</a>"#),
         "{body}"
     );
     assert_eq!(
@@ -571,18 +578,18 @@ async fn what_changed_over_a_period() {
     // Its days and dates are UTC, as `pathwarden changes` says them, not
     // the local time of the charts beside it; the date fields say so too.
     assert!(
-        body.contains(r#"<p class="muted small pv-utc">Days and dates here are UTC.</p>"#),
+        body.contains(r#"<p class="muted small pv-utc">Dates are UTC.</p>"#),
         "{body}"
     );
     assert!(
-        body.contains(r#"<span class="muted small">UTC days</span>"#),
+        body.contains(r#"<span class="muted small">Dates are UTC.</span>"#),
         "{body}"
     );
 
     // The whole history reaches back to the run tracking began in (run 2).
     let (_, body) = a.get("/progress?range=all&changes=range").await;
     assert!(
-        body.contains("Objects and paths are dated from Sep 8 (run 2) on; before that, only whole findings are."),
+        body.contains("Objects and paths have first-seen dates from Sep 8 (run 2) on; before that, only findings do."),
         "{body}"
     );
 
@@ -626,7 +633,7 @@ async fn what_changed_over_a_period() {
     let (_, body) = a.get("/progress").await;
     assert!(
         body.contains(
-            r#"href="/runs/20261020-000000-abcdef#introduced-last">Name them in the report"#
+            r#"href="/runs/20261020-000000-abcdef#introduced-last">See them in the report"#
         ),
         "{body}"
     );

@@ -49,17 +49,17 @@ impl Remove {
     pub fn words(self) -> (&'static str, &'static str) {
         match self {
             Remove::Delete { recorded: true } => (
-                "Delete this run",
-                "This also removes its point from the run history.",
+                "Delete run",
+                "It is also removed from the run history and Progress.",
             ),
-            Remove::Delete { recorded: false } => ("Delete this run", ""),
+            Remove::Delete { recorded: false } => ("Delete run", ""),
             Remove::FromHistory => (
-                "Remove from the history",
+                "Remove from the run history",
                 "This removes it on every computer.",
             ),
             Remove::Hide => (
                 "Hide on this computer",
-                "It stays in the repository for everyone else.",
+                "It stays in the run history for everyone else.",
             ),
         }
     }
@@ -177,7 +177,7 @@ pub fn perf_words(slower: bool) -> &'static str {
 
 /// The run page's one line above the report when something in Run details
 /// could change what the report concludes ([`attention`]).
-pub const ATTENTION: &str = "Findings can be missing from this run. Run details says why.";
+pub const ATTENTION: &str = "Some findings may be missing. See Run details.";
 
 /// Whether findings may be missing from `r`: objects skipped as too large,
 /// or the comparison with the previous run in the history warned. The run
@@ -189,7 +189,7 @@ pub fn attention(r: &RunSummary) -> bool {
         || upgrade(r).is_some()
 }
 
-/// The "Sources read part way" row: each OpenGraph or AzureHound
+/// The "Sources not read in full" row: each OpenGraph or AzureHound
 /// source not read whole, in the words `run` warns with, less the setting's
 /// key.
 fn sources_row(r: &RunSummary) -> Option<Row> {
@@ -197,13 +197,13 @@ fn sources_row(r: &RunSummary) -> Option<Row> {
     let status = match s.as_slice() {
         [] => return None,
         [one] => format!(
-            "{} read part way",
+            "{} not read in full",
             pathwarden_core::text::bidi_safe(&one.source)
         ),
-        many => format!("{} sources read part way", many.len()),
+        many => format!("{} sources not read in full", many.len()),
     };
     Some(Row {
-        title: "Sources read part way",
+        title: "Sources not read in full",
         status,
         warn: true,
         text: s
@@ -270,12 +270,12 @@ impl Go {
     /// The link's words.
     pub fn words(self) -> &'static str {
         match self {
-            Go::Schedule => "Run it every night",
+            Go::Schedule => "Schedule this collection",
             Go::History => "History storage",
             Go::Performance { slower } => perf_words(slower),
             Go::Settings => "Settings",
             Go::SettingsFolders => "Change the settings folders",
-            Go::Collect => "Collect them",
+            Go::Collect => "Collect the missing domains",
             Go::Mappings => "Mappings",
         }
     }
@@ -419,7 +419,7 @@ pub struct SettingsLine {
 pub const SETTINGS_FILES_ROW: &str = "Tier Zero settings files";
 
 /// The ⓘ of the row's first sentence.
-pub const SETTINGS_FILES_TIP: &str = "Pathwarden reads settings files from the collection and from the settings folders in Settings. Runs record each file's name, not the folder it came from.";
+pub const SETTINGS_FILES_TIP: &str = "Read from the collection and from the settings folders in Settings. Runs keep each file's name, not its folder.";
 
 /// "Over 90 days old, so it can confirm a weakness but can't show that one
 /// was fixed."
@@ -450,22 +450,22 @@ fn settings_row(r: &RunSummary) -> Option<Row> {
         .iter()
         .map(|f| {
             let what = match f.kind {
-                ServerKind::Dc => "Domain controller.",
-                ServerKind::Ca => "Certification authority.",
+                ServerKind::Dc => "Domain controller",
+                ServerKind::Ca => "Certification authority",
             };
             let text = match (f.read_at, f.stale) {
                 (Some(t), false) => Dated {
-                    pre: format!("{what} Settings read "),
+                    pre: format!("{what} · settings read "),
                     at: Some(t),
                     post: ".".into(),
                 },
                 (Some(t), true) => Dated {
-                    pre: format!("{what} Settings read "),
+                    pre: format!("{what} · settings read "),
                     at: Some(t),
                     post: format!(". {}", stale_words()),
                 },
                 (None, _) => Dated::plain(format!(
-                    "{what} Its file has no read date, so it can confirm a weakness but can't show that one was fixed."
+                    "{what} · its file has no read date, so it can confirm a weakness but can't show that one was fixed."
                 )),
             };
             SettingsLine {
@@ -557,7 +557,7 @@ fn not_signed_in(h: &crate::workspace::HistoryLink) -> String {
 /// How [`Row::kept`] reads, around the path.
 pub const KEPT_WORDS: (&str, &str) = (
     "The raw collection was kept in",
-    "Delete it when you no longer need it, because it is a complete map of your domain.",
+    "Delete it when done: it maps your whole domain.",
 );
 
 /// `s` as a sentence: capitalised, with a full stop. Warnings kept with
@@ -604,11 +604,11 @@ pub fn rows(r: &RunSummary, perf: Option<bool>, applies: &Result<String, String>
         title: "Where it came from",
         status: match &r.shared {
             Some(s) if left_out => format!(
-                "From the repository · {}",
+                "From the run history · {}",
                 crate::shared_runs::left_out_status(s.left_out.iter().map(|l| l.name.as_str()))
             ),
             Some(s) => format!(
-                "From the repository · loaded {}",
+                "From the run history · loaded {}",
                 pathwarden_core::time::format_local_date(s.mirrored_at)
             ),
             None if r.pathwarden.is_empty() => "On this computer".into(),
@@ -704,7 +704,7 @@ pub fn rows(r: &RunSummary, perf: Option<bool>, applies: &Result<String, String>
             let mut line = if h.sign_in {
                 let n = not_signed_in(h);
                 format!(
-                    "This run is recorded here, but not pushed: {}{}",
+                    "This run is saved here, but not shared yet: {}{}",
                     n[..1].to_lowercase(),
                     &n[1..]
                 )
@@ -712,22 +712,22 @@ pub fn rows(r: &RunSummary, perf: Option<bool>, applies: &Result<String, String>
                 sentence(why)
             };
             if together {
-                line.push_str(" Its full run goes with it.");
+                line.push_str(" The report and graph go with it.");
             }
             text.push(line);
-            status = status.or(Some("Recorded here, not pushed yet"));
+            status = status.or(Some("Saved here, not shared yet"));
         }
         let mut full_warn = false;
         if let Some(f) = h.full_run.as_ref().filter(|_| !together) {
             let (line, short, warn) = match f.state {
                 FullRunState::Shared if f.left_out.is_empty() => (
-                    "The full run is in the history.".to_string(),
-                    "Recorded · full run shared",
+                    "The report and graph are in the run history.".to_string(),
+                    "Recorded · report shared",
                     false,
                 ),
                 FullRunState::Shared => {
                     let mut line = format!(
-                        "Not all of the full run is in the history. Left out, over the file limit: {}.",
+                        "Not all of the report and graph is in the run history. Left out, over the file limit: {}.",
                         f.left_out.join(", ")
                     );
                     if f.left_out.iter().any(|w| {
@@ -736,26 +736,26 @@ pub fn rows(r: &RunSummary, perf: Option<bool>, applies: &Result<String, String>
                         line.push(' ');
                         line.push_str(crate::shared_runs::EXPLORE_ELSEWHERE_WORDS);
                     }
-                    (line, "Recorded · part of the full run", true)
+                    (line, "Recorded · report shared in part", true)
                 }
                 FullRunState::Pending => (
-                    "The full run isn't in the history yet. The next run from here brings it in."
+                    "The report and graph aren't in the run history yet. The next run on this computer adds them."
                         .to_string(),
-                    "Recorded · full run not in yet",
+                    "Recorded · report not shared yet",
                     true,
                 ),
                 FullRunState::Unpushed => {
                     let mut line = match f.why.as_deref().filter(|w| !w.trim().is_empty()) {
                         Some(why) => sentence(why),
-                        None => "The full run is committed here but not pushed yet. It goes with the next run that pushes.".to_string(),
+                        None => "The report and graph aren't shared yet. They go with the next run that syncs.".to_string(),
                     };
                     if !f.left_out.is_empty() {
                         line.push_str(&format!(" Left out: {}.", f.left_out.join(", ")));
                     }
-                    (line, "Recorded · full run not pushed yet", true)
+                    (line, "Recorded · report not shared yet", true)
                 }
                 FullRunState::NotShared => {
-                    let mut line = "The full run isn't shared.".to_string();
+                    let mut line = "The report and graph aren't shared.".to_string();
                     if let Some(why) = f.why.as_deref().filter(|w| !w.trim().is_empty()) {
                         line.push(' ');
                         line.push_str(&sentence(why));
@@ -763,7 +763,7 @@ pub fn rows(r: &RunSummary, perf: Option<bool>, applies: &Result<String, String>
                     if !f.left_out.is_empty() {
                         line.push_str(&format!(" Left out: {}.", f.left_out.join(", ")));
                     }
-                    (line, "Recorded · full run not shared", true)
+                    (line, "Recorded · report not shared", true)
                 }
             };
             text.push(line);
@@ -819,15 +819,14 @@ pub fn rows(r: &RunSummary, perf: Option<bool>, applies: &Result<String, String>
         out.push(Row {
             title: "Collection performance",
             status: if slower {
-                "Slower than the previous one"
+                "Slower than the previous collection"
             } else {
                 "Timings and diagnostics"
             }
             .into(),
             warn: slower,
             text: vec![
-                "Shows how long the collection took against the previous one, with the diagnostics download."
-                    .into(),
+                "Collection timings against the previous run, and a diagnostics download.".into(),
             ],
             go: Some(Go::Performance { slower }),
             ..Row::default()
@@ -841,9 +840,9 @@ pub fn rows(r: &RunSummary, perf: Option<bool>, applies: &Result<String, String>
     out.push(Row {
         title: "Settings",
         status: if loaded {
-            "For the next analysis"
+            "Applies to the next analysis"
         } else {
-            "Not loaded"
+            "Couldn't be read"
         }
         .into(),
         warn: !loaded,

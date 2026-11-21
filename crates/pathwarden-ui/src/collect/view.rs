@@ -85,10 +85,14 @@ fn who_defaults(d: &Detected, windows: bool) -> (bool, String, String) {
         let start = if current_default {
             "The account you're signed in with isn't a domain account, so Active Directory may not accept it."
         } else {
-            "Pathwarden chose a user and password because the account you're signed in with isn't a domain account, so Active Directory won't accept it."
+            "Your account isn't a domain account, so a user and password are chosen."
         };
         format!(
-            r#"<p class="hint auth-why" id="auth-why">{start} It can still work if you started Pathwarden with <code>runas /netonly</code> as a domain user.</p>"#
+            r#"<p class="hint auth-why" id="auth-why">{start} It can still work if Pathwarden runs as a domain user ({docs}).</p>"#,
+            docs = crate::pages::repo_link(
+                "docs/collect.md#from-a-computer-outside-the-domain",
+                "how"
+            )
         )
     };
     (current_default, account, why)
@@ -105,7 +109,7 @@ fn detected_hint(d: &Detected) -> String {
             "Filled in from this computer, which is joined to <strong>{}</strong>.",
             esc(dom)
         ),
-        None if d.workgroup => "This computer isn't joined to a domain, so enter the domain's full DNS name, like scale.local. Ask your Active Directory team if you're not sure.".into(),
+        None if d.workgroup => "This computer isn't joined to a domain. Enter the full DNS name, like scale.local.".into(),
         None => "Its full DNS name, like scale.local. Ask your Active Directory team if you're not sure.".into(),
     }
 }
@@ -131,7 +135,6 @@ pub fn wizard(
         r#"<div class="page-head glow-head"><div><h1 class="panel-title">Analyze</h1>
 <p class="lead">Where does the data come from?</p></div></div>
 {sources}
-<p class="lead src-lead">Pathwarden reads your directory, then analyzes it, all on this computer. A few questions first.</p>
 <div class="wiz-layout">
 <div class="wizard" id="wizard" data-builtin="{builtin}" data-windows="{windows}" data-job="{job_id}" data-initial="{job_json}" data-pick="{pick}">
 {stepper}
@@ -185,7 +188,7 @@ pub fn wizard(
         dc_detected.is_none(),
         None,
         "Find through DNS",
-        "Pathwarden looks up the domain's name in DNS when it checks the connection, and connects to the domain controller it finds.",
+        "Looks up a domain controller in DNS.",
         "",
     ));
     dc_choices.push_str(&choice(
@@ -221,7 +224,6 @@ pub fn wizard(
     <div class="td-head"><legend>Trusted domains {tip_td}</legend><span class="td-count"><span id="td-count"></span><button type="button" class="td-all" id="td-all">Untick all</button></span></div>
     <p class="hint" id="td-hint"></p>
     <ul class="td-list" id="td-list"></ul>
-    <p class="hint td-auth" id="td-auth" hidden>Only collect from domains you are authorized to assess.</p>
     {trusted_err}
   </fieldset>
 </section>
@@ -235,7 +237,7 @@ pub fn wizard(
         tip_td = crate::pages::tip(
             "tip-td",
             "Trusted domains",
-            "A trusted domain can be read when it trusts yours: a two-way trust, or a one-way trust from its side. Accounts from your domain then sign in there as ordinary users, and ordinary users can read the directory. SID filtering doesn't stop that. The Check step signs in to each ticked domain before anything is collected."
+            "Readable when it trusts your domain. The Check step signs in to each ticked one first."
         ),
     );
 
@@ -255,12 +257,12 @@ pub fn wizard(
     <div class="field"><label for="user">User</label><input type="text" id="user" placeholder="svc-pathwarden or SCALE\svc-pathwarden" spellcheck="false" autocapitalize="off" autocomplete="off">{user_err}</div>
     <div class="field"><label for="password">Password</label><input type="password" id="password" autocomplete="new-password">{password_err}</div>
   </div>
-  <div class="note">{i_lock}<p><strong>Permissions.</strong> A normal domain user can read everything Pathwarden needs from the directory. Seeing who is logged on where, and who is a local admin, needs admin rights on those computers.</p></div>
+  <div class="note">{i_lock}<p><strong>Permissions.</strong> Any domain user can read the directory; sessions and local admins need local admin rights.</p></div>
   <fieldset class="field">
     <legend>Connection</legend>
     <label class="toggle"><input type="checkbox" id="ldaps"><span class="t-body"><strong>Encrypt with LDAPS (port 636)</strong><span id="ldaps-hint"></span></span></label>
     {ldaps_err}
-    <label class="toggle"><input type="checkbox" id="kerberos-only" checked><span class="t-body"><strong>Kerberos only{tip_krb}</strong><span>Computers get a Kerberos ticket, never an NTLM response. A computer without a Kerberos name is skipped.</span></span></label>
+    <label class="toggle"><input type="checkbox" id="kerberos-only" checked><span class="t-body"><strong>Kerberos only{tip_krb}</strong><span>Computers are signed in to with Kerberos, never NTLM. A computer without a Kerberos name is skipped.</span></span></label>
     <label class="toggle"><input type="checkbox" id="smb-signing" checked><span class="t-body"><strong>Require SMB signing{tip_sign}</strong><span>Every reply from a computer must be signed. A computer whose replies aren't is skipped.</span></span></label>
     <div class="note warn" id="ntlm-note" hidden>{i_alert}<p><strong>NTLM allowed.</strong> A computer without a Kerberos name gets an NTLM response from this account. Anyone who can add a name to the domain's DNS can capture or relay it.</p></div>
     <div class="note warn" id="unsigned-note" hidden>{i_alert}<p><strong>SMB signing not required.</strong> Anyone on the network path could change what a computer answers.</p></div>
@@ -283,7 +285,7 @@ pub fn wizard(
         tip_sign = crate::pages::tip(
             "tip-sign",
             "Require SMB signing",
-            "Pathwarden signs its requests and checks the signature on every reply. With Kerberos, only the real computer can sign, so a look-alike is refused. Every Windows computer can sign; this doesn't need the computer to require it."
+            "Every reply must be signed, so a look-alike computer is refused. All Windows computers can sign."
         ),
         current = choice(
             "auth",
@@ -344,8 +346,8 @@ pub fn wizard(
     {sharphound_err}
   </div>
   <div class="note warn" id="sharphound-krb-note" hidden>{i_alert}<p><strong>Kerberos only and SMB signing don't apply.</strong> SharpHound signs in to computers its own way, as your Windows account, and falls back to NTLM where Kerberos fails.</p></div>
-  <div class="note means" id="means-quick">{i_alert}<p><strong>What this means for your results.</strong> Without sessions and local groups, paths that go through a logged-on admin or a local admin right are missing, so the counts can read low. The report says so on its Collection tab, under Collection completeness. <a href="{docs}" target="_blank" rel="noopener noreferrer">What each method collects</a></p></div>
-  <div class="note means" id="means-full" hidden>{i_alert}<p><strong>What this means for your results.</strong> Sessions are a snapshot of who was logged on during the collection. Computers that were off or refused the connection show as not collected on the report's Collection tab, under Collection completeness. <a href="{docs}" target="_blank" rel="noopener noreferrer">What each method collects</a></p></div>
+  <div class="note means" id="means-quick">{i_alert}<p><strong>Paths through sessions and local admins are missing</strong>, so counts can read low. <a href="{docs}" target="_blank" rel="noopener noreferrer">What each method collects</a></p></div>
+  <div class="note means" id="means-full" hidden>{i_alert}<p><strong>Sessions are a snapshot.</strong> Computers that are off show as not collected. <a href="{docs}" target="_blank" rel="noopener noreferrer">What each method collects</a></p></div>
 </section>
 "##,
         i_layers = icon("i-layers"),
@@ -396,20 +398,14 @@ pub fn wizard(
         tip_svc = crate::pages::tip(
             "tip-svc",
             "Read service accounts",
-            "A service that runs as a domain account keeps its password on the computer, where any \
-             of its administrators can read it. Pathwarden reads only the account each service runs \
-             as, over the same Kerberos sign-in, never the password. Needs local admin rights on the \
-             computers.",
+            "Reads only which account each service runs as, never the password. Needs local admin.",
         ),
         task_reads = if pre.task_reads { " checked" } else { "" },
         tip_task = crate::pages::tip(
             "tip-task",
             "Read scheduled tasks",
-            "A scheduled task set to run whether its user is logged on or not keeps that user's \
-             password on the computer, where any of its administrators can read it. Pathwarden reads \
-             only the account each task runs as, from the task files on the computer's C$ share over \
-             the same Kerberos sign-in, never the password or what the task runs. Windows logs the \
-             share access. Needs local admin rights on the computers.",
+            "Reads only which account each task runs as, from the C$ share (Windows logs this). \
+             Needs local admin.",
         ),
         none = if none_available {
             r#"<p class="field-error">This version of Pathwarden can't collect on this computer. Collect with SharpHound or RustHound-CE elsewhere, then <a href="/analyze">upload the file</a>.</p>"#
@@ -437,7 +433,7 @@ pub fn wizard(
     <div class="check-state" id="check-idle"><button type="button" class="btn" id="check-run">{i_plug} <span id="check-label">Check the connection</span></button></div>
     <div class="check-state" id="check-busy" hidden><span class="spinner" aria-hidden="true"></span><span>Checking. This usually takes a few seconds, and at most a minute.</span></div>
     <div class="check-state ok" id="check-ok" hidden>{i_check}<div><strong>Ready to collect</strong><ul id="check-lines"></ul><ul class="warn-list" id="check-warnings" hidden></ul><div id="check-unchecked-box" hidden><p class="check-sub">Not checked</p><ul class="unchecked" id="check-unchecked"></ul></div></div></div>
-    <div class="check-state bad" id="check-bad" hidden>{i_alert}<div><strong id="check-error"></strong><p class="detail" id="check-detail" hidden></p><p class="check-actions"><button type="button" class="btn" id="check-fix">{i_back} Fix</button><button type="button" class="btn" id="check-again">Try again</button></p></div></div>
+    <div class="check-state bad" id="check-bad" hidden>{i_alert}<div><strong id="check-error"></strong><p class="detail" id="check-detail" hidden></p><p class="check-actions"><button type="button" class="btn" id="check-fix">{i_back} Go back and fix</button><button type="button" class="btn" id="check-again">Try again</button></p></div></div>
   </div>
 </section>
 "##,
@@ -455,20 +451,20 @@ pub fn wizard(
     <header class="ws-head"><span class="ws-ic">{i_radar}</span><div><h2 class="sub" id="s5-title" tabindex="-1">Ready to collect</h2><p class="muted" id="ready-summary"></p></div></header>
     <label class="toggle"><input type="checkbox" id="keep"{keep}><span class="t-body"><strong>Keep the raw collection</strong><span>Kept on this computer, with this environment's runs. Otherwise it's deleted after the analysis, because it maps your whole domain.</span></span></label>
     <div class="also" id="also">
-      <h3>Analyze other data with it <span class="muted small">(optional)</span></h3>
+      <h3>Add other data <span class="muted small">(optional)</span></h3>
       <p class="muted small">AzureHound, OpenGraph or SharpHound files. They are read with the collection when it finishes.</p>
-      <label class="dropzone" id="also-drop"><input type="file" id="also-files" multiple accept=".zip,.json" aria-label="Files to analyze with the collection"><span class="dz-icon">{i_upload}</span><span class="dz-title">Drop files here, or <span class="link">browse</span></span><span class="dz-hint">.zip, .json or a folder</span></label>
+      <label class="dropzone" id="also-drop"><input type="file" id="also-files" multiple accept=".zip,.json" aria-label="Files to analyze with the collection"><span class="dz-icon">{i_upload}</span><span class="dz-title">Drop files here, or <span class="link">browse</span></span><span class="dz-hint">.zip or .json, or drop a folder</span></label>
       <ul class="filelist" id="also-list" hidden></ul>
     </div>
     <div class="env-where" id="ew" data-state="loading"></div>{label_field}
     <div class="note resume-note" id="resume-note" hidden>{i_clock}<p><strong id="resume-text"></strong></p></div>
-    <div class="form-actions"><button type="button" class="btn primary" id="collect-resume" hidden>Resume {i_arrow}</button><button type="button" class="btn" id="collect-over" hidden>Start over</button><button type="button" class="btn primary" id="collect-start">Start collecting {i_arrow}</button><span class="muted small">You can leave the page once it starts.</span></div>
+    <div class="form-actions"><button type="button" class="btn primary" id="collect-resume" hidden>Resume {i_arrow}</button><button type="button" class="btn" id="collect-over" hidden>Start again</button><button type="button" class="btn primary" id="collect-start">Start collecting {i_arrow}</button><span class="muted small">You can leave this page once it starts; it keeps going.</span></div>
   </div>
   <div id="collect-run" hidden>
     <div class="progress-head"><span class="spinner" aria-hidden="true" id="run-spinner" hidden></span><div><h2 class="sub" id="run-title">Collecting</h2><p class="muted small" id="run-phase"></p></div><span class="elapsed muted" id="run-elapsed"></span></div>
     <ol class="doms" id="run-doms" aria-label="Domains">
-      <li class="dg" id="run-done" hidden><div class="dg-row"><span class="st done"></span><span class="dg-n" id="run-done-n"></span><span class="dg-names" id="run-done-names"></span><button type="button" class="linkish dg-show" aria-expanded="false" aria-controls="run-done-list">Show</button></div><ol class="dg-list" id="run-done-list" hidden></ol></li>
-      <li class="dg fail" id="run-skipped" hidden><div class="dg-row"><span class="st fail"></span><span class="dg-n" id="run-skipped-n"></span><span class="dg-names" id="run-skipped-names"></span><span class="tip"><button type="button" class="tip-btn" aria-label="About: skipped domains" aria-describedby="run-skipped-tip">{i_info}</button><span class="tip-text" role="tooltip" id="run-skipped-tip">A domain that fails is skipped. The others are still analyzed.</span></span><button type="button" class="linkish dg-show" aria-expanded="false" aria-controls="run-skipped-list">Show</button></div><ol class="dg-list" id="run-skipped-list" hidden></ol></li>
+      <li class="dg" id="run-done" hidden><div class="dg-row"><span class="st done"></span><span class="dg-n" id="run-done-n"></span><span class="dg-names" id="run-done-names"></span><button type="button" class="linkish dg-show" aria-expanded="false" aria-controls="run-done-list" aria-label="Show done domains">Show</button></div><ol class="dg-list" id="run-done-list" hidden></ol></li>
+      <li class="dg fail" id="run-skipped" hidden><div class="dg-row"><span class="st fail"></span><span class="dg-n" id="run-skipped-n"></span><span class="dg-names" id="run-skipped-names"></span><span class="tip"><button type="button" class="tip-btn" aria-label="About: skipped domains" aria-describedby="run-skipped-tip">{i_info}</button><span class="tip-text" role="tooltip" id="run-skipped-tip">A domain that fails is skipped. The others are still analyzed.</span></span><button type="button" class="linkish dg-show" aria-expanded="false" aria-controls="run-skipped-list" aria-label="Show skipped domains">Show</button></div><ol class="dg-list" id="run-skipped-list" hidden></ol></li>
       <li class="cur" id="run-cur"><div class="cprog" id="cprog">
         <div class="cp-row">
           <p class="cp-what"><span class="st active" id="cp-st"></span><strong class="cp-dom" id="cp-dom" hidden></strong><span class="cp-phase" id="cp-phase">Starting</span><span class="muted cp-step" id="cp-step"></span></p>
@@ -479,12 +475,12 @@ pub fn wizard(
           </div>
         </div>
         <div class="cp-bar" id="cp-bar" role="progressbar" aria-label="Collection progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="cp-fill"></span></div>
-        <div class="cp-nums"><strong id="cp-pct">0%</strong><span class="muted cp-units-wrap"><span id="cp-units"></span><span id="cp-streams" hidden></span><span class="tip" id="cp-parts" hidden><button type="button" class="tip-btn" aria-label="About: the parts of the read" aria-describedby="cp-parts-text">{i_info}</button><span class="tip-text" role="tooltip" id="cp-parts-text"></span></span></span><span class="cp-eta" id="cp-eta"></span></div>
+        <div class="cp-nums"><strong id="cp-pct">0%</strong><span class="muted cp-units-wrap"><span id="cp-units"></span><span id="cp-streams" hidden></span><span class="tip" id="cp-parts" hidden><button type="button" class="tip-btn" aria-label="About: how the reading is split" aria-describedby="cp-parts-text">{i_info}</button><span class="tip-text" role="tooltip" id="cp-parts-text"></span></span></span><span class="cp-eta" id="cp-eta"></span></div>
         <div class="cp-counts" id="run-counts-line" hidden><p class="cp-kinds" id="run-kinds"></p><button type="button" class="linkish cp-all" id="run-counts-all" aria-expanded="false" aria-controls="run-counts" hidden>All counts</button></div>
         <dl class="counts" id="run-counts" hidden></dl>
         <p class="muted small cp-note" id="run-counts-note" hidden>Entries read so far. The final counts come after processing.</p>
       </div></li>
-      <li class="dg" id="run-waiting" hidden><div class="dg-row"><span class="st"></span><span class="dg-n" id="run-waiting-n"></span><span class="dg-names" id="run-waiting-names"></span><button type="button" class="linkish dg-show" aria-expanded="false" aria-controls="run-waiting-list">Show</button></div><ol class="dg-list" id="run-waiting-list" hidden></ol></li>
+      <li class="dg" id="run-waiting" hidden><div class="dg-row"><span class="st"></span><span class="dg-n" id="run-waiting-n"></span><span class="dg-names" id="run-waiting-names"></span><button type="button" class="linkish dg-show" aria-expanded="false" aria-controls="run-waiting-list" aria-label="Show waiting domains">Show</button></div><ol class="dg-list" id="run-waiting-list" hidden></ol></li>
     </ol>
     <ol class="steps" id="run-steps">
       <li data-step="collect"><span class="st"></span><span class="sl">Collecting from Active Directory</span></li>
@@ -494,30 +490,31 @@ pub fn wizard(
       <li data-step="remediation"><span class="st"></span><span class="sl">Planning the remediation path</span></li>
       <li data-step="report"><span class="st"></span><span class="sl">Writing the report</span></li>
     </ol>
-    <div class="notes-row" id="run-notes" hidden><span class="nr-what" id="run-notes-what"><span class="nr-ic" aria-hidden="true">!</span><span id="run-notes-n"></span><button type="button" class="linkish" id="run-notes-show" aria-expanded="false" aria-controls="run-warnings">Show</button></span><button type="button" class="linkish nr-out" id="run-output" aria-expanded="false" aria-controls="run-log-box" hidden>Collector output</button></div>
+    <div class="notes-row" id="run-notes" hidden><span class="nr-what" id="run-notes-what"><span class="nr-ic" aria-hidden="true">!</span><span id="run-notes-n"></span><button type="button" class="linkish" id="run-notes-show" aria-expanded="false" aria-controls="run-warnings" aria-label="Show warnings">Show</button></span><button type="button" class="linkish nr-out" id="run-output" aria-expanded="false" aria-controls="run-log-box" hidden>Collector log</button></div>
     <ul class="warn-list" id="run-warnings" hidden></ul>
     <div class="log" id="run-log-box" hidden>
-      <div class="log-bar"><span class="log-title">Collector output <span class="muted" id="run-log-n"></span></span><button type="button" class="btn small" id="run-log-copy">{i_copy}<span>Copy log</span></button></div>
-      <pre id="run-log" tabindex="0" aria-label="Collector output"></pre>
+      <div class="log-bar"><span class="log-title">Collector log <span class="muted" id="run-log-n"></span></span><button type="button" class="btn small" id="run-log-copy">{i_copy}<span>Copy log</span></button></div>
+      <pre id="run-log" tabindex="0" aria-label="Collector log"></pre>
     </div>
     <div class="also-row" id="run-also" hidden>{i_file}<span><strong>Analyzed with it:</strong> <span class="muted" id="run-also-names"></span></span></div>
-    <div class="form-actions" id="run-actions"><button type="button" class="btn danger" id="collect-cancel">{i_stop} Stop collecting</button><span class="muted small" id="run-note">You can leave this page; collecting continues.</span></div>
+    <div class="form-actions" id="run-actions"><button type="button" class="btn danger" id="collect-cancel">{i_stop} Stop collecting</button><span class="muted small" id="run-note">You can leave this page; it keeps going.</span></div>
   </div>
   <div id="collect-stopped" class="ended" hidden>
     <div class="failed-head">{i_stop}<h2 class="sub">Stopped</h2></div>
     <p class="muted" id="stopped-text">The collection was stopped. Nothing was kept.</p>
     <div class="grid2 again-pw" hidden><div class="field"><label for="stopped-password">Password</label><input type="password" id="stopped-password" autocomplete="current-password">{stopped_pw_err}</div></div>
-    <div class="check-actions"><button type="button" class="btn primary" id="stopped-resume" hidden>Resume {i_arrow}</button><button type="button" class="btn" id="stopped-over" hidden>Start over</button><button type="button" class="btn" id="collect-restart">Start over</button></div>
+    <div class="check-actions"><button type="button" class="btn primary" id="stopped-resume" hidden>Resume {i_arrow}</button><button type="button" class="btn" id="stopped-over" hidden>Start again</button><button type="button" class="btn" id="collect-restart">Start from step 1</button></div>
   </div>
   <div id="collect-failed" class="ended failed-box" hidden role="alert">
     <div class="failed-head">{i_alert}<h2 class="sub">The collection didn't finish</h2></div>
     <p id="collect-error"></p>
     <div class="grid2 again-pw" hidden><div class="field"><label for="failed-password">Password</label><input type="password" id="failed-password" autocomplete="current-password">{failed_pw_err}</div></div>
-    <div class="check-actions"><button type="button" class="btn primary" id="failed-resume" hidden>Resume {i_arrow}</button><button type="button" class="btn" id="failed-over" hidden>Start over</button><button type="button" class="btn" id="collect-retry">{i_back} Back to the check</button></div>
+    <div class="check-actions"><button type="button" class="btn primary" id="failed-resume" hidden>Resume {i_arrow}</button><button type="button" class="btn" id="failed-over" hidden>Start again</button><button type="button" class="btn" id="collect-retry">{i_back} Back to the check</button></div>
   </div>
 </section>
 </form>
 <dialog id="doms-dialog" class="card doms-dialog" aria-labelledby="doms-title"><form method="dialog"><h2 class="sub" id="doms-title"></h2><p id="doms-who"></p><ul id="doms-list"></ul><p class="muted small">Only collect from domains you are authorized to assess.</p><div class="dialog-actions"><button class="btn" value="cancel">Cancel</button><button class="btn primary" value="go" id="doms-go"></button></div></form></dialog>
+<dialog id="stop-dialog" class="card" aria-labelledby="stop-title"><form method="dialog"><h2 class="sub" id="stop-title">Stop collecting?</h2><p class="muted">Anything that can be resumed is kept for 24 hours.</p><div class="dialog-actions"><button class="btn" value="cancel">Cancel</button><button class="btn danger solid" value="stop">{i_stop} Stop collecting</button></div></form></dialog>
 <div class="wiz-nav" id="wiz-nav">
   <button type="button" class="btn" id="wiz-back" hidden>{i_back} Back</button>
   <span class="wiz-spacer"></span>
@@ -526,13 +523,8 @@ pub fn wizard(
 </div>
 <aside class="wiz-aside card" aria-label="About collecting">
   <h2 class="sub">How collecting works</h2>
-  <ul>
-    <li><strong>Checked before it starts.</strong> The wizard checks the connection first, then collects and analyzes in one go.</li>
-    <li><strong>Read-only, on this computer.</strong> Pathwarden reads the directory; the data and the report stay here.</li>
-    <li><strong>Local admin paths</strong> come from each computer's local groups, which only local administrators may read remotely. The release's <code>scripts\New-PathwardenCollectorGpo.ps1</code> sets up an account that can read them and do nothing else.</li>
-    <li><strong>Sessions and local groups:</strong> SharpHound is still the most complete collector for these; you can choose it under How deep.</li>
-  </ul>
-  <p class="muted small">Only collect from domains you are authorized to assess.</p>
+  <p>Pathwarden only reads the directory, and checks the connection before it starts.</p>
+  <p class="muted small">{docs_collect} · {docs_account}</p>
 </aside>
 </div>
 <script src="/static/collect.js" defer></script>
@@ -551,6 +543,11 @@ pub fn wizard(
         i_file = icon("i-file"),
         keep = if keep_default { " checked" } else { "" },
         label_field = crate::env_where::label_field(),
+        docs_collect = crate::pages::repo_link("docs/collect.md", "Collecting, step by step"),
+        docs_account = crate::pages::repo_link(
+            "docs/collector-account.md",
+            "A collector account for local groups"
+        ),
     );
     shell(ctx, Some(Nav::Collect), "Analyze", "", &b)
 }
@@ -585,7 +582,7 @@ pub fn collected_words(c: &CollectionInfo) -> (String, String) {
                     "This run was collected with {collector}, {depth}. It read {n} domains over {}, {}.",
                     if c.ldaps { "LDAPS" } else { "LDAP" },
                     if c.current_user {
-                        "signed in as your Windows account"
+                        "signed in as the Windows account that ran it"
                     } else {
                         "signed in with a user and password"
                     }
@@ -596,14 +593,14 @@ pub fn collected_words(c: &CollectionInfo) -> (String, String) {
         _ => from,
     };
     let sign_in = if c.current_user {
-        "signed in as your Windows account"
+        "signed in as the Windows account that ran it"
     } else {
         "signed in with a user and password"
     };
     (
         format!(
             "This run was collected with {collector}, {depth}. It read {}{from} over {}, {sign_in}.",
-            c.domain,
+            c.domain.to_uppercase(),
             if c.ldaps { "LDAPS" } else { "LDAP" }
         ),
         short.to_string(),
@@ -632,11 +629,7 @@ pub fn computers_sentence(c: &CollectionInfo) -> Option<String> {
         ));
     };
     if c.method == "sharphound" {
-        return Some(
-            "Kerberos only and SMB signing weren't enforced: SharpHound signs in to computers \
-             its own way."
-                .into(),
-        );
+        return Some("Kerberos only and SMB signing don't apply to SharpHound.".into());
     }
     let what = if c.scope == "all" {
         "Computers were read"
@@ -731,7 +724,7 @@ pub fn schedule(
             format!(
                 r#"<p class="muted small">Based on <a href="/runs/{}">the run of {}</a>.</p>"#,
                 esc(&r.id),
-                esc(&r.environment())
+                crate::pages::time(r.created_at)
             )
         })
         .unwrap_or_default();
@@ -739,15 +732,8 @@ pub fn schedule(
     // (not shown while the folder may be one that was refused).
     let from = if ctx.several_envs() && errors.is_empty() {
         format!(
-            r#"{from}<p class="muted small">For the <strong>{}</strong> environment: the {} <code>{}</code> in <code>{}</code>, with this environment's settings and history.</p>"#,
+            r#"{from}<p class="muted small">For the <strong>{}</strong> environment.</p>"#,
             esc(&ctx.env_name),
-            if t.linux { "timer" } else { "task" },
-            esc(&if t.linux {
-                format!("{}.timer", t.unit())
-            } else {
-                t.task_name()
-            }),
-            esc(&t.folder),
         )
     } else {
         from
@@ -755,7 +741,7 @@ pub fn schedule(
     let _ = write!(
         b,
         r##"<div class="page-head"><div><p class="eyebrow">Automate</p><h1 class="panel-title">Schedule</h1>
-<p class="lead">Set up a server to collect and analyze every night and record each run in the run history. An administrator copies these files to the server and runs the commands.</p>{from}</div></div>
+<p class="lead">Collect and analyze every night on a server, recorded in the run history.</p>{from}</div></div>
 {example_note}{status}<nav class="os-switch" aria-label="Server">
   <a href="/automate/schedule?{q_win}"{win_cur}>{i_windows} Windows server</a>
   <a href="/automate/schedule?{q_linux}"{linux_cur}>{i_terminal} Linux server</a>
@@ -777,7 +763,7 @@ pub fn schedule(
         i_terminal = icon("i-terminal"),
         example_note = example_for
             .map(|d| format!(
-                r#"<div class="note">{}<p><strong>These scripts are examples for {}.</strong> After your first run they use its domain and domain controller.</p></div>"#,
+                r#"<div class="note">{}<p><strong>These files are examples for {}.</strong> After your first run they use its domain and domain controller.</p></div>"#,
                 icon("i-info"),
                 esc(d)
             ))
@@ -856,7 +842,7 @@ pub fn schedule(
     if !errors.is_empty() {
         let _ = write!(
             b,
-            r#"<div class="note warn">{}<p>Correct the settings above and choose <strong>Update the files</strong>: the files are written for settings that work.</p></div>"#,
+            r#"<div class="note warn">{}<p>Correct the settings above, then choose <strong>Update the files</strong>.</p></div>"#,
             icon("i-alert")
         );
         b.push_str(r#"<script src="/static/collect.js" defer></script>"#);

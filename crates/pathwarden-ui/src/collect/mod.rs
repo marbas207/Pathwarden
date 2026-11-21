@@ -248,7 +248,7 @@ pub fn trusted_servers(
             )))
         }
         Err(ServerError::Twice(d) | ServerError::FirstTwice(d)) => Err(field(format!(
-            "Give {}'s domain controller once.",
+            "{}'s domain controller is entered twice. Enter it once.",
             d.to_ascii_uppercase()
         ))),
         Err(ServerError::Empty(i)) => Err(field(format!(
@@ -444,7 +444,7 @@ pub fn build_request(form: CollectForm, output_dir: PathBuf) -> Result<CollectRe
                 return Err(FieldError::new(
                     2,
                     "user",
-                    "Enter the user name like svc-pathwarden, SCALE\\svc-pathwarden or \
+                    "Enter the user name, like svc-pathwarden, SCALE\\svc-pathwarden or \
                      svc-pathwarden@scale.local.",
                 ));
             }
@@ -478,17 +478,15 @@ pub fn build_request(form: CollectForm, output_dir: PathBuf) -> Result<CollectRe
                 return Err(FieldError::new(
                     2,
                     "ldaps",
-                    "Turn on LDAPS: with a password, it keeps the password and your data \
-                     encrypted on the way.",
+                    "Turn on LDAPS: a password needs an encrypted connection.",
                 ));
             }
             if form.depth == Depth::Full && !password {
                 return Err(FieldError::new(
                     3,
                     "collector",
-                    "For a Full collection the built-in collector needs a user and password \
-                     (it signs in to every computer with them). Use SharpHound, or go back and \
-                     enter a user and password.",
+                    "A Full collection with the built-in collector needs a user and password. \
+                     Use SharpHound, or enter one in step 2.",
                 ));
             }
             Method::Builtin
@@ -505,10 +503,8 @@ pub fn build_request(form: CollectForm, output_dir: PathBuf) -> Result<CollectRe
                 return Err(FieldError::new(
                     3,
                     "collector",
-                    "SharpHound always runs as your Windows account: it could only take a \
-                     password on its command line, where other people on this computer could \
-                     read it. Choose \"Use my Windows account\" in step 2, or the built-in \
-                     collector.",
+                    "SharpHound runs as your Windows account only. Choose \"Use my Windows \
+                     account\" in step 2, or the built-in collector.",
                 ));
             }
             let raw = clean_path(&form.sharphound);
@@ -527,8 +523,7 @@ pub fn build_request(form: CollectForm, output_dir: PathBuf) -> Result<CollectRe
                     3,
                     "sharphound",
                     "That is a network path. Copy SharpHound.exe to this computer and enter \
-                     its local path, like C:\\Tools\\SharpHound.exe: even checking a network \
-                     path makes Windows sign in to that server as you.",
+                     its local path.",
                 ));
             }
             let program = PathBuf::from(raw);
@@ -553,7 +548,7 @@ pub fn build_request(form: CollectForm, output_dir: PathBuf) -> Result<CollectRe
                     return Err(FieldError::new(
                         3,
                         "sharphound",
-                        format!("Nothing found at {raw}. Check the path."),
+                        format!("Nothing found at {raw}. Check the path and try again."),
                     ))
                 }
             }
@@ -783,7 +778,7 @@ pub fn offer_words(s: &StoppedRead, first: bool, now: i64) -> String {
         format!(" of {}", s.domain.to_ascii_uppercase())
     };
     format!(
-        "An earlier read{of} stopped at {}%, {}.",
+        "An earlier collection{of} stopped at {}%, {}.",
         s.percent,
         s.ago(now)
     )
@@ -1298,15 +1293,14 @@ fn unchecked_lines(check: &ConnectionCheck, full: bool, kerberos_only: bool) -> 
     }
     if full && kerberos_only && check.program.is_none() {
         lines.push(
-            "Signing in to each computer for sessions and local groups: that happens during the \
-             collection. Computers that are off, refuse, or have no Kerberos name show as not \
-             collected in the report."
+            "Signing in to each computer: done during the collection. Computers that are off, \
+             refuse, or have no Kerberos name show as not collected."
                 .into(),
         );
     } else if full {
         lines.push(
-            "Signing in to each computer for sessions and local groups: that happens during the \
-             collection. Computers that are off or refuse show as not collected in the report."
+            "Signing in to each computer: done during the collection. Computers that are off or \
+             refuse show as not collected."
                 .into(),
         );
     }
@@ -1440,7 +1434,7 @@ fn capitalize(s: &str) -> String {
 fn busy() -> Response {
     json_error(
         StatusCode::CONFLICT,
-        "Pathwarden is already collecting or analyzing. Wait for it to finish, then try again.",
+        "A collection or analysis is running. Try again when it finishes.",
     )
 }
 
@@ -1517,17 +1511,19 @@ async fn start(
     let also = match also_id {
         Some(id) => match st.jobs.take_also(&id) {
             Some(a) => Some(a),
-            None => return json_error(
-                StatusCode::CONFLICT,
-                "The files to analyze with the collection are no longer waiting. Add them again.",
-            ),
+            None => {
+                return json_error(
+                    StatusCode::CONFLICT,
+                    "The added files were cleared. Add them again.",
+                )
+            }
         },
         None => None,
     };
     let also_names = also.as_ref().map(|a| a.names.clone()).unwrap_or_default();
     let source = format!(
         "Collected from {}{} ({}, {})",
-        req.domain,
+        req.domain.to_ascii_uppercase(),
         match trusted.len() {
             0 => String::new(),
             1 => " and 1 trusted domain".into(),
@@ -1650,7 +1646,10 @@ async fn stage_also(State(st): State<Shared>, mut form: axum::extract::Multipart
 
 async fn cancel(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> Response {
     if !workspace::valid_run_id(&id) {
-        return json_error(StatusCode::BAD_REQUEST, "Invalid job.");
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "That collection wasn't found. Reload the page.",
+        );
     }
     if st.jobs.cancel(&id) {
         StatusCode::ACCEPTED.into_response()
@@ -1777,7 +1776,7 @@ impl CollectJob {
                     &self.cancel,
                 )
             }))
-            .unwrap_or_else(|_| Err(anyhow::anyhow!("the collector stopped unexpectedly")))
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("The collector stopped unexpectedly.")))
         };
         // Stopped: whether a read was kept to resume. A domain that
         // finished is not saved; one that hadn't keeps its read.
@@ -1912,6 +1911,8 @@ impl CollectJob {
         if e.is::<ReadStopped>() {
             self.jobs.update_collect(&self.id, |c| c.resumable = true);
         }
+        // The page says it in plain words; the whole error is in the log.
+        self.jobs.log_line(&self.id, &format!("[error] {e:#}"));
         let error = collect_error(e);
         self.jobs.set(&self.id, JobStatus::Failed { error });
     }
@@ -1959,7 +1960,7 @@ fn relocate(files: &[PathBuf], from: &Path, to: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-/// A failed collection in plain words, with the collector's own message.
+/// A failed collection in plain words; the error itself is in the log.
 fn collect_error(e: &anyhow::Error) -> String {
     // Already explained by the collector: the plain words, then the detail.
     if let Some(ce) = e.downcast_ref::<ConnectionError>() {
@@ -1973,8 +1974,10 @@ fn collect_error(e: &anyhow::Error) -> String {
     }
     let text = format!("{e:#}");
     match Problem::classify(&text) {
-        Problem::Other | Problem::Settings => format!("The collection failed: {text}"),
-        p => format!("{} ({text})", p.explain()),
+        Problem::Other | Problem::Settings => {
+            "The collection failed. Open the log for details.".to_string()
+        }
+        p => p.explain().to_string(),
     }
 }
 
@@ -2095,7 +2098,7 @@ mod tests {
         assert!(first);
         assert_eq!(
             offer_words(&s, first, now),
-            "An earlier read stopped at 61%, 2 h ago."
+            "An earlier collection stopped at 61%, 2 h ago."
         );
         // Another sign-in, or SharpHound: no offer.
         f.auth = AuthChoice::Password;
@@ -2119,7 +2122,7 @@ mod tests {
         let (s, first) = stopped_offer(&ws, &f).expect("offered");
         assert_eq!(
             offer_words(&s, first, now),
-            "An earlier read of FABRIKAM.LOCAL stopped at 12%, 10 min ago."
+            "An earlier collection of FABRIKAM.LOCAL stopped at 12%, 10 min ago."
         );
         // Stopped: the box says a read was kept only when one was.
         let mut req = CollectRequest::new("contoso.local", "o");

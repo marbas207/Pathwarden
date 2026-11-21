@@ -14,10 +14,10 @@
       return r.text().then(function (text) {
         var j = null;
         try { j = text ? JSON.parse(text) : {}; } catch (e) {}
-        if (!r.ok) throw new Error((j && j.error) || "Pathwarden didn't answer (" + r.status + "). Is it still running?");
+        if (!r.ok) throw new Error((j && j.error) || "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs.");
         return j || {};
       });
-    }, function () { throw new Error("Pathwarden is not answering. Is it still running?"); });
+    }, function () { throw new Error("Pathwarden isn't answering. Is it still running?"); });
   }
 
   // Where this environment's history lives: on this computer (the form,
@@ -120,7 +120,7 @@
         // away.
         if (j.note && status) {
           section.querySelectorAll("[data-history-action]").forEach(function (x) { x.disabled = false; });
-          status.textContent = j.note + " Reload the page to see the history as it is now.";
+          status.textContent = j.note + " Reload to see it.";
           status.className = "save-status small";
           return;
         }

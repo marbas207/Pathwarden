@@ -112,7 +112,7 @@ pub fn edge_fix_on(kind: EdgeKind, from: &str, to: &str, to_kind: Option<NodeKin
     match kind {
         MemberOf => format!("Remove {from} from the group {to}."),
         HasSession => format!(
-            "Stop {to} from logging on to {from}, then log off or reboot {from} to clear its cached credentials."
+            "Stop {to} from signing in to {from}, then sign it out or restart {from} to clear its cached credentials."
         ),
         AdminTo => format!("Remove {from} from the local Administrators group on {to}."),
         CanRdp => format!("Remove {from} from Remote Desktop Users on {to}, or from the GPO that grants it."),
@@ -150,7 +150,7 @@ pub fn edge_fix_on(kind: EdgeKind, from: &str, to: &str, to_kind: Option<NodeKin
              With it, {from} can enable EDITF_ATTRIBUTESUBJECTALTNAME2 or approve its own requests (ESC7)."
         ),
         HostsCaService | GoldenCert => format!(
-            "{from} hosts a certificate authority; anyone who controls it can steal the CA key and forge \
+            "{from} hosts a certification authority; anyone who controls it can steal the CA key and forge \
              certificates for any account. Manage {from} as Tier Zero."
         ),
         k if k.is_adcs_abuse() => match adcs_rule(k) {

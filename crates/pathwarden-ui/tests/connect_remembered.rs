@@ -200,7 +200,7 @@ async fn a_passphrase_kept_here_opens_and_connects() {
             !page.contains("Enter the passphrase to open it"),
             "round {round}: no passphrase asked: {page}"
         );
-        for want in ["Encrypted.", "Use this history and sync"] {
+        for want in ["Encrypted.", "Connect and sync"] {
             assert!(page.contains(want), "round {round}: {want}");
         }
         // Remember is offered; ticked for one kept on this computer (in
@@ -253,8 +253,7 @@ async fn a_passphrase_kept_here_opens_and_connects() {
     // kept for: one recorded for another key is passed over, and so is one
     // kept before the key was recorded with it (before 0.2), with
     // the reason on the page.
-    const OLD: &str = "Passphrases saved on this computer before Pathwarden 0.2 are no longer \
-                       tried on other histories. Enter this history";
+    const OLD: &str = "Enter this history&#39;s passphrase once.";
     let keys: Vec<PathBuf> = std::fs::read_dir(dir.join("keystore"))
         .unwrap()
         .flatten()

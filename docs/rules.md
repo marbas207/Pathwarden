@@ -19,7 +19,7 @@ for a rule (Settings, or `[rules.severities]`) overrides both.
 | [PW-001](../crates/pathwarden-core/guides/PW-001.md) | A broad group (Domain Users, Authenticated Users, Everyone) has a path to Tier Zero. | Attack Path | From exposure, usually Critical. |
 | [PW-002](../crates/pathwarden-core/guides/PW-002.md) | An account outside Tier Zero can DCSync. | Attack Path | At least High. |
 | [PW-003](../crates/pathwarden-core/guides/PW-003.md) | An account outside Tier Zero controls a Tier Zero object. | Attack Path | At least High. |
-| [PW-004](../crates/pathwarden-core/guides/PW-004.md) | A Tier Zero account is logged on to computers outside Tier Zero. | Attack Path | At least High. |
+| [PW-004](../crates/pathwarden-core/guides/PW-004.md) | A Tier Zero account is signed in to computers outside Tier Zero. | Attack Path | At least High. |
 | [PW-005](../crates/pathwarden-core/guides/PW-005.md) | Unconstrained delegation outside the domain controllers. | Attack Path | At least High. |
 | [PW-006](../crates/pathwarden-core/guides/PW-006.md) | A Kerberoastable account is in Tier Zero or has a path to it. | Attack Path | From exposure. |
 | [PW-007](../crates/pathwarden-core/guides/PW-007.md) | An account doesn't require Kerberos pre-authentication (AS-REP roasting). | Attack Path if it reaches Tier Zero, else Hygiene. | From exposure, or Medium. |
@@ -27,7 +27,7 @@ for a rule (Settings, or `[rules.severities]`) overrides both.
 | [PW-009](../crates/pathwarden-core/guides/PW-009.md) | Enabled Tier Zero accounts with no logon in 90 days. | Hygiene | Medium. |
 | [PW-010](../crates/pathwarden-core/guides/PW-010.md) | Tier Zero passwords older than 365 days. | Hygiene | Medium. |
 | [PW-011](../crates/pathwarden-core/guides/PW-011.md) | Computers without LAPS. | Hygiene | Medium. |
-| [PW-012](../crates/pathwarden-core/guides/PW-012.md) | A trust lets forged SID history through (SID history enabled, or not quarantined). | Hygiene | High. |
+| [PW-012](../crates/pathwarden-core/guides/PW-012.md) | A trust lets forged SID history through (SID filtering relaxed). | Hygiene | High. |
 | [PW-013](../crates/pathwarden-core/guides/PW-013.md) | Accounts that may have an empty password (PASSWD_NOTREQD). | Hygiene | High in Tier Zero, else Low. |
 | [PW-014](../crates/pathwarden-core/guides/PW-014.md) | The krbtgt password hasn't been changed in 180 days. | Hygiene | Medium. |
 | [PW-015](../crates/pathwarden-core/guides/PW-015.md) | AD CS ESC1: a template lets the requester choose any identity. | Attack Path | At least High. |
@@ -38,11 +38,11 @@ for a rule (Settings, or `[rules.severities]`) overrides both.
 | [PW-020](../crates/pathwarden-core/guides/PW-020.md) | AD CS ESC9/ESC10: weak certificate mapping plus write access to an enrolling account. | Attack Path, or Hygiene when unverified. | At least High, or Medium. |
 | [PW-021](../crates/pathwarden-core/guides/PW-021.md) | AD CS ESC13: an issuance policy linked to a group. | Attack Path | From exposure; at least High for a Tier Zero group. |
 | [PW-022](../crates/pathwarden-core/guides/PW-022.md) | An account outside a [Privilege Zone](privilege-zones.md) controls an object in it. | Attack Path | From exposure. |
-| [PW-023](../crates/pathwarden-core/guides/PW-023.md) | An account outside Tier Zero can log on to domain controllers remotely. | Hygiene | High; Critical for broad groups. |
+| [PW-023](../crates/pathwarden-core/guides/PW-023.md) | An account outside Tier Zero can sign in to domain controllers remotely. | Hygiene | High; Critical for broad groups. |
 | [PW-025](../crates/pathwarden-core/guides/PW-025.md) | A [management plane](#management-planes) manages Tier Zero but isn't declared Tier Zero. | Attack Path | At least High. |
 | [PW-026](../crates/pathwarden-core/guides/PW-026.md) | A Group Policy Preferences file in SYSVOL holds a password. | Hygiene | Critical. |
 | [PW-027](../crates/pathwarden-core/guides/PW-027.md) | A GPO's SYSVOL folder is writable by someone who can't edit the GPO. | Hygiene | High or Medium. |
-| [PW-028](../crates/pathwarden-core/guides/PW-028.md) | A possible management plane to review. | Hygiene | High, Medium or Low, by the evidence. |
+| [PW-028](../crates/pathwarden-core/guides/PW-028.md) | A possible management system to check. | Hygiene | High, Medium or Low, by the evidence. |
 | [PW-029](../crates/pathwarden-core/guides/PW-029.md) | ESX Admins (CVE-2024-37085) is controlled from outside Tier Zero, or missing. | Hygiene | High, Medium or Low. |
 | [PW-030](../crates/pathwarden-core/guides/PW-030.md) | An account outside Tier Zero controls Tier Zero through another system, from [OpenGraph](opengraph.md) data. | Attack Path | At least High. |
 | [PW-031](../crates/pathwarden-core/guides/PW-031.md) | An account outside Tier Zero controls an Entra ID Tier Zero object ([Entra ID](entra.md)). | Attack Path | At least High. |

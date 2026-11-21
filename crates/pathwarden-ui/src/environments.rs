@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::pages::{self, esc, icon, num};
 use crate::server::AppState;
-use crate::workspace::{RunSummary, Workspace, CONFIG_FILE};
+use crate::workspace::{RunSummary, Workspace};
 
 type Shared = Arc<AppState>;
 
@@ -439,7 +439,7 @@ impl Registry {
 /// Why a registry file can't be used, and what to do.
 fn broken(path: &Path, why: &str) -> String {
     format!(
-        "{} can't be read ({why}). Pathwarden won't change it: fix it, or move it away to start over (a copy of the last good one may be in {BACKUP_FILE}).",
+        "The list of environments can't be read ({why}). Fix {} or move it away to start over; a copy may be in {BACKUP_FILE}.",
         path.display()
     )
 }
@@ -814,7 +814,7 @@ impl Ask {
                 .map(|(id, _)| name(&reg.name_of(id)))
                 .collect();
             out.push_str(&format!(
-                "{} {} {} only through runs saved by Pathwarden 0.1.1 or earlier, which also counted trusted domains: asked once.",
+                "{} {} {} only through runs from an older Pathwarden. You are asked only this once.",
                 list(&self.legacy, dom),
                 if self.legacy.len() == 1 { "matches" } else { "match" },
                 and_list(&names)
@@ -1099,7 +1099,7 @@ pub fn settle(
                         .environments
                         .iter_mut()
                         .find(|e| e.is_default())
-                        .ok_or("The workspace has no Default environment.")?;
+                        .ok_or("There is no Default environment to use.")?;
                     d.name = name;
                     (DEFAULT_ENV.to_string(), true)
                 } else {
@@ -1499,8 +1499,8 @@ fn render_with(
             .collect();
         let loaded = crate::settings::load_ws(&ws);
         let settings = match &loaded.error {
-            Some(_) => format!("{CONFIG_FILE} can't be loaded"),
-            None if !loaded.exists => "Not set up yet (the defaults)".into(),
+            Some(_) => "Can't be read. Switch to it and open Settings.".to_string(),
+            None if !loaded.exists => "The defaults".into(),
             None => crate::settings::applies_parts(&loaded.config)
                 .unwrap_or_else(|| "The defaults".into()),
         };
@@ -1552,8 +1552,9 @@ fn render_with(
             r#"<span class="tag">Current</span>"#.to_string()
         } else {
             format!(
-                r#"<form method="post" action="/environments/switch?to={id}"><button type="submit" class="btn small-btn">{i} Switch to it</button></form>"#,
+                r#"<form method="post" action="/environments/switch?to={id}"><button type="submit" class="btn small-btn">{i} Switch to {name}</button></form>"#,
                 id = esc(&e.id),
+                name = esc(e.display()),
                 i = icon("i-arrow"),
             )
         };
@@ -1562,24 +1563,24 @@ fn render_with(
             String::new()
         } else {
             format!(
-                r#"<div class="er-remove"><a class="btn danger small-btn" href="/environments/{id}/remove">{i} Remove environment…</a><span class="hint">With its {count_lc}, settings and history. The next page shows what goes; you confirm there.</span></div>"#,
+                r#"<div class="er-remove"><a class="btn danger small-btn" href="/environments/{id}/remove">{i} Remove environment…</a><span class="hint">With its {count_lc}settings and history. You confirm on the next page.</span></div>"#,
                 id = esc(&e.id),
                 i = icon("i-trash"),
                 count_lc = if runs.is_empty() {
-                    "runs (none yet)".to_string()
+                    String::new()
                 } else {
-                    count.to_lowercase()
+                    format!("{}, ", count.to_lowercase())
                 },
             )
         };
         let _ = write!(
             b,
             r#"<section class="env-row card{cur}" id="env-{id}">
-  <div class="er-head"><div class="er-name"><h2>{name}</h2><button type="button" class="rr-edit" data-rename aria-label="Rename {name}" title="Rename">{i_edit}</button><form class="inline-edit" method="post" action="/environments/{id}/rename" data-rename-form hidden><input type="text" name="name" value="{name_value}" maxlength="{max}" required autocomplete="off" aria-label="Name"><button type="submit" class="btn primary">Save</button><button type="button" class="btn" data-rename-cancel>Cancel</button></form></div>{demo}<span class="er-count">{count}</span><div class="er-actions">{switch}</div></div>
+  <div class="er-head"><div class="er-name"><h2>{name}</h2><button type="button" class="rr-edit" data-rename aria-label="Rename {name}" title="Rename">{i_edit}</button><form class="inline-edit" method="post" action="/environments/{id}/rename" data-rename-form hidden><input type="text" name="name" value="{name_value}" maxlength="{max}" required autocomplete="off" aria-label="New name for {name}"><button type="submit" class="btn primary">Save</button><button type="button" class="btn" data-rename-cancel>Cancel</button></form></div>{demo}<span class="er-count">{count}</span><div class="er-actions">{switch}</div></div>
   <dl class="er-facts">
     <div><dt>Runs</dt><dd>{latest}</dd></div>
     <div><dt>Settings</dt><dd>{settings}</dd></div>
-    <div><dt>Domains for automatic assignment</dt><dd>{domains}</dd></div>
+    <div><dt>Domains</dt><dd>{domains}</dd></div>
     <div class="wide"><dt>Folder</dt><dd><code>{dir}</code></dd></div>
     <div class="wide"><dt>Run history</dt><dd><code>{history}</code></dd></div>
   </dl>
@@ -1587,7 +1588,7 @@ fn render_with(
   <details class="er-edit"{open}><summary>{i_edit} Change domains or remove</summary>
     <form method="post" action="/environments/{id}/edit" class="env-form">
       <input type="hidden" name="name" value="{raw_name}">
-      <label>Domains <span class="hint">Runs of these domains go to this environment by themselves. Separate them with commas or spaces.</span><textarea name="domains" rows="2" spellcheck="false">{domain_text}</textarea></label>
+      <label>Domains <span class="hint">Runs of these domains go here. Separate them with commas or new lines.</span><textarea name="domains" rows="2" spellcheck="false">{domain_text}</textarea></label>
       <div class="form-actions"><button type="submit" class="btn primary"><svg class="ic" aria-hidden="true"><use href='#i-check'/></svg> Save</button></div>
     </form>
     {remove}
@@ -1634,14 +1635,14 @@ fn render_with(
         r#"<section class="env-new card" id="new">
   <h2 class="sub">New environment</h2>
   <form method="post" action="/environments" class="env-form" data-env-new>
-    <fieldset class="choice env-origin"><legend>Its history</legend>
+    <fieldset class="choice env-origin"><legend>Run history</legend>
       <label class="option card"><input type="radio" name="origin" value="local" checked><span><strong>On this computer</strong><span class="muted">An empty history in this environment's folder. You can share it later.</span></span></label>
       <label class="option card"><input type="radio" name="origin" value="connect"><span><strong>Connect to a run history</strong><span class="muted">The runs and settings that teammates or a server already record.</span></span></label>
       <label class="option card"><input type="radio" name="origin" value="new-shared"><span><strong>Start a new run history</strong><span class="muted">An empty history in a git repository or shared folder, for others to join.</span></span></label>
     </fieldset>
     <label data-when-origin="own">Name <span class="hint">For example Demo, Lab or Production.</span><input type="text" name="name" maxlength="{max}" required autocomplete="off"></label>
-    <label data-when-origin="own">Domains <span class="hint">Optional. Analyses of these domains go here when no environment is chosen.</span><textarea name="domains" rows="2" spellcheck="false" placeholder="scale.local, emea.scale.local"></textarea></label>
-    <label data-when-origin="own">Start with <select name="copy"><option value="">The default settings</option>{copy_options}</select><span class="hint">A copy includes accepted risks and ticketing plugins; review them before the first analysis.</span></label>
+    <label data-when-origin="own">Domains <span class="hint">Optional. Runs of these domains go here when no environment is chosen.</span><textarea name="domains" rows="2" spellcheck="false" placeholder="scale.local, emea.scale.local"></textarea></label>
+    <label data-when-origin="own">Start with <select name="copy"><option value="">The default settings</option>{copy_options}</select><span class="hint">A copy includes accepted risks and plugins. Review them before the first run.</span></label>
     <p class="hint" data-when-origin="connect" hidden>The name and domains come from the run history. You can change the name on the next step.</p>
     <div class="form-actions"><button type="submit" class="btn primary" data-when-origin="own">{i_plus} Create and switch to it</button><button type="submit" class="btn primary" data-when-origin="connect" hidden>{i_arrow} Continue</button></div>
   </form>
@@ -1697,7 +1698,12 @@ async fn create(State(st): State<Shared>, Form(f): Form<EnvForm>) -> Response {
         Ok(format!("env-{id}"))
     })
     .await
-    .unwrap_or_else(|_| Err("Saving failed.".into()));
+    .unwrap_or_else(|_| {
+        Err(
+            "Couldn't create the environment. Try again; if it keeps failing, see Settings › Logs."
+                .into(),
+        )
+    });
     if shared && result.is_ok() {
         return Redirect::to("/automate/history?origin=new-shared#state").into_response();
     }
@@ -1792,7 +1798,7 @@ fn render_remove(st: &AppState, plan: &crate::env_remove::Plan, error: Option<&s
     let _ = write!(
         b,
         r#"<div class="page-head"><div><p class="crumb"><a href="/environments">Environments</a></p><h1 class="panel-title">{title}</h1>
-<p class="lead">Check what goes before you confirm. Nothing is deleted, but the environment and its runs leave every list.</p></div></div>"#,
+<p class="lead">Nothing is deleted: the environment and its runs move to a folder you can restore from.</p></div></div>"#,
         title = esc(&plan.title()),
     );
     if let Some(e) = error {
@@ -1813,8 +1819,8 @@ fn render_remove(st: &AppState, plan: &crate::env_remove::Plan, error: Option<&s
   <ul class="rm-lines">{items}</ul>
   <form method="post" action="/environments/{id}/remove" class="env-form rm-form">
     <input type="hidden" name="runs_key" value="{runs_key}">
-    <label>{prompt} <span class="hint">Its name as shown above, or its ID ({raw_id}) if the name is hard to type.</span><input type="text" name="confirm" required autocomplete="off" spellcheck="false" data-must-match="{name}" data-or-match="{raw_id}"></label>
-    <div class="form-actions"><button type="submit" class="btn danger solid" data-confirm-button>{i} {button}</button><a class="btn" href="/environments#env-{id}">Keep it</a></div>
+    <label>{prompt} <span class="hint">Type its name, or its ID ({raw_id}).</span><input type="text" name="confirm" required autocomplete="off" spellcheck="false" data-must-match="{name}" data-or-match="{raw_id}"></label>
+    <div class="form-actions"><button type="submit" class="btn danger solid" data-confirm-button>{i} {button}</button><a class="btn" href="/environments#env-{id}">Cancel</a></div>
   </form>
 </section>"#,
         items = lines
@@ -1918,7 +1924,7 @@ pub fn run_note(st: &AppState, run_ws: &Workspace) -> String {
         return String::new();
     }
     format!(
-        r#"<div class="env-note card" role="note">{i}<div class="en-text">This run is in <strong>{name}</strong>, so its retests and accepted risks use the settings of {name}. <form method="post" action="/environments/switch?to={id}"><button type="submit" class="btn small-btn">Switch to {name}</button></form></div></div>"#,
+        r#"<div class="env-note card" role="note">{i}<div class="en-text">This run is in <strong>{name}</strong> and uses its settings. <form method="post" action="/environments/switch?to={id}"><button type="submit" class="btn small-btn">Switch to {name}</button></form></div></div>"#,
         i = icon("i-layers"),
         name = esc(&reg.name_of(run_ws.env_id())),
         id = esc(run_ws.env_id()),
@@ -2181,8 +2187,8 @@ mod tests {
         // Each domain is said once.
         assert_eq!(
             ask.reason(&reg),
-            "SEVENKINGDOMS.LOCAL matches Default only through runs saved by Pathwarden 0.1.1 \
-             or earlier, which also counted trusted domains: asked once."
+            "SEVENKINGDOMS.LOCAL matches Default only through runs from an older Pathwarden. \
+             You are asked only this once."
         );
         // Next to a domain that matches the usual way.
         let other = reg.environments.iter().find(|e| e.name == "Other").unwrap();
@@ -2197,8 +2203,7 @@ mod tests {
         assert_eq!(
             mixed.reason(&reg),
             "CONTOSO.COM matches Other; BRAAVOS.LOCAL is new. SEVENKINGDOMS.LOCAL matches \
-             Default only through runs saved by Pathwarden 0.1.1 or earlier, which also \
-             counted trusted domains: asked once."
+             Default only through runs from an older Pathwarden. You are asked only this once."
         );
         // Settled by itself it asks too; picked, Default lists it.
         let choice = Choice::Env(DEFAULT_ENV.into());
@@ -2481,7 +2486,7 @@ mod tests {
         std::fs::write(d.join(REGISTRY_FILE), "{not json").unwrap();
         let err = Registry::update(&d, |r| r.create("Lab", &[])).unwrap_err();
         assert!(
-            err.contains("can't be read") && err.contains("won't change it"),
+            err.contains("can't be read") && err.contains("move it away"),
             "{err}"
         );
         assert_eq!(

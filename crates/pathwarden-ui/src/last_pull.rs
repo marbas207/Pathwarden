@@ -391,11 +391,11 @@ impl Status {
         self.kind == Kind::NotSignedIn && self.last.as_ref().is_some_and(|r| r.refused)
     }
 
-    /// "1 run is waiting to be pushed.", "2 runs are waiting to be pushed."
+    /// "1 run is waiting to be shared.", "2 runs are waiting to be shared."
     pub fn waiting_head(&self) -> String {
         let n = self.waiting.len();
         format!(
-            "{} waiting to be pushed.",
+            "{} waiting to be shared.",
             pathwarden_core::text::count(n, "run is", "runs are")
         )
     }
@@ -405,12 +405,12 @@ impl Status {
     pub fn foot(&self) -> String {
         match self.kind {
             Kind::NotYet => "Not synced yet".into(),
-            Kind::Failed => "Couldn't sync with the repository".into(),
+            Kind::Failed => "Couldn't reach the run history".into(),
             Kind::NotSignedIn if self.refused() => "Sign-in refused by the repository".into(),
             Kind::NotSignedIn | Kind::NoHelper => "Not signed in to the repository".into(),
             Kind::Locked => "Passphrase needed".into(),
             Kind::Waiting => format!(
-                "{} waiting to be pushed",
+                "{} waiting to be shared",
                 pathwarden_core::text::count(self.waiting.len(), "run", "runs")
             ),
             Kind::UpToDate => {
@@ -490,7 +490,7 @@ impl Status {
                 Kind::Failed => (
                     " warn",
                     "i-alert",
-                    "Couldn't sync with the repository.".to_string(),
+                    "Couldn't reach the run history.".to_string(),
                     format!(
                         "Retrying in {} min. {}",
                         self.retry_in(),
@@ -517,14 +517,14 @@ impl Status {
                     format!("{NO_HELPER} then sync again."),
                     Some(self.failed_tip(Some((
                         "Sign-in helper",
-                        "None is set up for git on this computer, so git can't ask for an account.",
+                        "Git on this computer can't ask you to sign in.",
                     )))),
                 ),
                 Kind::Locked => (
                     " warn",
                     "i-lock",
                     format!("Synced {}", self.pulled_ago()),
-                    " · nothing loaded until the passphrase is entered ·".to_string(),
+                    " · Nothing loaded yet. ".to_string(),
                     Some(self.locked_tip()),
                 ),
             };
@@ -535,7 +535,7 @@ impl Status {
             esc(&rest)
         );
         if self.kind == Kind::Locked {
-            b.push_str(r#"<a href="/runs">Enter it on Runs</a>"#);
+            b.push_str(r#"<a href="/runs">Enter the passphrase on Runs</a>"#);
         }
         b.push_str(&tip.unwrap_or_default());
         b.push_str("</span>");
@@ -562,13 +562,16 @@ impl Status {
                     "New runs, numbers, settings and accepted risks.".into(),
                 ),
                 (
-                    "Pushes".into(),
+                    "Shares".into(),
                     "Runs recorded here that are waiting, unless an analysis is running.".into(),
                 ),
-                ("Never".into(), "Reloads the page you are on.".into()),
+                (
+                    "Your page".into(),
+                    "Stays as it is: a sync never reloads it.".into(),
+                ),
                 (
                     "Change".into(),
-                    "Set Sync every under Where to keep it.".into(),
+                    "Change it in Sync every on History storage.".into(),
                 ),
             ],
             false,
@@ -603,15 +606,15 @@ impl Status {
         };
         crate::sync_ui::tip(
             "pullwait",
-            "Runs waiting to be pushed",
+            "Runs waiting to be shared",
             &[
                 ("Waiting".into(), what),
                 (
                     "Sync now".into(),
                     if one {
-                        "Pushes it, then gets the latest."
+                        "Shares it, then gets the latest."
                     } else {
-                        "Pushes them, then gets the latest."
+                        "Shares them, then gets the latest."
                     }
                     .into(),
                 ),
@@ -639,7 +642,7 @@ impl Status {
             .map(crate::pages::time)
             .unwrap_or_default();
         let mut rows = vec![(
-            "Git said".to_string(),
+            "What git said".to_string(),
             format!(
                 "<code>{}</code>",
                 esc(r.and_then(|r| r.error.as_deref()).unwrap_or("nothing"))
@@ -672,16 +675,13 @@ impl Status {
             &[
                 (
                     "Syncs".into(),
-                    "Still happen. The files stay encrypted here.".into(),
+                    "Still run; the files stay encrypted here.".into(),
                 ),
                 (
                     "Loads".into(),
                     "No runs, numbers or settings until the passphrase is entered.".into(),
                 ),
-                (
-                    "Passphrase".into(),
-                    "Entered on Runs. Pathwarden never asks on its own.".into(),
-                ),
+                ("Passphrase".into(), "Enter it on Runs.".into()),
             ],
             false,
         )
@@ -838,7 +838,7 @@ mod tests {
             line.contains("Runs recorded here that are waiting"),
             "{line}"
         );
-        assert!(line.contains("Set Sync every"), "{line}");
+        assert!(line.contains("Change it in Sync every"), "{line}");
         assert!(!line.contains("Sign in"), "{line}");
         assert!(s.text().starts_with("Up to date · synced 2 min ago"));
 
@@ -887,7 +887,7 @@ mod tests {
         let s = status(Some(locked), 5, 1000 + 120);
         assert_eq!(s.foot(), "Passphrase needed");
         let line = s.line_html();
-        assert!(line.contains("<strong>Synced 2 min ago</strong><span> · nothing loaded until the passphrase is entered ·</span><a href=\"/runs\">Enter it on Runs</a>"), "{line}");
+        assert!(line.contains("<strong>Synced 2 min ago</strong><span> · Nothing loaded yet. </span><a href=\"/runs\">Enter the passphrase on Runs</a>"), "{line}");
 
         let failed = LastPull {
             at: 1000 + 25 * 60,
@@ -900,9 +900,9 @@ mod tests {
         };
         let s = status(Some(failed.clone()), 5, 1000 + 25 * 60);
         assert_eq!(s.kind, Kind::Failed);
-        assert_eq!(s.foot(), "Couldn't sync with the repository");
+        assert_eq!(s.foot(), "Couldn't reach the run history");
         let line = s.line_html();
-        assert!(line.contains("<strong>Couldn&#39;t sync with the repository.</strong><span>Retrying in 5 min. Last synced 25 min ago.</span>") || line.contains("<strong>Couldn't sync with the repository.</strong><span>Retrying in 5 min. Last synced 25 min ago.</span>"), "{line}");
+        assert!(line.contains("<strong>Couldn&#39;t reach the run history.</strong><span>Retrying in 5 min. Last synced 25 min ago.</span>") || line.contains("<strong>Couldn't reach the run history.</strong><span>Retrying in 5 min. Last synced 25 min ago.</span>"), "{line}");
         assert!(
             line.contains("fatal: could not resolve &lt;host&gt;"),
             "{line}"
@@ -970,11 +970,11 @@ mod tests {
         );
         assert_eq!(s.kind, Kind::NoHelper);
         let line = s.line_html();
-        assert!(line.contains("Git here has no sign-in helper. Install Git for Windows with Git Credential Manager, then sync again."), "{line}");
+        assert!(line.contains("Git can&#39;t ask you to sign in. Install Git for Windows (it includes Git Credential Manager), then sync again."), "{line}");
         assert!(!line.contains("data-history-action=\"sign-in\""), "{line}");
         assert!(
-            line.contains("so git can&#39;t ask for an account")
-                || line.contains("so git can't ask for an account"),
+            line.contains("Git on this computer can&#39;t ask you to sign in")
+                || line.contains("Git on this computer can't ask you to sign in"),
             "{line}"
         );
         assert_eq!(s.foot(), "Not signed in to the repository");
@@ -986,21 +986,21 @@ mod tests {
         }]);
         assert_eq!(s.kind, Kind::Waiting);
         assert!(!s.warn());
-        assert_eq!(s.foot(), "1 run waiting to be pushed");
+        assert_eq!(s.foot(), "1 run waiting to be shared");
         assert!(s.foot_html().contains("#i-upload"));
         let line = s.line_html();
-        assert!(line.contains(r##"<span class="pl-state"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg><strong>1 run is waiting to be pushed.</strong><span>Last synced 2 min ago.</span>"##), "{line}");
+        assert!(line.contains(r##"<span class="pl-state"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg><strong>1 run is waiting to be shared.</strong><span>Last synced 2 min ago.</span>"##), "{line}");
         assert!(
             line.contains("Its numbers are in the history already."),
             "{line}"
         );
-        assert!(line.contains("Pushes it, then gets the latest."), "{line}");
+        assert!(line.contains("Shares it, then gets the latest."), "{line}");
         assert!(
             line.contains("It goes with the next run recorded here."),
             "{line}"
         );
         assert!(
-            s.text().starts_with("1 run is waiting to be pushed."),
+            s.text().starts_with("1 run is waiting to be shared."),
             "{}",
             s.text()
         );

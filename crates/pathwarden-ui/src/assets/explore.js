@@ -48,7 +48,7 @@
         try { j = JSON.parse(t); } catch (e) {}
         if (!r.ok) {
           if (j && j.reanalyze) reanalyze = true;
-          throw new Error((j && j.error) || "The explorer couldn't answer (" + r.status + ").");
+          throw new Error((j && j.error) || "Explore couldn't load this. Reload the page.");
         }
         return j;
       });
@@ -415,7 +415,7 @@
       setMode("list");
       note.hidden = false;
       note.textContent = "";
-      note.appendChild(el("span", null, "The graph has " + num(cy.nodes().length) + " objects, so it is shown as a list. "));
+      note.appendChild(el("span", null, "Too many objects for a graph (" + num(cy.nodes().length) + "): shown as a list. "));
       var b = el("button", "linkish", "Show the graph anyway");
       b.type = "button";
       b.addEventListener("click", function () { forceGraph = true; note.hidden = true; root.classList.remove("noted"); setMode("graph"); });
@@ -652,7 +652,7 @@
         try { j = JSON.parse(t); } catch (e) {}
         if (!r.ok) {
           if (j && j.reanalyze) reanalyze = true;
-          throw new Error((j && j.error) || "The explorer couldn't answer (" + r.status + ").");
+          throw new Error((j && j.error) || "Explore couldn't load this. Reload the page.");
         }
         return j;
       });
@@ -842,7 +842,7 @@
     if (loadPrepared.busy) return;
     loadPrepared.busy = true;
     fetch("/api/prepared", { credentials: "same-origin" }).then(function (r) {
-      if (!r.ok) throw new Error("The prepared queries couldn't be loaded (" + r.status + ").");
+      if (!r.ok) throw new Error("The prepared queries couldn't be loaded. Reload the page.");
       return r.json();
     }).then(function (d) {
       prep.list = d;
@@ -870,9 +870,7 @@
     p.appendChild(input);
     var lead = el("p", "muted small xp-plead", plural(d.queries.length, "query", "queries") + " from the " + d.library.library + ".");
     lead.appendChild(tipEl("Prepared queries",
-      "Pathwarden ships a pinned copy of the " + d.library.library + " (" + d.library.tag + "). " +
-      "It works offline. Each query names the people who wrote it. " +
-      "The library is © " + d.library.copyright + ", under the MIT License."));
+      "A copy of the " + d.library.library + " (" + d.library.tag + "), built in; works offline."));
     p.appendChild(lead);
     var box = el("div", "xp-plist");
     p.appendChild(box);
@@ -908,7 +906,7 @@
         b.type = "button";
         b.appendChild(el("span", "xp-prow-name", q.name));
         var sub = el("span", "xp-prow-sub");
-        if (q.edit_first) sub.appendChild(el("span", "tag muted-tag", "Edit first"));
+        if (q.edit_first) sub.appendChild(el("span", "tag muted-tag", "Needs editing"));
         if (q.finding) sub.appendChild(el("span", "tag muted-tag", q.finding.rule));
         b.appendChild(sub);
         b.addEventListener("click", function () { prep.item = q; renderQuery(); });
@@ -947,7 +945,7 @@
     var tags = el("div", "xp-tags");
     tags.appendChild(el("span", "tag muted-tag", q.category));
     tags.appendChild(el("span", "tag muted-tag", q.returns === "paths" ? "Paths" : "Objects"));
-    if (q.edit_first) tags.appendChild(el("span", "tag muted-tag", "Edit first"));
+    if (q.edit_first) tags.appendChild(el("span", "tag muted-tag", "Needs editing"));
     p.appendChild(tags);
     if (q.description) {
       var desc = el("p", "xp-summary xp-pdesc clamp", q.description);
@@ -979,8 +977,7 @@
     if (q.acknowledgements.length) fact("By", q.acknowledgements.join(", "));
     var src = el("span");
     src.appendChild(document.createTextNode(lib.library));
-    src.appendChild(tipEl("Source", "Revision " + q.revision + " of this query, from the library's " + lib.tag +
-      " release. ID " + q.guid + ". © " + lib.copyright + ", MIT License."));
+    src.appendChild(tipEl("Source", "Revision " + q.revision + ", " + lib.tag + " release."));
     fact("Source", src);
     var links = q.resources.filter(function (u) { return /^https:\/\//i.test(u); });
     if (links.length) {
@@ -1007,7 +1004,7 @@
       renderQuery();
     }
     if (q.edit_first) {
-      row.appendChild(button("Edit first", "primary", asCypher, "Replace the placeholder, then run it"));
+      row.appendChild(button("Edit", "primary", asCypher, "Replace the placeholder, then run it"));
     } else {
       row.appendChild(button("Run", "primary", function () { runQuery(q); }, "Run the query on this run"));
       row.appendChild(button("Open as Cypher", null, asCypher, "Edit a copy of the query"));
@@ -1123,7 +1120,7 @@
     // would hide it, so it ends.
     if (domainFilter && n.domain && n.domain.toUpperCase() !== domainFilter.toUpperCase()) {
       domainFilter = null;
-      toast("Showing every domain again: " + n.name + " is not in the domain you were exploring.");
+      toast("Showing all domains: " + n.name + " is in another domain.");
     }
     var fresh = cy.getElementById(nid(n.ix)).empty();
     var pos = null;
@@ -1180,11 +1177,11 @@
       if (d.node.t0) tag("Tier Zero", "t0");
       if (d.node.dc) tag("Domain controller", "t0");
       if (d.node.server) tag("Server");
-      if (d.admin_count) tag("adminCount", "warn", "Protected by AdminSDHolder: privileged now or once.");
+      if (d.admin_count) tag("Protected (adminCount)", "warn", "Protected by AdminSDHolder: privileged now or once.");
       if (d.node.disabled) tag("Disabled", "muted-tag");
       if (d.node.ph) tag("Not collected", "muted-tag", "Referenced by other objects but not in the collected data.");
       if (d.broad) tag("Everyone", "warn", "Holds (nearly) every user or computer.");
-      if (d.owned) tag("Owned", "warn", "Marked as owned: Tag_Owned in queries.");
+      if (d.owned) tag("Owned", "warn", "Marked as owned (an attacker controls it).");
       d.zones.forEach(function (z) { tag("Zone: " + z, "zone-tag"); });
       if (tags.childNodes.length) p.appendChild(tags);
 
@@ -1206,23 +1203,23 @@
 
       // Actions
       var acts = el("div", "xp-actions");
-      acts.appendChild(button("Expand outbound", "primary", function () { expand(ix, "out", chosenKinds("out")); }, "What this object controls (double-click a node to expand both ways)"));
+      acts.appendChild(button("Expand outbound", "primary", function () { expand(ix, "out", chosenKinds("out")); }, "What this object controls (double-click an object to expand both ways)"));
       acts.appendChild(button("Expand inbound", "", function () { expand(ix, "in", chosenKinds("in")); }, "Who has rights over this object"));
       if (!d.node.t0) acts.appendChild(button("Path to Tier Zero", "", function () { pathTo(ix, "t0", 1); }));
       if (!d.node.t0) acts.appendChild(button("3 shortest paths", "", function () { pathTo(ix, "t0", 3); }));
-      acts.appendChild(button("Who can reach this", "", function () { loadReach(ix, 0, null); }));
-      acts.appendChild(button(d.owned ? "Not owned" : "Mark as owned", "", function () {
+      acts.appendChild(button("Who can reach it", "", function () { loadReach(ix, 0, null); }));
+      acts.appendChild(button(d.owned ? "Unmark as owned" : "Mark as owned", "", function () {
         post("/owned", { ix: ix, owned: !d.owned }).then(function (o) {
           showOwned({ count: o.count, text: o.text });
           toast(o.text);
           renderObject(ix);
         }).catch(fail);
-      }, "Owned objects are Tag_Owned in queries on this environment's runs."));
+      }, "Marked for this environment; queries can match it as Tag_Owned."));
       var inBasket = !!basket[ix];
       acts.appendChild(button(inBasket ? "Remove from zone draft" : "Add to zone draft", "", function () {
         toggleBasket(d.node);
         renderObject(ix);
-      }, "Collect objects for a new Privilege Zone (Suggested zones tab)"));
+      }, "Add to a draft for a new zone (Suggested zones tab)"));
       p.appendChild(acts);
 
       // Relationship counts, as kind filters for expanding.
@@ -1278,7 +1275,7 @@
       if (mode === "graph") fit(cy.getElementById(nid(ix)).closedNeighborhood(), cy.getElementById(nid(ix)));
       var what = dir === "out" ? "outbound" : dir === "in" ? "inbound" : "";
       if (d.total === 0) toast("No " + (what ? what + " " : "") + "relationships" + (kinds && kinds.length ? " of those kinds." : "."));
-      else if (d.total > d.shown) toast("Showing " + num(d.shown) + " of " + num(d.total) + " " + (what ? what + " " : "") + "relationships, Tier Zero first. Pick kinds on the Object tab to narrow it, or use List view.");
+      else if (d.total > d.shown) toast("Showing " + num(d.shown) + " of " + num(d.total) + " " + (what ? what + " " : "") + "relationships, Tier Zero first. Pick kinds to narrow it.");
     }).catch(fail);
   }
 
@@ -1363,10 +1360,10 @@
         }
         var extra = el("div", "xp-reach-extra");
         var how = el("span", "xp-how");
-        how.appendChild(el("b", null, plural(r.hops, "hop", "hops")));
-        how.appendChild(document.createTextNode(" · first "));
+        how.appendChild(el("b", null, plural(r.hops, "step", "steps")));
+        how.appendChild(document.createTextNode(" · first step "));
         how.appendChild(el("code", null, r.first.k));
-        how.appendChild(document.createTextNode(" → " + shortName(r.via)));
+        how.appendChild(document.createTextNode(" to " + shortName(r.via)));
         extra.appendChild(how);
         var showPath = el("button", "linkish", "Show path");
         showPath.type = "button";
@@ -1377,7 +1374,7 @@
       list.setAttribute("data-last", lastClass || "");
       var more = $("xp-reach-more");
       more.hidden = reachState.next >= reachState.total;
-      more.textContent = "Show more (" + num(reachState.total - reachState.next) + " left)";
+      more.textContent = "Show more (" + num(reachState.total - reachState.next) + ")";
     }).catch(function (e) {
       if (ix !== reachFor) return;   // another object's, asked for since
       reachFor = null;               // so the tab tries again
@@ -1402,8 +1399,7 @@
       note.appendChild(el("strong", null, roast + " needs no path. "));
       note.appendChild(document.createTextNode((current.finding.rule === "PW-006"
         ? "Any domain account can request this account's ticket and crack its password offline."
-        : "Anyone on the network can request this account's authentication data, without credentials, and crack its password offline.")
-        + (d.total ? " The objects below are the ones with a path on the graph, in addition." : "")));
+        : "Anyone on the network can request this account's authentication data, without credentials, and crack its password offline.")));
       p.appendChild(note);
     }
     if (d.total) {
@@ -1525,11 +1521,11 @@
     var acts = el("div", "xp-actions");
     if (d.path.nodes.length) {
       var start = d.path.nodes[0];
-      acts.appendChild(button("Who else can reach the start", "primary", function () { loadReach(start, 0, null); },
+      acts.appendChild(button("Who can reach the start", "primary", function () { loadReach(start, 0, null); },
         "Every object with a route to where this path starts, unprivileged users first"));
       acts.appendChild(button("Other paths", "", function () {
         pathTo(start, d.path.nodes[d.path.nodes.length - 1], 3);
-      }, "The three shortest routes between the same two objects"));
+      }, "The 3 shortest paths between the same two objects"));
     }
     if (d.entry.length) {
       acts.appendChild(button("Show entry points", "", function () {
@@ -1539,7 +1535,7 @@
         else layoutPaths(added.map(function (ix) { return [ix]; }));
         afterChange();
         if (mode === "graph") fit();
-      }, "Put the objects whose control abuses this finding on the graph"));
+      }, "Add the entry points to the graph"));
     }
     p.appendChild(acts);
 
@@ -1567,7 +1563,7 @@
       });
       p.appendChild(ol);
     }
-    list("Entry points", d.entry, f.entry_total, "Controlling any of these abuses the finding.");
+    list("Entry points", d.entry, f.entry_total, "Whoever controls one of these can abuse the finding.");
     list("Affected", d.affected, f.affected_total);
     list("Leads to", d.hits, f.hits_total);
     if (!d.path.nodes.length && !d.affected.length && !d.hits.length) {
@@ -1583,7 +1579,7 @@
       $("xp-next").disabled = query.sel >= n - 1;
       $("xp-prev").title = "Previous path ( [ )";
       $("xp-next").title = "Next path ( ] )";
-      sev.textContent = "Query";
+      sev.textContent = "Query result";
       sev.className = "pill";
       sev.hidden = false;
       $("xp-ctitle").textContent = query.title || known[x.nodes[0]].name + " to " + known[x.nodes[x.nodes.length - 1]].name;
@@ -1599,14 +1595,14 @@
     if (current) {
       sev.className = "pill " + current.finding.severity;
       sev.appendChild(el("span", "dot"));
-      sev.appendChild(document.createTextNode(current.finding.severity));
+      sev.appendChild(document.createTextNode(cap(current.finding.severity)));
       sev.hidden = false;
       $("xp-ctitle").textContent = current.finding.title;
       $("xp-pos").textContent = num(i + 1) + " of " + num(current.count);
     } else {
       sev.hidden = true;
-      $("xp-ctitle").textContent = findings.length ? "Page through the findings" : "No findings";
-      $("xp-pos").textContent = findings.length ? num(findings.length) + " findings" : "";
+      $("xp-ctitle").textContent = findings.length ? "Findings" : "No findings";
+      $("xp-pos").textContent = findings.length ? plural(findings.length, "finding", "findings") : "";
     }
     var items = document.querySelectorAll("#xp-flist li");
     Array.prototype.forEach.call(items, function (li) {
@@ -1656,7 +1652,7 @@
       b.type = "button";
       b.appendChild(el("span", "xp-fnum muted", String(i + 1)));
       var d = el("span", "dot " + f.severity);
-      d.title = f.severity;
+      d.title = cap(f.severity);
       b.appendChild(d);
       var t = el("span", "xp-ftitle");
       t.appendChild(el("span", "xp-rule", f.rule));
@@ -1691,7 +1687,7 @@
     if (suggestionsLoaded) return;
     suggestionsLoaded = true;
     var p = panel("zones");
-    p.appendChild(el("p", "muted small", "Looking for objects that belong in Tier 1 or Tier 2…"));
+    p.appendChild(el("p", "muted small", "Finding zone candidates…"));
     get("/suggestions").then(renderSuggestions).catch(function (e) {
       suggestionsLoaded = false;
       p.textContent = e.message;
@@ -1759,7 +1755,7 @@
       var b = basket[ix];
       var li = el("li");
       li.appendChild(el("span", "xp-pick-name", b.name));
-      li.appendChild(el("span", "muted small", b.as === "group" ? "group and members" : b.as === "ou" ? "OU and contents" : "object"));
+      li.appendChild(el("span", "muted small", b.as === "group" ? "Group and everyone in it" : b.as === "ou" ? "OU and everything below it" : "Just this object"));
       var x = el("button", "fl-remove", "×");
       x.type = "button";
       x.setAttribute("aria-label", "Remove " + b.name);
@@ -1776,9 +1772,9 @@
     name.setAttribute("aria-label", "Zone name");
     row.appendChild(name);
     row.appendChild(button("Create zone from these", "primary", function () { createZone(name.value); },
-      "Opens the Zone wizard with these objects; nothing is saved until you save there."));
+      "Opens a new zone with these. Nothing is saved yet."));
     box.appendChild(row);
-    box.appendChild(el("p", "muted small", "Opens the Zone wizard pre-filled. Nothing is saved until you save there."));
+    box.appendChild(el("p", "muted small", "Opens a new zone with these. Nothing is saved yet."));
   }
 
   function refreshCount() {
@@ -1809,7 +1805,7 @@
       body: JSON.stringify(body)
     }).then(function (r) {
       return r.json().then(function (j) {
-        if (!r.ok) throw new Error(j.error || "Couldn't hand over the zone.");
+        if (!r.ok) throw new Error(j.error || "Couldn't open the new zone. Try again.");
         location.href = j.url;
       });
     }).catch(fail);
@@ -1879,7 +1875,7 @@
     b.title = n.name;
     b.addEventListener("click", function () { select(n.ix); });
     td.appendChild(b);
-    if (n.t0) td.appendChild(el("span", "tag t0", "T0"));
+    if (n.t0) td.appendChild(el("span", "tag t0", "Tier Zero"));
     return td;
   }
 
@@ -2150,7 +2146,7 @@
     b.type = "button";
     b.setAttribute("data-def", DEF[key] || key);
     b.title = DEF[key] || key;
-    b.setAttribute("aria-label", "About " + (about || "this"));
+    b.setAttribute("aria-label", "About: " + (about || "this"));
     return b;
   }
   var pop = null;
@@ -2197,13 +2193,13 @@
   }, true);
   // An ⓘ inside the map: focusable, a button by role, named for its term.
   function svgInfo(parent, x, y, key, about) {
-    var ic = svg("text", { x: x, y: y, "class": "fm-si", tabindex: 0, role: "button", "aria-label": "About " + about, "data-def": DEF[key] || "" }, parent);
+    var ic = svg("text", { x: x, y: y, "class": "fm-si", tabindex: 0, role: "button", "aria-label": "About: " + about, "data-def": DEF[key] || "" }, parent);
     ic.textContent = "ⓘ";
     ic.appendChild(svg("title", {})).textContent = DEF[key] || "";
     return ic;
   }
   function svgInfoSpan(parent, key, about) {
-    var ic = svg("tspan", { "class": "fm-si", tabindex: 0, role: "button", "aria-label": "About " + about, "data-def": DEF[key] || "" }, parent);
+    var ic = svg("tspan", { "class": "fm-si", tabindex: 0, role: "button", "aria-label": "About: " + about, "data-def": DEF[key] || "" }, parent);
     ic.textContent = "ⓘ";
     return ic;
   }
@@ -2263,7 +2259,7 @@
     $("fm-detail").textContent = " · " + h.detail;
     // Trusted domains not collected: collect them, from the chip.
     if (h.not_collected > 0) {
-      var collect = el("a", "fm-collect", "Collect them");
+      var collect = el("a", "fm-collect", "Collect these domains");
       collect.href = "/runs/" + encodeURIComponent(RUN) + "/collect";
       $("fm-detail").appendChild(document.createTextNode(" "));
       $("fm-detail").appendChild(collect);
@@ -2777,7 +2773,7 @@
     var part = !st.tall && (vb.x > full.x + 1 || vb.y > full.y + 1 || vb.x + vb.w < full.x + full.w - 1 || vb.y + vb.h < full.y + full.h - 1);
     var hint = $("fm-hint");
     if (!hint) {
-      hint = el("p", "fm-hint", "Part of the map, at a readable size: drag to move around, \u2212 to see more.");
+      hint = el("p", "fm-hint", "Drag to move around; zoom out to see the whole map.");
       hint.id = "fm-hint";
     }
     if (hint.parentNode !== box) box.appendChild(hint);
@@ -2927,7 +2923,7 @@
     var f = findingOf(t);
     var top = el("div", "xp-fhead");
     if (f) top.appendChild(sevPill(f.severity));
-    top.appendChild(el("span", "xp-rule", t.findings.length ? "TRUST · PW-012" : "TRUST"));
+    top.appendChild(el("span", "xp-rule", t.findings.length ? "Trust · PW-012" : "Trust"));
     p.appendChild(top);
     p.appendChild(trustHeading(t, el("h2", "xp-name")));
     var rec = t.records.length > 1 ? "Both domains recorded it." : t.records.length ? "Only " + t.records[0].source + " recorded it." : "";
@@ -2951,7 +2947,7 @@
       var u = el("div", "fm-callout fm-unknown");
       u.appendChild(iconEl("i-info"));
       var ut = el("p");
-      ut.appendChild(el("strong", null, "Whether SID history can be forged here is not in the data"));
+      ut.appendChild(el("strong", null, "SID filtering unknown"));
       ut.appendChild(infoBtn("unknown", "SID filtering unknown"));
       ut.appendChild(document.createTextNode(". " + t.pw012_note + ". " + DEF.not_a_path_step));
       u.appendChild(ut);
@@ -2962,8 +2958,7 @@
       ft.appendChild(el("strong", null, "Forest takeover"));
       ft.appendChild(infoBtn("takeover", "forest takeover"));
       var missing = (t.flags || []).filter(function (x) { return x.kind === "not_collected"; })[0];
-      ft.appendChild(document.createTextNode(": inside one forest, so whoever controls either domain controls the forest." +
-        (missing ? " " + missing.text + "." : "")));
+      ft.appendChild(document.createTextNode(missing ? ". " + missing.text + "." : "."));
       p.appendChild(ft);
     }
 
@@ -2998,14 +2993,14 @@
         li.appendChild(line);
         ul.appendChild(li);
       });
-      if (!t.ways.length) ul.appendChild(el("li", "muted", "Not in use (disabled)."));
+      if (!t.ways.length) ul.appendChild(el("li", "muted", "Disabled."));
       p.appendChild(ul);
     }
 
     var hc = section(p, "What crosses it");
     hc.appendChild(infoBtn("crossing", "what crosses it"));
     if (t.crossing_note) p.appendChild(el("p", "muted small fm-t0", t.crossing_note + "."));
-    crossingList(p, t.crossing, t.intra_forest ? "Nothing else crosses it." : "Nothing in the data crosses it.");
+    crossingList(p, t.crossing, "Nothing crosses it.");
 
     if (FM.indirect.length) {
       section(p, "Rights between domains no trust joins directly");
@@ -3026,7 +3021,7 @@
       var b = el("button");
       b.type = "button";
       b.appendChild(trustHeading(u, el("span", "fm-tn")));
-      b.appendChild(el("span", "muted", u.trust_type + " · " + (u.intra_forest ? "inside the forest" : "between forests")));
+      b.appendChild(el("span", "muted", u.trust_type + " · " + (u.intra_forest ? "inside one forest" : "between forests")));
       var tag = tagOf(u);
       if (tag) b.appendChild(el("span", "tag " + tag.cls, tag.text));
       b.addEventListener("click", function () { selectTrust(k); });
@@ -3064,7 +3059,7 @@
       li.appendChild(el("span", null, c.counts));
       var b = el("button", "linkish", "Show");
       b.type = "button";
-      b.title = (c.rights || []).length ? "Draw these rights on the object graph" : "Analyze the collection again to list them";
+      b.title = (c.rights || []).length ? "Draw these rights on the object graph" : "This run doesn't list these rights; analyze the collection again.";
       b.disabled = !(c.rights || []).length;
       b.addEventListener("click", function () { showCrossing(c); });
       li.appendChild(b);
@@ -3109,7 +3104,7 @@
       td.appendChild(el("span", "muted fm-role", roleText(d) + " · forest " + firstLabel(FM.forests[d.forest].name)));
       tr.appendChild(td);
       var v = el("td", "num");
-      if (!d.paths) v.appendChild(el("span", "muted", d.collected ? "no accounts" : "not collected"));
+      if (!d.paths) v.appendChild(el("span", "muted", d.collected ? "no accounts outside Tier Zero" : "not collected"));
       else {
         v.appendChild(document.createTextNode(num(d.exposed) + " of " + num(d.relevant_population) + " "));
         v.appendChild(el("span", "muted", "· " + d.paths.percent));
@@ -3167,7 +3162,7 @@
       var b = el("button");
       b.type = "button";
       b.appendChild(trustHeading(u, el("span", "fm-tn")));
-      b.appendChild(el("span", "muted", u.trust_type + " · " + (u.intra_forest ? "inside the forest" : "between forests")));
+      b.appendChild(el("span", "muted", u.trust_type + " · " + (u.intra_forest ? "inside one forest" : "between forests")));
       b.addEventListener("click", function () { selectTrust(k); });
       li.appendChild(b);
       ul.appendChild(li);
@@ -3196,7 +3191,7 @@
   // A crossing's rights on the object graph: principals on the left, what
   // they hold rights over on the right.
   function showCrossing(c) {
-    busy(true, "Drawing what crosses");
+    busy(true, "Drawing the rights across this trust…");
     get("/crossing", { from: c.from, to: c.to }).then(function (d) {
       busy(false);
       setMode("graph");
@@ -3218,7 +3213,7 @@
       var p = panel("finding");
       p.appendChild(el("h2", "xp-name", "What crosses from " + d.from + " into " + d.to));
       p.appendChild(el("p", "xp-summary", d.counts + (d.listed < d.counted ? ". The first " + num(d.listed) + " are drawn." : ".")));
-      var back = button("Back to the forest", "", function () { setMode("forest"); });
+      var back = button("Back to Forest view", "", function () { setMode("forest"); });
       var acts = el("div", "xp-actions");
       acts.appendChild(back);
       p.appendChild(acts);
@@ -3238,7 +3233,7 @@
   window.addEventListener("resize", function () { cy.resize(); });
   showTab("finding");
   panel("finding").appendChild(el("p", "muted small", "Loading…"));
-  busy(true, "Loading the graph");
+  busy(true, "Loading the graph…");
   get("").then(function (d) {
     busy(false);
     info = d;
@@ -3289,7 +3284,7 @@
     var ctx = el("li", "xp-lg-ctx");
     ctx.appendChild(el("span", "lg lg-ctx"));
     ctx.appendChild(document.createTextNode("Context only (OpenGraph)"));
-    ctx.title = "A relationship from an OpenGraph file that no trusted mapping pack makes an attack path";
+    ctx.title = "From an OpenGraph file; not part of any attack path until its mapping is trusted.";
     legend.appendChild(ctx);
     sources.sort().forEach(function (s) {
       var li = el("li", "xp-src");
@@ -3314,7 +3309,7 @@
 
   function intro() {
     var p = panel("finding");
-    p.appendChild(el("h2", "xp-name", "Explore " + num(info.objects) + " objects"));
-    p.appendChild(el("p", "muted small", "Open a finding with Previous and Next, or search for any object. Click an object for its details; double-click to expand it."));
+    p.appendChild(el("h2", "xp-name", num(info.objects) + " objects in this run"));
+    p.appendChild(el("p", "muted small", "Open a finding, or search for an object. Double-click an object to expand it."));
   }
 })();

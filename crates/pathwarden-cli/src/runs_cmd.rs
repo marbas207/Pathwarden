@@ -393,7 +393,7 @@ fn print_change(lists: &ExposureLists) {
                 hops_words(a.hops()),
                 ui::safe(&path_words(&a.path)),
                 match step {
-                    Some(n) => format!("plan step {n} cuts it off"),
+                    Some(n) => format!("step {n} cuts it off"),
                     None => exposed::NO_STEP.to_string(),
                 }
             );
@@ -497,7 +497,7 @@ fn show(
             None => bail!(
                 "The remediation path of run {} has {}.",
                 row.id,
-                pathwarden_core::text::count(lists.steps.len(), "plan step", "plan steps")
+                pathwarden_core::text::count(lists.steps.len(), "step", "steps")
             ),
         },
     };
@@ -641,7 +641,7 @@ fn show(
             print_change(lists);
             if !lists.steps.is_empty() {
                 println!(
-                    "\n`pathwarden runs show {} --step N` lists the accounts plan step N of the remediation path cuts off.",
+                    "\n`pathwarden runs show {} --step N` lists the accounts step N of the remediation path cuts off.",
                     ui::safe(shown_id(&row))
                 );
             }

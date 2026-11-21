@@ -161,10 +161,7 @@ fn storage_import_and_keep_local_from_the_terminal() {
     assert!(old[0]["created_at"].is_i64(), "{v}");
     let old = old[0]["id"].as_str().unwrap().to_string();
     let text = ok(&run(&dir, &["history", "keep-local", "--workspace", "ws"]));
-    assert!(
-        text.contains("1 older run from before the history's latest run"),
-        "{text}"
-    );
+    assert!(text.contains("1 older run can't be added"), "{text}");
     assert!(
         !text.contains("every analysis in the app is in the history"),
         "{text}"

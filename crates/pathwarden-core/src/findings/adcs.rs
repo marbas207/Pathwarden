@@ -498,7 +498,7 @@ fn finding(ctx: &Context, rule: &'static str, m: &Merged) -> Option<Finding> {
             format!(
                 "{t_name} is published by {ca_name}, lets the enrollee supply the certificate subject, allows \
                  client authentication, and needs no manager approval. {who} can request a certificate as any \
-                 user, including Domain Admins, and log on with it."
+                 user, including Domain Admins, and sign in with it."
             ),
             format!(
                 "On the certificate template {t_short}, set Subject Name to 'Build from this Active Directory \

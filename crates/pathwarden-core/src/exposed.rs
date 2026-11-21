@@ -113,7 +113,7 @@ pub const LISTED: usize = 1_000;
 
 /// An account that now reaches Tier Zero through no step of the plan: what
 /// the report, the app and `runs show` say in place of its step.
-pub const NO_STEP: &str = "No step cuts it off";
+pub const NO_STEP: &str = "No step cuts it";
 
 /// Accounts a report lists across all its steps at most: past it, later
 /// steps list fewer, or none ([`ExposureLists::listed_per_step`]).

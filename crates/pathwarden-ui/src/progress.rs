@@ -53,6 +53,7 @@ use crate::retest_ui::{env_key, open_fingerprints};
 use crate::run_data;
 use crate::server::Shared;
 use crate::workspace::{RunSummary, Workspace};
+use pathwarden_core::text::count;
 
 const PROGRESS_CSS: &str = include_str!("assets/progress.css");
 const PROGRESS_JS: &str = include_str!("assets/progress.js");
@@ -234,7 +235,7 @@ fn environments(runs: &[RunSummary], snap: &Snapshot, env_name: &str) -> Vec<Env
             None => {
                 let domains = history_ui::domains_for(&scopes, runs, snap.history.last.as_ref());
                 let label = if domains.is_empty() {
-                    "Recorded environment".to_string()
+                    "Unnamed environment".to_string()
                 } else {
                     point_env(&domains)
                 };
@@ -450,7 +451,7 @@ fn changes_picker(env: &str, range: Range, changes: Changes) -> String {
     let mut b = String::from(r#"<div class="pv-pick">"#);
     let _ = write!(
         b,
-        r#"<span class="pv-over" role="group" aria-label="What changed over"><a href="{last}"{cur_last}>Since the last run</a><a href="{over}"{cur_over}>Over the {span}</a></span>"#,
+        r#"<span class="pv-over" role="group" aria-label="What changed over"><a href="{last}"{cur_last}>Since the last run</a><a href="{over}"{cur_over}>{span}</a></span>"#,
         last = esc(&href_changes(env, range, Changes::LastRun)),
         over = esc(&href_changes(env, range, Changes::Range)),
         cur_last = if matches!(changes, Changes::LastRun | Changes::Backwards(..)) {
@@ -474,7 +475,7 @@ fn changes_picker(env: &str, range: Range, changes: Changes) -> String {
     };
     let _ = write!(
         b,
-        r#"<form class="pv-dates" method="get" action="/progress"><input type="hidden" name="env" value="{env}"><input type="hidden" name="range" value="{range}"><label>From <input type="date" name="from" value="{from}"></label><label>To <input type="date" name="to" value="{to}"></label><span class="muted small">UTC days</span><button type="submit" class="btn small-btn">Show</button></form></div>"#,
+        r#"<form class="pv-dates" method="get" action="/progress"><input type="hidden" name="env" value="{env}"><input type="hidden" name="range" value="{range}"><label>From <input type="date" name="from" value="{from}"></label><label>To <input type="date" name="to" value="{to}"></label><span class="muted small">Dates are UTC.</span><button type="submit" class="btn small-btn">Show</button></form></div>"#,
         env = esc(env),
         range = range.key(),
     );
@@ -484,14 +485,14 @@ fn changes_picker(env: &str, range: Range, changes: Changes) -> String {
     b
 }
 
-/// "week", "month", "3 months", "whole history": the range in "Over the
-/// month".
+/// "Over the week", "Over the month", "Over 3 months", "Over all runs":
+/// the What changed card's switch, as the range switch names them.
 fn range_words(r: Range) -> &'static str {
     match r {
-        Range::Week => "week",
-        Range::Month => "month",
-        Range::Quarter => "3 months",
-        Range::All => "whole history",
+        Range::Week => "Over the week",
+        Range::Month => "Over the month",
+        Range::Quarter => "Over 3 months",
+        Range::All => "Over all runs",
     }
 }
 
@@ -651,7 +652,7 @@ fn body(
     if total < 2 {
         let _ = write!(
             b,
-            r#"<div class="empty card pv-one">{}<p><strong>One run so far</strong>: {run}.<br><span class="muted">The charts need two runs. Fix something, then analyze this environment again (or let the schedule do it): the change shows up here.</span></p><p class="empty-actions"><a class="btn primary" href="/collect">{} Run an analysis</a></p></div>"#,
+            r#"<div class="empty card pv-one">{}<p><strong>One run so far</strong>: {run}.<br><span class="muted">The charts need a second run.</span></p><p class="empty-actions"><a class="btn primary" href="/collect">{} Analyze</a></p></div>"#,
             icon("i-trend"),
             icon("i-upload"),
             run = all.last().map(|p| run_cell(&p.run)).unwrap_or_default(),
@@ -710,9 +711,13 @@ fn source_tip(snap: &Snapshot, e: &Env) -> String {
             "source",
             "Where these runs come from",
             &format!(
-                "From the run history in {}{}: runs started here, from the command line and on a schedule.",
+                "From the run history in {}{}.",
                 crate::workspace::shown_path(&loc.dir),
-                if loc.git.is_some() { " (a git repository)" } else { "" }
+                if loc.git.is_some() {
+                    " (a git repository)"
+                } else {
+                    ""
+                }
             ),
         ),
         _ => String::new(),
@@ -737,7 +742,7 @@ fn source_note(snap: &Snapshot, e: &Env) -> String {
     }
     if e.local_only > 0 {
         parts.push(format!(
-            r#"{} earlier {} of this environment {} local only and not charted. <a href="/automate/history#earlier">Import or keep them local</a>"#,
+            r#"{} earlier {} of this environment {} local only and not charted. <a href="/automate/history#earlier">Choose what to do with them</a>"#,
             num(e.local_only),
             if e.local_only == 1 { "run" } else { "runs" },
             if e.local_only == 1 { "is" } else { "are" },
@@ -865,7 +870,8 @@ fn kpis(b: &mut String, all: &[Point], pts: &[Point]) {
         None => r#"<span class="kpi-sub">the first run</span>"#.to_string(),
     };
     let another_way =
-        r#"<span class="kpi-sub">the last run counted these another way</span>"#.to_string();
+        r#"<span class="kpi-sub">not comparable: the last run counted differently</span>"#
+            .to_string();
     let changed = prev.map(|p| since::compare(&p.hp, l, None));
     let not_compared = r#"<span class="kpi-sub">not compared with the last run</span>"#.to_string();
     let counts = |d: since::Delta| delta(d.before as f64, d.after as f64, true, count_fmt);
@@ -880,13 +886,13 @@ fn kpis(b: &mut String, all: &[Point], pts: &[Point]) {
         .unwrap_or_default();
     let steps = l.plan.map(|s| s.steps);
     let plan = match (steps, &changed) {
-        (None, _) => r#"<span class="kpi-sub">not recorded for this run</span>"#.to_string(),
+        (None, _) => r#"<span class="kpi-sub">not recorded in this run</span>"#.to_string(),
         (Some(_), None) => since_last(None),
         (Some(_), Some(c)) if !c.comparable() => not_compared.clone(),
         (Some(_), Some(c)) => match c.changes_to_zero {
             Some(p) => since_last(Some(counts(p.steps))),
             None if c.basis_changed => another_way.clone(),
-            None => r#"<span class="kpi-sub">not recorded the run before</span>"#.to_string(),
+            None => r#"<span class="kpi-sub">not recorded in the last run</span>"#.to_string(),
         },
     } + &over(&|p| p.plan.map(|s| s.steps as f64), true, &count_fmt).unwrap_or_default();
     let open = match &changed {
@@ -900,7 +906,7 @@ fn kpis(b: &mut String, all: &[Point], pts: &[Point]) {
         (Some(_), Some(c)) if !c.comparable() => not_compared.clone(),
         (Some(_), Some(c)) => match c.protection_score {
             Some(sh) => since_last(Some(delta(sh.before, sh.after, false, pts_fmt))),
-            None => r#"<span class="kpi-sub">not recorded the run before</span>"#.to_string(),
+            None => r#"<span class="kpi-sub">not recorded in the last run</span>"#.to_string(),
         },
     } + &over(&|p| p.protection_score, false, &pts_fmt).unwrap_or_default();
     // The objects behind the share, as context (the share is exact: the
@@ -916,18 +922,18 @@ fn kpis(b: &mut String, all: &[Point], pts: &[Point]) {
         b,
         r#"<div class="kpis pv-kpis">
 <div class="kpi {band}" title="{reason}"><span class="kpi-label">With an attack path to Tier Zero · {grade}{t1}</span><span class="kpi-value">{exposed_n}</span>{exposed}</div>
-<div class="kpi"><span class="kpi-label">Plan steps{t2}</span><span class="kpi-value">{steps}</span>{plan}</div>
+<div class="kpi"><span class="kpi-label">Remediation path{t2}</span><span class="kpi-value">{steps}</span>{plan}</div>
 <div class="kpi"><span class="kpi-label">Open findings{t3}</span><span class="kpi-value">{open_n}</span>{open}</div>
 <div class="kpi"><span class="kpi-label">Tier Zero protected{t4}</span><span class="kpi-value">{score_n}</span>{score}</div>
 </div>"#,
         band = pages::grade_class(r),
         reason = esc(&r.status_reason()),
         grade = r.grade().as_str(),
-        t1 = tip("k-exposed", "With an attack path to Tier Zero", "Enabled users and computers outside Tier Zero with a full path to it. The status comes from the paths and the open findings, never from a share."),
+        t1 = tip("k-exposed", "With an attack path to Tier Zero", "Enabled users and computers outside Tier Zero with a full path to it. The status comes from the paths and the open findings."),
         exposed_n = num(l.tier_zero_exposed),
-        t2 = tip("k-plan", "Plan steps", "The fewest changes that cut every attack path to Tier Zero, the one that cuts the most first."),
+        t2 = tip("k-plan", "Remediation path", "The fewest steps that cut every attack path to Tier Zero, biggest cut first."),
         steps = steps.map_or("–".to_string(), num),
-        t3 = tip("k-open", "Open findings", "Findings not fixed or accepted as a risk, attack path and hygiene alike."),
+        t3 = tip("k-open", "Open findings", "Findings not fixed and not an accepted risk, attack path and hygiene alike."),
         open_n = num(open_of(l)),
         t4 = tip("k-score", "Tier Zero protected", pathwarden_core::posture::PROTECTED_DEFINITION),
         score_n = l
@@ -969,7 +975,7 @@ fn since_card(
 fn named_in(b: &mut String, href: &str) {
     let _ = write!(
         b,
-        r#"<p class="small pv-named"><a href="{}">Name them in the report's Findings tab</a></p>"#,
+        r#"<p class="small pv-named"><a href="{}">See them in the report</a></p>"#,
         esc(href)
     );
 }
@@ -1001,7 +1007,7 @@ fn introduced_card(
         tip(
             "introduced",
             "Introduced",
-            "First seen by Pathwarden: each finding, object and path carries the date of the run that found it, not when it changed in the directory. The report's Findings tab names the objects and paths."
+            "Dated by the run that first saw it, not by when it changed in Active Directory."
         ),
     );
     line_list(b, &intro.lines());
@@ -1010,7 +1016,7 @@ fn introduced_card(
     }
     // The days and dates are those `pathwarden changes` and the report use:
     // UTC, not the local time the charts show.
-    b.push_str(r#"<p class="muted small pv-utc">Days and dates here are UTC.</p>"#);
+    b.push_str(r#"<p class="muted small pv-utc">Dates are UTC.</p>"#);
     if let Some(run) = report {
         named_in(b, &report_link(run, period, latest));
     }
@@ -1352,7 +1358,7 @@ fn empty_figure(
 ) -> String {
     format!(
         r#"<figure class="pv card {class} pv-empty"><figcaption><div class="pv-cap"><div><h2 class="sub">{t}{tip}</h2><p class="muted small">{sub}</p></div></div></figcaption>
-<p class="pv-note-line muted small">{note}</p><p class="empty-actions"><a class="btn" href="/collect">{icon} Run an analysis to record it</a></p></figure>"#,
+<p class="pv-note-line muted small">{note}</p><p class="empty-actions"><a class="btn" href="/collect">{icon} Analyze again to record it</a></p></figure>"#,
         t = esc(title),
         tip = tip(tip_id, title, definition),
         icon = icon("i-upload"),
@@ -1391,7 +1397,7 @@ fn starts_note(pts: &[Point], has: impl Fn(&Point) -> bool, what: &str) -> Strin
             "Runs before {} didn't record {what}: the line starts at the first run that did.",
             pages::time_as(pts[i].hp.at, "day")
         ),
-        None => format!("No run in this range recorded {what}; runs from this version on do."),
+        None => format!("No run in this range recorded {what}. New runs will."),
     }
 }
 
@@ -1691,7 +1697,7 @@ fn tiers_chart(pts: &[Point]) -> String {
     for z in &zones {
         let _ = write!(table, "<th>{}</th>", esc(z));
     }
-    table.push_str("<th>Share of active accounts</th></tr></thead><tbody>");
+    table.push_str("<th>Share of enabled accounts</th></tr></thead><tbody>");
     for p in pts {
         let _ = write!(
             table,
@@ -1733,7 +1739,7 @@ fn tiers_chart(pts: &[Point]) -> String {
         class: "pv-tiers",
         title,
         tip_id: "c-tiers",
-        definition: "For each tier, the enabled users and computers outside it (and outside Tier Zero) with a path into it. Log scale: each step up is ten times more, so a drop from thousands to tens stays visible. A run marked not targeted did not read sessions or local groups, so it counts fewer paths.",
+        definition: "Enabled users and computers outside each tier with a path into it. Log: each step is ten times more. Not collected: the run didn't read sessions or local groups.",
         sub: "Enabled users and computers outside each tier with a path into it, per run. Lower is better.",
         legend: &legend(&items),
         extra: &extra,
@@ -1745,14 +1751,21 @@ fn tiers_chart(pts: &[Point]) -> String {
 }
 
 const PLAN_DEF: &str =
-    "The fewest changes that cut every attack path to Tier Zero, the one that cuts the most first.";
-const PLAN_SUB: &str = "How many steps the remediation path needs to cut every attack path to Tier Zero: the size of the job left.";
+    "The fewest steps that cut every attack path to Tier Zero, biggest cut first.";
+const PLAN_SUB: &str = "Steps left to cut every attack path to Tier Zero. Lower is better.";
 
 fn plan_chart(pts: &[Point]) -> String {
     let n = pts.len();
-    let note = starts_note(pts, |p| p.hp.plan.is_some(), "the remediation plan");
+    let note = starts_note(pts, |p| p.hp.plan.is_some(), "the remediation path");
     if pts.iter().all(|p| p.hp.plan.is_none()) {
-        return empty_figure("pv-plan", "Plan steps", "c-plan", PLAN_DEF, PLAN_SUB, &note);
+        return empty_figure(
+            "pv-plan",
+            "Remediation path",
+            "c-plan",
+            PLAN_DEF,
+            PLAN_SUB,
+            &note,
+        );
     }
     let (mut s, mut axis) = (String::new(), String::new());
     let max = pts
@@ -1767,7 +1780,7 @@ fn plan_chart(pts: &[Point]) -> String {
     let first = pts.iter().position(|p| p.hp.plan.is_some());
     let last = pts.iter().rposition(|p| p.hp.plan.is_some());
     let mut table = String::from(
-        "<thead><tr><th>Run</th><th>Plan steps</th><th>Accounts left after them</th></tr></thead><tbody>",
+        "<thead><tr><th>Run</th><th>Steps</th><th>Accounts left after them</th></tr></thead><tbody>",
     );
     for (i, p) in pts.iter().enumerate() {
         let cx = slot_x(i, n);
@@ -1791,11 +1804,15 @@ fn plan_chart(pts: &[Point]) -> String {
                         ty = y - 7.0
                     );
                 }
-                let mut tl = vec![when(p.hp.at), format!("{} plan steps", num(pl.steps))];
+                let mut tl = vec![when(p.hp.at), count(pl.steps, "step", "steps")];
                 if pl.exposed_after > 0 {
                     tl.push(format!(
-                        "{} accounts still reach Tier Zero after them",
-                        num(pl.exposed_after)
+                        "{} Tier Zero after them",
+                        count(
+                            pl.exposed_after,
+                            "account still reaches",
+                            "accounts still reach"
+                        )
                     ));
                 }
                 hit(&mut s, i, n, MT, plot_h(), &p.run, &tl);
@@ -1828,13 +1845,13 @@ fn plan_chart(pts: &[Point]) -> String {
     table.push_str("</tbody>");
     Figure {
         class: "pv-plan",
-        title: "Plan steps",
+        title: "Remediation path",
         tip_id: "c-plan",
         definition: PLAN_DEF,
         sub: PLAN_SUB,
-        legend: &legend(&[("plan", "Changes in the plan".into())]),
+        legend: &legend(&[("plan", "Remediation path".into())]),
         extra: "",
-        svg: &svg("Plan steps", H, &s, &axis, Axis::Y, ""),
+        svg: &svg("Remediation path", H, &s, &axis, Axis::Y, ""),
         note: &note,
         table: &table,
     }
@@ -1929,7 +1946,7 @@ fn findings_chart(pts: &[Point]) -> String {
         };
         let mut tl = vec![
             when(p.hp.at),
-            format!("{} open findings", num(open_of(&p.hp))),
+            count(open_of(&p.hp), "open finding", "open findings"),
             format!("{ap} on attack paths"),
         ];
         let _ = write!(table, "<tr><td>{}</td>", run_cell(&p.run));
@@ -1949,16 +1966,13 @@ fn findings_chart(pts: &[Point]) -> String {
         .filter(|(c, _)| *c != "info" || show_info)
         .map(|(c, l)| (*c, l.to_string()))
         .collect();
-    items.push((
-        "attack",
-        "Attack path findings (dashed line; counted in the bars too)".into(),
-    ));
+    items.push(("attack", "Attack path findings (dashed)".into()));
     Figure {
         class: "pv-findings",
         title: "Open findings and attack paths",
         tip_id: "c-findings",
-        definition: "Findings not fixed or accepted as a risk, by severity. Attack path findings are the ones on a path to Tier Zero; the rest are hygiene. The line is part of the bars, not added to them.",
-        sub: "Open findings by severity (bars, total on top) and the attack path findings among them (dashed line).",
+        definition: "Findings not fixed and not an accepted risk, by severity. Attack path findings are the ones on a path to Tier Zero; the rest are hygiene. The line is part of the bars, not added to them.",
+        sub: "Open findings by severity (bars, total on top) and the attack path findings among them.",
         legend: &legend(&items),
         extra: "",
         svg: &svg("Open findings and attack paths", H, &s, &axis, Axis::Y, ""),
@@ -2023,8 +2037,9 @@ fn attack_line(b: &mut String, s: &Series, n: usize, scale: Scale, bw: f64) {
 /// Objects per tier: the row names' column, in chart units.
 const ROWS_LEFT: f64 = 190.0;
 
-const OBJECTS_DEF: &str = "The objects each tier protects. Tier Zero objects are never counted in a zone: the highest tier wins.";
-const OBJECTS_SUB: &str = "What each tier protects, per run, each row on its own scale. An object in Tier Zero counts there only.";
+const OBJECTS_DEF: &str =
+    "The objects each tier protects. An object counts in its highest tier only.";
+const OBJECTS_SUB: &str = "What each tier protects, per run, each row on its own scale. An object counts in its highest tier only.";
 
 /// Objects per tier: one row per tier (Tier Zero and the zones the
 /// accounts chart draws, [`charted_zones`]), each on its own scale, the
@@ -2059,7 +2074,7 @@ fn objects_chart(pts: &[Point]) -> String {
             "c-objects",
             OBJECTS_DEF,
             OBJECTS_SUB,
-            "No run in this range recorded the objects per tier; runs from this version on do.",
+            "No run in this range recorded the objects per tier. New runs will.",
         );
     }
     const ROW: f64 = 64.0;
@@ -2258,7 +2273,7 @@ fn objects_chart(pts: &[Point]) -> String {
 
 /// Collection completeness: sessions and local groups, 0 to 100%, with
 /// the runs below [`LOW_PERCENT`] (or with a domain below it) shaded.
-const COMPLETE_DEF: &str = "The share of computers whose sessions, and of member computers whose local groups, were collected. Paths through logged-on sessions and local administrator rights are only as complete as these; below 80% the counts above can read low. A run marked not targeted did not ask the collector to read them.";
+const COMPLETE_DEF: &str = "Share of computers whose sessions and local groups were collected. Below 80% the counts can read low. Not collected: the run didn't ask for them.";
 
 /// What a point's run did not target (nothing, when it doesn't say).
 fn untargeted(p: &Point) -> pathwarden_core::posture::Untargeted {
@@ -2283,18 +2298,18 @@ fn untargeted_groups(pts: &[Point]) -> Vec<f64> {
     out
 }
 
-/// A muted "not targeted" over each group of such runs, at `y`.
+/// A muted "not collected" over each group of such runs, at `y`.
 fn untargeted_labels(b: &mut String, pts: &[Point], y: f64) {
     for x in untargeted_groups(pts) {
         let _ = write!(
             b,
-            r#"<text class="pv-nt" x="{x:.1}" y="{y:.1}">not targeted</text>"#
+            r#"<text class="pv-nt" x="{x:.1}" y="{y:.1}">not collected</text>"#
         );
     }
 }
 
 /// The tooltip line of a run that did not target sessions or local
-/// groups: "Sessions and local groups not targeted".
+/// groups: "Sessions and local groups not collected".
 fn untargeted_tip(p: &Point) -> Option<String> {
     let chip = untargeted(p).chip()?;
     let mut c = chip.chars();
@@ -2419,7 +2434,7 @@ fn completeness_chart(pts: &[Point]) -> String {
     }
     x_labels(&mut s, pts, MT + plot_h());
     // A run that did not target a part has no point for it: the line ends
-    // at the last run that did, and the slot says "not targeted".
+    // at the last run that did, and the slot says "not collected".
     untargeted_labels(&mut s, pts, MT + plot_h() * 0.5);
     let series = [
         Series {
@@ -2473,7 +2488,7 @@ fn completeness_chart(pts: &[Point]) -> String {
             None => Some("–".to_string()),
             Some(g) => Some(format!("{}%", since::whole_percent(g))),
         };
-        let shown = |v: &Option<String>| v.clone().unwrap_or_else(|| "not targeted".into());
+        let shown = |v: &Option<String>| v.clone().unwrap_or_else(|| "not collected".into());
         let mut tl = vec![
             when(p.hp.at),
             format!("Sessions {}", shown(&sess)),
@@ -2485,7 +2500,7 @@ fn completeness_chart(pts: &[Point]) -> String {
         hit(&mut s, i, n, MT, plot_h(), &p.run, &tl);
         let cell = |v: Option<String>| match v {
             Some(v) => format!("<td>{v}</td>"),
-            None => r#"<td class="muted">Not targeted</td>"#.to_string(),
+            None => r#"<td class="muted">Not collected</td>"#.to_string(),
         };
         let _ = write!(
             table,
@@ -2519,16 +2534,16 @@ fn completeness_chart(pts: &[Point]) -> String {
 /// Every definition on the page, collapsed at the bottom.
 const DEFINITIONS: &str = r#"<details class="explain pv-defs"><summary>{info} All definitions</summary><dl>
 <div><dt>With an attack path to Tier Zero</dt><dd>Enabled users and computers outside Tier Zero with a full path to it. Each is a way in.</dd></div>
-<div><dt>Status</dt><dd>Critical, High, Moderate or Low, from the paths and the open findings, never from a share: any path into Tier Zero keeps it at High or above.</dd></div>
-<div><dt>Plan steps</dt><dd>The fewest changes that cut every attack path to Tier Zero, the one that cuts the most first.</dd></div>
-<div><dt>Open findings</dt><dd>Findings not fixed or accepted as a risk. Attack path findings are on a path to Tier Zero; hygiene findings are weaknesses not on an attack path.</dd></div>
+<div><dt>Status</dt><dd>Critical, High, Moderate or Low, from the paths and the open findings: any path into Tier Zero keeps it at High or above.</dd></div>
+<div><dt>Remediation path</dt><dd>The fewest steps that cut every attack path to Tier Zero, biggest cut first.</dd></div>
+<div><dt>Open findings</dt><dd>Findings not fixed and not an accepted risk. Attack path findings are on a path to Tier Zero; hygiene findings are weaknesses not on an attack path.</dd></div>
 <div><dt>Tier Zero protected</dt><dd>The share of Tier Zero objects that no open attack path finding leads to.</dd></div>
 <div><dt>Accounts with an attack path to each tier</dt><dd>For Tier Zero and each Privilege Zone, the accounts outside it (and outside Tier Zero) with a path into it. Log scale: each step up is ten times more.</dd></div>
-<div><dt>Objects per tier</dt><dd>The objects each tier protects. Tier Zero objects are never zone members, so an object counts in the highest tier only.</dd></div>
-<div><dt>Collection completeness</dt><dd>The share of computers whose sessions, and of member computers whose local groups, were collected. Below 80% the counts can read low. A run marked not targeted did not ask the collector to read them, as in a Quick collection; its counts are compared only with runs that also didn't.</dd></div>
-<div><dt>What changed</dt><dd>The latest run against the run before it in the same environment. Over the time range above, or two days picked: everything net new in it (new findings, findings back after a fix, findings that gained objects, new members of Tier Zero and the zones, new paths into them) and what was fixed. The report's Findings tab names them.</dd></div>
+<div><dt>Objects per tier</dt><dd>The objects each tier protects. An object counts in its highest tier only.</dd></div>
+<div><dt>Collection completeness</dt><dd>The share of computers whose sessions, and of member computers whose local groups, were collected. Below 80% the counts can read low. Not collected: the run didn't ask for them, as in a Quick collection; its counts are compared only with runs that also didn't.</dd></div>
+<div><dt>What changed</dt><dd>The latest run against the one before, or everything new and fixed over the time range or two picked days.</dd></div>
 <div><dt>Introduced</dt><dd>First seen by Pathwarden: a change carries the date of the run that found it, not when it was made in the directory. Objects and paths are dated from the first run of this version on.</dd></div>
-<div><dt>Time range</dt><dd>The week, month or three months up to the latest run (not up to today). At most the latest 40 runs are charted.</dd></div>
+<div><dt>Time range</dt><dd>1 week, 1 month or 3 months up to the latest run (not up to today), or all runs. At most the latest 40 runs are charted.</dd></div>
 </dl><p class="muted small">More terms in the <a href="https://pathwarden.org/kb/glossary.html">glossary</a>.</p></details>"#;
 
 #[cfg(test)]

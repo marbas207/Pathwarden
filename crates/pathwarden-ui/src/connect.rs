@@ -212,7 +212,7 @@ fn valid_token(t: &str) -> bool {
 }
 
 /// Why a probe can't start without random numbers.
-const NO_RANDOM: &str = "Pathwarden couldn't get the random numbers it needs. Try again.";
+const NO_RANDOM: &str = "Windows couldn't give Pathwarden secure random numbers. Try again.";
 
 fn token() -> Result<String, String> {
     let mut b = [0u8; 16];
@@ -547,7 +547,13 @@ pub fn runs_row(
         ),
         None => match p.recorded_by.as_deref() {
             Some(f) => crate::shared_runs::recorded_words(f, None, None),
-            None => "recorded by a run".into(),
+            None => {
+                return format!(
+                    "{}. The latest was recorded on {}.",
+                    pathwarden_core::text::count(found.runs.max(1), "run", "runs"),
+                    when(p.at)
+                )
+            }
         },
     };
     format!(
@@ -591,11 +597,7 @@ pub struct Connected {
 
 /// The note Runs shows once connected, and the command line prints.
 pub fn landing_words(git: bool, full: bool, full_runs: usize, runs: usize, refresh: u32) -> String {
-    let mut s = String::from(if git {
-        "Connected to the run history."
-    } else {
-        "Connected to the shared folder."
-    });
+    let mut s = String::from("Connected to the run history.");
     if full {
         s.push_str(&format!(
             " {} {} loaded from the {}.",
@@ -803,9 +805,13 @@ pub fn connect(
             && match keystore::store(&dir, &p) {
                 Ok(_) => true,
                 Err(e) => {
-                    notes.push(format!(
-                        "The passphrase couldn't be stored on this computer ({e:#}); it is kept for this session."
+                    pathwarden_core::logs::session_line(&format!(
+                        "The passphrase couldn't be stored on this computer: {e:#}"
                     ));
+                    notes.push(
+                        "Connected, but the passphrase couldn't be saved. You'll be asked again next time."
+                            .to_string(),
+                    );
                     false
                 }
             };

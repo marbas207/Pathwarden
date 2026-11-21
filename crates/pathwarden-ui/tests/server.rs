@@ -169,7 +169,7 @@ async fn requests_without_the_cookie_are_rejected() {
             .unwrap();
         let (s, h, body) = a.send(req).await;
         assert_eq!(s, StatusCode::UNAUTHORIZED, "{uri}");
-        assert!(body.contains("Open Pathwarden from the terminal"), "{uri}");
+        assert!(body.contains("Open Pathwarden from its window"), "{uri}");
         assert!(h.get(header::SET_COOKIE).is_none());
     }
     // A wrong cookie value is no better.
@@ -798,7 +798,7 @@ async fn a_path_produces_a_run_and_a_report() {
     );
     assert!(!details.contains(&format!("<code>{id}</code>")));
     assert!(details.contains("<dt>Recorded</dt><dd>On this computer</dd>"));
-    assert!(details.contains(r#"data-pw-run="remove""#) && details.contains("Delete this run"));
+    assert!(details.contains(r#"data-pw-run="remove""#) && details.contains("Delete run"));
     // Not in the report itself, and the page has no Delete button of its
     // own: only the trigger the tab's button asks for.
     let (_, _, full) = a.get(&format!("/runs/{id}/report")).await;
@@ -852,7 +852,7 @@ async fn a_path_produces_a_run_and_a_report() {
     // local in the browser (UTC until then).
     let (_, _, home) = a.get("/").await;
     assert!(home.contains(&format!("/runs/{id}")));
-    assert!(home.contains(r#"<section class="env-ov">"#) && home.contains("New analysis"));
+    assert!(home.contains(r#"<section class="env-ov">"#) && home.contains(" Analyze <svg"));
     assert!(home.contains(r#"<div class="hero card"#), "{home}");
     assert!(home.contains(r#"class="ov-cards""#), "{home}");
     assert!(!home.contains(r##"<a href="#"##), "{home}");
@@ -861,7 +861,7 @@ async fn a_path_produces_a_run_and_a_report() {
     let (_, _, runs) = a.get("/runs").await;
     assert!(runs.contains("CONTOSO.LOCAL"));
     // Each row against the run before; this is the first.
-    assert!(runs.contains("Vs previous") && runs.contains("First run"));
+    assert!(runs.contains("Since the previous run") && runs.contains("First run"));
 
     // Delete it.
     let req = a
@@ -921,7 +921,7 @@ async fn bad_input_fails_plainly() {
         )
         .await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
-    assert!(body.contains("is not a .zip or .json file"), "{body}");
+    assert!(body.contains("isn't a .zip or .json file"), "{body}");
     assert!(a.uploads_empty());
 
     // Nothing chosen.
@@ -1218,5 +1218,5 @@ async fn a_wait_asks_whether_a_run_is_loading() {
     assert_eq!(v, serde_json::json!({ "loading_run": false }));
     let (_, _, js) = a.get("/static/app.js").await;
     assert!(js.contains("fetch(\"/api/busy\""), "app.js asks /api/busy");
-    assert!(js.contains("Loading this run into memory"));
+    assert!(js.contains("Opening this run…"));
 }

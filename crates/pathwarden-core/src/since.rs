@@ -289,16 +289,16 @@ impl TargetingChange {
         };
         match (self.after.words(), self.before.words()) {
             (Some(w), b) if b.is_none() || self.after != self.before => format!(
-                "{} were not targeted this run, so its counts are not compared with the last run.",
+                "{} weren't collected in this run, so this run's counts aren't compared with the last run.",
                 cap(w)
             ),
             (None, Some(w)) => format!(
-                "{} were not targeted in the last run, so this run's counts are not compared with it.",
+                "{} weren't collected in the last run, so this run's counts aren't compared with it.",
                 cap(w)
             ),
             // The same parts, not in the same domains.
             (w, _) => format!(
-                "{} were not targeted in the same domains as the last run, so this run's counts are not compared with it.",
+                "{} weren't collected in the same domains as the last run, so this run's counts aren't compared with it.",
                 cap(w.unwrap_or("sessions and local groups"))
             ),
         }
@@ -896,7 +896,7 @@ fn takeover(d: Delta, zone: &str) -> (Tone, String) {
         (
             Tone::Better,
             format!(
-                "No account has an attack path to {zone} any more ({} had before)",
+                "No account has an attack path to {zone} anymore ({} had before)",
                 thousands(d.before)
             ),
         )
@@ -977,7 +977,7 @@ fn zone_line(
     }
 }
 
-/// A finding named in a line: "critical PW-003 JDOE has GenericAll on DC01",
+/// A finding named in a line: "Critical PW-003 JDOE has GenericAll on DC01",
 /// or the rule's own title when the state keeps no names. With `cut`, the
 /// title is cut to 70 characters.
 fn finding_name(f: &FindingRef, cut: bool) -> String {
@@ -987,7 +987,7 @@ fn finding_name(f: &FindingRef, cut: bool) -> String {
             .find(|r| r.id == f.rule)
             .map(|r| r.title.to_string())
     });
-    let sev = f.severity.as_str();
+    let sev = f.severity.label();
     match title {
         Some(t) if cut => format!("{sev} {} {}", f.rule, short(&t, 70)),
         Some(t) => format!("{sev} {} {t}", f.rule),
@@ -1006,7 +1006,7 @@ fn short(t: &str, max: usize) -> String {
     }
 }
 
-/// "3 new findings", naming the most severe ("critical PW-003 …") and
+/// "3 new findings", naming the most severe ("Critical PW-003 …") and
 /// counting the rest ("and 1 more").
 fn findings_line(
     n: usize,
@@ -1054,7 +1054,7 @@ fn plan_line(p: PlanChange) -> Option<Line> {
             ("fewer", steps.before - steps.after)
         };
         format!(
-            "{} {word} plan step{} ({} → {})",
+            "{} {word} step{} on the remediation path ({} → {})",
             thousands(n),
             if n == 1 { "" } else { "s" },
             thousands(steps.before),
@@ -1062,7 +1062,7 @@ fn plan_line(p: PlanChange) -> Option<Line> {
         )
     } else {
         format!(
-            "Plan steps: {} → {}; {} account{} still reach{} Tier Zero after them ({} before)",
+            "Remediation path steps: {} → {}; {} account{} still reach{} Tier Zero after them ({} before)",
             thousands(steps.before),
             thousands(steps.after),
             thousands(left.after),
@@ -1096,12 +1096,13 @@ impl SinceLast {
         let not_compared = "Findings by severity are not compared with the last run.";
         if self.severities_changed.is_empty() {
             if !say_not_compared {
-                return self
-                    .rating_changed
-                    .then(|| "Attack paths are rated another way in Settings.".to_string());
+                return self.rating_changed.then(|| {
+                    "Attack path severities were changed in Settings since the last run."
+                        .to_string()
+                });
             }
             return self.rating_changed.then(|| {
-                format!("Attack paths are rated another way in Settings. {not_compared}")
+                format!("Attack path severities were changed in Settings since the last run. {not_compared}")
             });
         }
         let what: Vec<String> = self
@@ -1294,12 +1295,12 @@ impl SinceLast {
                 tone: Tone::Same,
                 text: match self.not_targeted.words() {
                     Some(w) => format!(
-                        "{} finding{} can't be checked this run ({w} not targeted, domain not collected, data not read again, or the collection looks incomplete)",
+                        "{} finding{} can't be checked this run: {w} weren't collected",
                         thousands(f.held),
                         s(f.held)
                     ),
                     None => format!(
-                        "{} finding{} can't be checked this run (domain not collected, data not read again, or the collection looks incomplete)",
+                        "{} finding{} can't be checked this run: the data behind them wasn't collected",
                         thousands(f.held),
                         s(f.held)
                     ),
@@ -1365,7 +1366,7 @@ impl SinceLast {
             } else if out.is_empty() {
                 "No change: as many accounts as before have an attack path to Tier Zero, and no finding opened or closed"
             } else {
-                "No change for the better or the worse"
+                "No change"
             };
             out.insert(
                 0,
@@ -1720,7 +1721,7 @@ mod tests {
                 "12 more accounts with an attack path to Tier Zero (40 → 52); status High → Critical",
                 "New zone New: 9 accounts with an attack path to it",
                 "3 accounts now have an attack path to Finance (none had before); status Low → High",
-                "2 more plan steps (5 → 7)",
+                "2 more steps on the remediation path (5 → 7)",
             ]
         );
         assert!(lines.iter().all(|l| l.tone == Tone::Worse));
@@ -1736,7 +1737,7 @@ mod tests {
             texts(&back)[..2],
             [
                 "12 fewer accounts with an attack path to Tier Zero (52 → 40); status Critical → High",
-                "No account has an attack path to Finance any more (3 had before); status High → Low",
+                "No account has an attack path to Finance anymore (3 had before); status High → Low",
             ]
         );
         // A zone the later run no longer has is said, neither better nor
@@ -1862,19 +1863,19 @@ mod tests {
         assert_eq!(
             lines[0].items,
             [
-                "critical PW-003 JDOE has GenericAll on DC01".to_string(),
-                format!("high PW-003 {pw003}"),
-                "medium PW-003 medium one".to_string(),
+                "Critical PW-003 JDOE has GenericAll on DC01".to_string(),
+                format!("High PW-003 {pw003}"),
+                "Medium PW-003 medium one".to_string(),
                 "and 1 more".to_string(),
             ]
         );
-        assert_eq!(lines[1].items, ["high PW-010 back again"]);
-        assert_eq!(lines[2].items, ["medium PW-001 gone"]);
+        assert_eq!(lines[1].items, ["High PW-010 back again"]);
+        assert_eq!(lines[2].items, ["Medium PW-001 gone"]);
         assert_eq!(lines[2].tone, Tone::Better);
         let text = s.render(&[]);
         assert!(
             text.contains(
-                "  ! 4 new findings\n      critical PW-003 JDOE has GenericAll on DC01\n"
+                "  ! 4 new findings\n      Critical PW-003 JDOE has GenericAll on DC01\n"
             ),
             "{text}"
         );
@@ -1956,7 +1957,7 @@ mod tests {
         p
     }
 
-    const NOT_COMPARED: &str = "Sessions and local groups were not targeted this run, so its counts are not compared with the last run.";
+    const NOT_COMPARED: &str = "Sessions and local groups weren't collected in this run, so this run's counts aren't compared with the last run.";
 
     /// A Quick run after a Full one is no progress: no count is compared,
     /// one neutral line says why, and only the findings it could check and
@@ -1989,7 +1990,7 @@ mod tests {
         let c = full("c", 300, 9000);
         assert_eq!(
             texts(&compare(&b, &c, None))[0],
-            "Sessions and local groups were not targeted in the last run, so this run's counts are not compared with it."
+            "Sessions and local groups weren't collected in the last run, so this run's counts aren't compared with it."
         );
         // Sessions only.
         let mut s_only = quick("s", 300, 1);
@@ -1998,13 +1999,14 @@ mod tests {
         }
         assert_eq!(
             texts(&compare(&a, &s_only, None))[0],
-            "Sessions were not targeted this run, so its counts are not compared with the last run."
+            "Sessions weren't collected in this run, so this run's counts aren't compared with the last run."
         );
         // Quick after Quick: compared, and held findings say why.
         let mut d = quick("d", 400, 1);
         d.changes.held = 3;
         assert!(texts(&compare(&b, &d, None)).contains(
-            &"3 findings can't be checked this run (sessions and local groups not targeted, domain not collected, data not read again, or the collection looks incomplete)".to_string()
+            &"3 findings can't be checked this run: sessions and local groups weren't collected"
+                .to_string()
         ));
     }
 
@@ -2377,7 +2379,7 @@ mod tests {
         assert_eq!(
             texts(&compare(&a, &b, None)),
             [
-                "No change for the better or the worse".to_string(),
+                "No change".to_string(),
                 format!("Accounts with an attack path to Tier Zero and the zones: {BASIS_CHANGED}"),
             ]
         );
@@ -2400,13 +2402,13 @@ mod tests {
         let l = &compare(&a, &b, None).lines()[0];
         assert_eq!(
             l.text,
-            "Plan steps: 5 → 3; 4 accounts still reach Tier Zero after them (0 before)"
+            "Remediation path steps: 5 → 3; 4 accounts still reach Tier Zero after them (0 before)"
         );
         assert_eq!(l.tone, Tone::Worse);
         assert_eq!(l.next, Some(Next::new(&["plan"])));
         // Back to zero is better, even with more changes.
         let l = &compare(&b, &a, None).lines()[0];
-        assert_eq!(l.text, "2 more plan steps (3 → 5)");
+        assert_eq!(l.text, "2 more steps on the remediation path (3 → 5)");
         assert_eq!(l.tone, Tone::Better);
         // As many left after a shorter plan: better, and still says so.
         let mut c = b.clone();
@@ -2417,7 +2419,7 @@ mod tests {
         let l = &compare(&b, &c, None).lines()[0];
         assert_eq!(
             l.text,
-            "Plan steps: 3 → 2; 4 accounts still reach Tier Zero after them (4 before)"
+            "Remediation path steps: 3 → 2; 4 accounts still reach Tier Zero after them (4 before)"
         );
         assert_eq!(l.tone, Tone::Better);
     }
@@ -2466,10 +2468,7 @@ mod tests {
         a.zones = vec![zone("Old", Some(1), None)];
         assert_eq!(
             texts(&compare(&a, &b, None)),
-            [
-                "No change for the better or the worse",
-                "Zone Old is no longer in the settings",
-            ]
+            ["No change", "Zone Old is no longer in the settings",]
         );
     }
 
@@ -2503,13 +2502,13 @@ mod tests {
             [
                 "1 finding fixed",
                 "2 findings no longer checked (rule turned off)",
-                "3 findings can't be checked this run (domain not collected, data not read again, or the collection looks incomplete)",
+                "3 findings can't be checked this run: the data behind them wasn't collected",
             ]
         );
-        assert_eq!(lines[0].items, ["medium PW-001 gone"]);
+        assert_eq!(lines[0].items, ["Medium PW-001 gone"]);
         assert_eq!(
             lines[1].items,
-            ["high PW-011 off one", "high PW-011 off two"]
+            ["High PW-011 off one", "High PW-011 off two"]
         );
         assert_eq!((lines[1].tone, lines[2].tone), (Tone::Same, Tone::Same));
         assert_eq!(lines[2].next, Some(Next::new(&["posture"])));

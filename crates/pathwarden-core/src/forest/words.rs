@@ -11,21 +11,20 @@ use crate::text::count;
 
 /// Why the trust is where its risk shows: the trust itself is not a step
 /// of any attack path, though rights that cross it are.
-pub const NOT_A_PATH_STEP: &str = "The trust itself is not an attack path step: forged SID \
-history across it is not in the paths, so this is where that risk shows. Rights that cross it \
-are.";
+pub const NOT_A_PATH_STEP: &str = "The trust is not an attack path step; rights that cross it \
+are. Forged SID history shows here, not in the paths.";
 
 /// A domain the data has only from another domain's record of a trust
 /// (it may trust that domain or be trusted by it).
 pub const NOT_COLLECTED: &str = "Not collected (known from a trust)";
 
 /// What a trust inside a forest leaves out of what crosses it.
-pub const TIER_ZERO_NOT_LISTED: &str = "Rights held by Tier Zero not listed: inside a forest any \
-domain's Tier Zero can take the forest (Enterprise Admins control every domain by design)";
+pub const TIER_ZERO_NOT_LISTED: &str =
+    "Tier Zero's rights aren't listed: inside a forest, Tier Zero already controls every domain";
 
 /// PW-012 fired on a forest trust's flag alone.
-pub const PW012_FLAG_ALONE: &str = "PW-012 fires on these records from the collector's flag \
-alone; whether SID history can be forged across this trust is not in the data";
+pub const PW012_FLAG_ALONE: &str = "PW-012 is raised from the collector's flag alone; whether \
+SID history can be forged across this trust is not in the data";
 
 /// How to find out what the collector's flag can't tell (PW-012 on a forest
 /// trust's flag alone).
@@ -36,17 +35,17 @@ newer SharpHound gives them)";
 pub const SID_FILTERING_UNKNOWN: &str = "SID filtering unknown";
 
 /// PW-012 fired on a record that is inbound only.
-pub const PW012_INBOUND_ONLY: &str = "PW-012 fires on a record that is inbound only: what the \
+pub const PW012_INBOUND_ONLY: &str = "PW-012 is raised on a record that is inbound only: what the \
 trusting side filters is set on its own record, which is not in the data";
 
 /// SID filtering read from the collector's flag, not the trust attributes.
 pub const FLAG_ONLY: &str =
-    "per the collector's SidFilteringEnabled flag; trust attributes not in the data";
+    "from the collector's summary flag; the trust's attributes weren't collected";
 
 /// The definitions behind each ⓘ of the Forest view, by key.
 pub fn definitions() -> Vec<(&'static str, String)> {
     vec![
-        ("attack", "Accounts with an attack path to Tier Zero: the domain's active users and computers outside Tier Zero that can reach any Tier Zero object, as the Tier Zero headline counts them. The percentage of the domain's active accounts is secondary.".into()),
+        ("attack", "Accounts with an attack path to Tier Zero: the domain's active users and computers outside Tier Zero that can reach any Tier Zero object, as the Tier Zero headline counts them.".into()),
         ("takeover", "Forest takeover: a trust inside one forest. The forest, not the domain, is the security boundary, so whoever controls either domain controls the whole forest. It is how forests work, not a misconfiguration.".into()),
         ("sidhist", format!("SID history abuse: the trusting side filters only the built-in and privileged SIDs (RIDs under 1000), so whoever controls the trusted side can forge SID history it accepts for its other accounts and groups (PW-012). {NOT_A_PATH_STEP}")),
         ("not_collected", format!("{NOT_COLLECTED}: the data has this domain only from another domain's record of a trust, which it may trust or be trusted by. What it filters and who is in it are unknown until it is collected.")),
@@ -55,7 +54,7 @@ pub fn definitions() -> Vec<(&'static str, String)> {
         ("between", format!("Dashed: a trust between two forests. {NOT_A_PATH_STEP}")),
         ("between_abuse", "Red dashed: a trust between forests across which SID history can be forged (PW-012). Such a trust is both between forests and abusable.".into()),
         ("way_in", "Arrows point the way principals go: from the trusted domain into the domain that trusts it. Two heads: both ways.".into()),
-        ("unknown", "SID filtering unknown: the trusting side was not collected, its record does not trust the other side, or (on a forest trust without its trust attributes) the collector's SidFilteringEnabled flag only reports quarantine, which forest trusts don't use.".into()),
+        ("unknown", "SID filtering unknown: the trusting side was not collected, its record does not trust the other side, or the collector didn't record this trust's attributes.".into()),
         ("ways", "Each way: principals of one domain going into the domain that trusts them. SID filtering and selective authentication are set by the trusting side, on its own record of the trust.".into()),
         ("crossing", "What crosses it: rights principals of one domain hold in the other: memberships in its groups (not the groups everyone is in), local admin rights, ACEs that grant control and SID history entries. Across forests, Tier Zero's rights count too. These rights are attack path steps.".into()),
     ]
@@ -168,8 +167,7 @@ fn derive_domain(d: &mut DomainNode) {
         return;
     }
     match d.exposure_percent {
-        None if d.population == 0 => d.note = Some("No enabled accounts outside Tier Zero".into()),
-        None => d.note = Some("No active accounts outside Tier Zero".into()),
+        None => d.note = Some("No accounts outside Tier Zero".into()),
         Some(p) => {
             d.paths = Some(PathWords {
                 count: format!(
@@ -218,9 +216,7 @@ fn derive_way(w: &mut TrustWay, to_collected: Option<bool>) {
     .into();
     w.abuse_text = w.sid_history_abuse.then(|| {
         format!(
-            "whoever controls {} can forge SID history {} accepts, for accounts and groups with RIDs of \
-             1000 and above; a trust between forests, forest or external, always filters the built-in \
-             privileged groups (RIDs under 1000)",
+            "whoever controls {} can forge SID history {} accepts (for accounts with RID 1000 and above)",
             w.from, w.to,
         )
     });

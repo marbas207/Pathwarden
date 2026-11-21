@@ -27,12 +27,12 @@ impl PackEntry {
     pub fn trust_label(&self) -> &'static str {
         if self.from_repo.is_some() {
             if self.pack.trusted() {
-                "From the repository · trusted here"
+                "From the run history · trusted here"
             } else {
-                "From the repository · not trusted here"
+                "From the run history · not trusted here"
             }
         } else if !self.pack.trusted() {
-            "Untrusted: context only"
+            "Untrusted mapping: context only"
         } else if self.trusted_by_config {
             "Trusted by you"
         } else {
@@ -40,12 +40,17 @@ impl PackEntry {
         }
     }
 
-    /// Where the pack comes from: "Built in", or "Yours: <path>".
+    /// Where the pack comes from: "Built in", or "Your pack (<file name>)".
     pub fn origin(&self) -> String {
         match (&self.path, &self.from_repo) {
             (None, _) => "Built in".to_string(),
-            (Some(_), Some(_)) => "From the repository".to_string(),
-            (Some(path), None) => format!("Yours: {path}"),
+            (Some(_), Some(_)) => "From the run history".to_string(),
+            (Some(path), None) => format!(
+                "Your pack ({})",
+                std::path::Path::new(path)
+                    .file_name()
+                    .map_or_else(|| path.to_string(), |n| n.to_string_lossy().into_owned())
+            ),
         }
     }
 
@@ -95,15 +100,15 @@ impl PackEntry {
 pub fn edge_facts(e: &EdgeView) -> Vec<String> {
     let mut facts = Vec::new();
     if e.traversable {
-        facts.push(format!("cost {}", e.cost));
+        facts.push(format!("path weight {}", e.cost));
         if !e.cuttable {
-            facts.push("fixed at another step, not cut".into());
+            facts.push("fixed elsewhere in the remediation path".into());
         }
     }
     if let Some(r) = &e.rule {
         facts.push(format!("reported by {r}"));
     }
-    facts.push(format!("coverage unit: {}", e.unit));
+    facts.push(format!("coverage per {}", e.unit));
     for u in &e.unless {
         facts.push(format!("context only when {u}"));
     }

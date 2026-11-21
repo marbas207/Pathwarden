@@ -364,7 +364,7 @@ impl Workspace {
         if !path.exists() {
             return Ok(Config::default());
         }
-        Config::from_file(&path).map_err(|e| anyhow::anyhow!("{CONFIG_FILE} in the workspace: {e}"))
+        Config::from_file(&path).map_err(|e| anyhow::anyhow!("Settings can't be read: {e}"))
     }
 
     /// The folder of a finished run; `None` for an invalid ID or a missing

@@ -320,7 +320,7 @@ fn two_sides_merge_finding_by_finding() {
 fn chips_and_lines_read_as_the_mock_up() {
     let open = ticket("sys-1", "Open", true);
     assert_eq!(chip(&open, false), "RITM10816190 · Open");
-    assert_eq!(chip(&open, true), "Fixed — RITM10816190 still Open");
+    assert_eq!(chip(&open, true), "Fixed · RITM10816190 still Open");
     let closed = ticket("sys-1", "Closed", false);
     assert_eq!(chip(&closed, true), "RITM10816190 · Closed");
     let bare = Record {
@@ -342,7 +342,7 @@ fn chips_and_lines_read_as_the_mock_up() {
     let when = crate::time::format_local(1_795_010_531);
     assert_eq!(
         e.line(),
-        format!(r"Opened RITM10816190 — NORTH\eddard.stark, SECOPS-WS02, {when}")
+        format!(r"Opened RITM10816190 · NORTH\eddard.stark, SECOPS-WS02, {when}")
     );
     let failed = Activity {
         ok: false,
@@ -531,12 +531,7 @@ fn a_removed_record_never_comes_back() {
 /// `outcome: cancelled`; a cancelled dry run isn't saved.
 #[test]
 fn a_cancelled_run_is_saved_as_cancelled() {
-    let mut o = outcome(
-        false,
-        "Cancelled: it was stopped before it finished.",
-        Vec::new(),
-        false,
-    );
+    let mut o = outcome(false, "Canceled before it finished.", Vec::new(), false);
     o.ended = Ended::Cancelled;
     let c = run_change(
         None,

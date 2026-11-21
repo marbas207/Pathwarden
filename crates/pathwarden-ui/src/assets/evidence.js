@@ -44,16 +44,24 @@
 
   function plural(n, one, many) { return n === 1 ? one : many; }
 
+  // "3 of 3 files are unchanged."
+  function unchanged(ok, checked) {
+    return ok + " of " + checked + plural(checked, " file is unchanged.", " files are unchanged.");
+  }
+
+  // An error answer with no message of its own.
+  var FAILED = "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs.";
+
   function getJson(url, opts) {
     return fetch(url, Object.assign({ credentials: "same-origin" }, opts || {}))
       .then(function (r) {
         return r.text().then(function (t) {
           var j = {};
-          try { j = JSON.parse(t); } catch (e) { j = { error: t || "Pathwarden didn't answer (" + r.status + "). Is it still running?" }; }
-          if (!r.ok) throw new Error(j.error || "Pathwarden didn't answer (" + r.status + "). Is it still running?");
+          try { j = JSON.parse(t); } catch (e) { j = { error: t || FAILED }; }
+          if (!r.ok) throw new Error(j.error || FAILED);
           return j;
         });
-      });
+      }, function () { throw new Error("Pathwarden isn't answering. Is it still running?"); });
   }
 
   function postJson(url, body) {
@@ -259,7 +267,7 @@
         $("ev-r-file").textContent = j.file;
         $("ev-r-shows").textContent = j.shows + ", against the run of " + date(j.against) + ".";
         $("ev-r-checked").textContent = j.verified
-          ? "Signature valid. " + j.files_ok + " of " + j.files_checked + " files match."
+          ? "Signature valid. " + unchanged(j.files_ok, j.files_checked)
           : j.problems.map(sentence).join(" ");
         $("ev-r-fp").textContent = j.signed_by;
         $("ev-r-sha").textContent = j.sha256;
@@ -291,8 +299,8 @@
       var held = $("ff-held");
       held.hidden = !(fmt === "defectdojo" && info.held > 0);
       $("ff-held-text").textContent = info.held === 1
-        ? "1 finding couldn't be checked in this run and isn't in the file. A reimport that closes old findings would close it."
-        : info.held + " findings couldn't be checked in this run and aren't in the file. A reimport that closes old findings would close them.";
+        ? "1 finding couldn't be checked in this run and isn't in the file. A DefectDojo reimport that closes old findings would close it."
+        : info.held + " findings couldn't be checked in this run and aren't in the file. A DefectDojo reimport that closes old findings would close them.";
     };
     ff.addEventListener("change", ffUpdate);
     document.addEventListener("click", function (e) {
@@ -386,7 +394,7 @@
     var render = function (v) {
       var rows = [];
       if (v.signed_by) rows.push(["Signature", "Valid, made with <code>" + esc(v.signed_by) + "</code>."]);
-      rows.push(["Files", esc(v.files_ok + " of " + v.files_checked + " match the manifest.")]);
+      rows.push(["Files", esc(unchanged(v.files_ok, v.files_checked))]);
       if (v.shows) {
         rows.push(["Created", esc(full(v.shows.created_at) + ", with Pathwarden " + v.shows.pathwarden + ".") +
           (v.shows.redacted ? " Names and the report left out." : "") + " " +
@@ -395,13 +403,13 @@
       }
       if (v.outcome === "verified") {
         return '<div class="ev-res good" role="status"><p class="head">' + icon("i-check") +
-          '<strong>Verified.</strong><span class="muted small">Every file is exactly as signed, by the expected key.</span></p>' + dl(rows) + "</div>";
+          '<strong>Verified.</strong><span class="muted small">Signature valid, by the expected key. Every file is unchanged.</span></p>' + dl(rows) + "</div>";
       }
       if (v.outcome === "signer_not_checked") {
         // Nothing vouches for the key, so nothing the pack says is shown
         // as fact: only that its files match, and which key it names.
         var unchecked = [
-          ["Files", esc(v.files_ok + " of " + v.files_checked + " match the manifest.")],
+          ["Files", esc(unchanged(v.files_ok, v.files_checked))],
           ["Key", "<code>" + esc(v.signed_by) + "</code>, not compared with the sender's."]
         ];
         return '<div class="ev-res meh" role="status"><p class="head">' + icon("i-alert") +

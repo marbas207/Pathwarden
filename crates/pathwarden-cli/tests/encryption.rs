@@ -304,7 +304,7 @@ fn the_environment_variable_encrypts_and_opens_the_history() {
         &[],
         None,
     ));
-    assert!(text.contains("Off: the files are plain JSON."), "{text}");
+    assert!(text.contains("Off: the files are plain text."), "{text}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1076,7 +1076,10 @@ fn accept_takes_a_restored_history_as_it_is() {
     ok(&run());
     // A plain history: nothing refused.
     let text = ok(&accept(true));
-    assert_eq!(text, "Nothing in this history is refused.");
+    assert_eq!(
+        text,
+        "Nothing needs accepting: the history is fine. Reload the page."
+    );
     ok(&pw(
         &dir,
         &[
@@ -1102,7 +1105,10 @@ fn accept_takes_a_restored_history_as_it_is() {
     let before = kept();
     assert!(before > 0);
     let text = ok(&accept(true));
-    assert_eq!(text, "Nothing in this history is refused.");
+    assert_eq!(
+        text,
+        "Nothing needs accepting: the history is fine. Reload the page."
+    );
     assert_eq!(kept(), before);
     // Restored from a backup: refused as an older copy, with the command.
     std::fs::write(state.join("findings.json.age"), &old).unwrap();
@@ -1135,7 +1141,10 @@ fn accept_takes_a_restored_history_as_it_is() {
     assert!(text.contains(&records.display().to_string()), "{text}");
     // Nothing refused any more.
     let text = ok(&accept(true));
-    assert_eq!(text, "Nothing in this history is refused.");
+    assert_eq!(
+        text,
+        "Nothing needs accepting: the history is fine. Reload the page."
+    );
     ok(&run());
     let _ = std::fs::remove_dir_all(&dir);
 }

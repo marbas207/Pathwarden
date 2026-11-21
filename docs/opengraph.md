@@ -53,7 +53,10 @@ resolve until you add one.
 
 1. In the rail, under **Configure**, click **Mappings**.
 2. Open the pack and read every relationship kind marked as a path.
-3. Click **Mark as trusted…** and confirm.
+3. Click **Trust…** and confirm.
+
+To undo, click **Remove trust**. Trust is kept on each computer, never shared:
+the name is added to `[opengraph] trust` in that computer's `pathwarden.toml`.
 
 ### On the command line
 

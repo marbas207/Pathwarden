@@ -758,8 +758,7 @@ fn the_map_says_it_in_words() {
     // (MS-PAC 4.1.2.2): the text must not say privileged groups pass.
     assert!(!abuse.contains("privileged groups included"), "{abuse}");
     assert!(
-        abuse.contains("RIDs of 1000 and above")
-            && abuse.contains("always filters the built-in privileged groups"),
+        abuse.contains("for accounts with RID 1000 and above"),
         "{abuse}"
     );
     assert!(!definition("sidhist").contains("does not filter SIDs"));

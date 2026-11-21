@@ -166,7 +166,7 @@ pub fn import_runs(
             let i = import_run(&state, ev, &r.analyzed, prev_objects, config);
             store
                 .save(&i.state, &i.last, &i.point)
-                .map_err(|e| format!("Could not save to the history: {e:#}"))?;
+                .map_err(|e| format!("Couldn't save to the history: {e:#}"))?;
             prev_objects = ev.run.objects;
             state = i.state;
             ids.push(Some(i.last.run_id));

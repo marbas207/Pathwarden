@@ -118,7 +118,7 @@ async fn analyze_says_files_stay_where_they_are() {
     let app = app("analyze-page");
     let (status, _, body) = send(&app, get("/analyze", "pathwarden.localhost")).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains("files are read where they are"), "{body}");
+    assert!(body.contains("Files are read where they are"), "{body}");
     assert!(!body.contains("Uploaded copies are deleted"));
 }
 

@@ -24,7 +24,7 @@
   if (!data || typeof data.origin !== "string" || !data.f ||
       !/^(http:\/\/(127\.0\.0\.1|localhost):\d{1,5}|https?:\/\/pathwarden\.localhost|pathwarden:\/\/localhost)$/.test(data.origin)) return;
   var own = Object.prototype.hasOwnProperty;
-  var LABEL = { fixed: "Fixed ✓", still_open: "Still open", cant_tell: "Can't tell" };
+  var LABEL = { fixed: "Fixed", still_open: "Still open", cant_tell: "Can't tell" };
   var KIND = { fixed: "fixed", still_open: "open", cant_tell: "unknown" };
   var accepted = Object.create(null);
   (Array.isArray(data.acc) ? data.acc : []).forEach(function (fp) {
@@ -268,7 +268,7 @@
     var n = notes[fp];
     if (!n) return;
     n.hidden = false;
-    n.textContent = "Accepted risk: from the next analysis this finding is shown as accepted, not open.";
+    n.textContent = "Accepted. Shown as accepted from the next analysis.";
     var b = n.parentNode.querySelector(".fa-accept");
     if (b) b.disabled = true;
   }
@@ -294,7 +294,7 @@
   // Add a note: opens the app's dialog for the accepted risk that covers
   // the finding; nothing is saved until the user confirms there.
   function noteButton(fp) {
-    return button("fa-btn", "note", "Add a note", "Add a note to the accepted risk, in the app's settings",
+    return button("fa-btn", "note", "Add note", "Add a note to this accepted risk",
       function () { send({ type: "pathwarden:note", fingerprint: fp }); });
   }
   function exploreButton(fp) {
@@ -306,7 +306,7 @@
     return button("fa-btn", "copy", "Copy ID", "Copy the finding ID " + fp,
       function (b, label) {
         copy(fp, function (ok) {
-          label.textContent = ok ? "Copied" : fp;
+          label.textContent = ok ? "Copied" : "Copy failed";
           setTimeout(function () { label.textContent = "Copy ID"; }, 1600);
         });
       });
@@ -351,9 +351,7 @@
       name = copy.textContent;
     }
     function retest() { send({ type: "pathwarden:retest", fingerprint: fp }); }
-    var retestTip = info.t === 1
-      ? "Re-read this finding's objects and check again"
-      : "Retest this finding with a new collection";
+    var retestTip = "Retest this finding";
 
     // The row: a badge and the Retest button in the last column.
     if (!summary.querySelector(":scope > .aside")) {
@@ -394,7 +392,7 @@
       hints[fp] = hint;
     }
     bar.appendChild(button("fa-btn fa-accept", "accept", "Accept risk",
-      "Accept this risk with a reason, in the app's settings",
+      "Accept this risk, with a reason",
       function () { send({ type: "pathwarden:accept", fingerprint: fp }); }));
     // Accepted since this run: a note can be added to it now.
     if (notable[fp]) bar.appendChild(noteButton(fp));
@@ -450,7 +448,7 @@
   }
   function https(u) { return typeof u === "string" && /^https:\/\/\S+$/i.test(u) && u.length <= 2048; }
   // A record's chip: "RITM0001234 · Open"; on a fixed finding whose record
-  // is still open, "Fixed — RITM0001234 still Open".
+  // is still open, "Fixed · RITM0001234 still Open".
   function chip(rv, fixed) {
     var r = rv || {};
     var name = r.number || r.label || r.id || "";
@@ -459,7 +457,7 @@
     var c = text("span", "ac-chip" + (stale ? " stale" : r.open ? "" : " closed"));
     c.title = visible(typeof r.chip === "string" ? r.chip : name);
     c.appendChild(icon("ticket"));
-    if (stale) c.appendChild(document.createTextNode("Fixed — "));
+    if (stale) c.appendChild(document.createTextNode("Fixed · "));
     c.appendChild(text("span", "num", name));
     c.appendChild(document.createTextNode(visible(stale ? " still " + status : " · " + status)));
     return c;
@@ -506,7 +504,7 @@
     if (offered.length) {
       var grp = text("span", "fa-acts");
       grp.setAttribute("role", "group");
-      grp.setAttribute("aria-label", "Actions");
+      grp.setAttribute("aria-label", "Finding actions");
       var sep = text("span", "fa-sep");
       sep.setAttribute("aria-hidden", "true");
       grp.appendChild(sep);
@@ -546,8 +544,13 @@
       var rc = text("span", "ac-rowchips");
       rc.appendChild(chip(records[0], fixed));
       if (records.length > 1) {
-        var n = text("span", "ac-more", "+" + (records.length - 1));
-        n.title = "And " + (records.length - 1) + " more " + (records.length === 2 ? "record" : "records");
+        var n = text("span", "ac-more");
+        var more = "and " + (records.length - 1) + " more " + (records.length === 2 ? "record" : "records");
+        n.title = more;
+        var plus = text("span", null, "+" + (records.length - 1));
+        plus.setAttribute("aria-hidden", "true");
+        n.appendChild(plus);
+        n.appendChild(text("span", "ac-sr", more));
         rc.appendChild(n);
       }
       // After "first seen …", so the title keeps its width.
@@ -589,10 +592,10 @@
           }
           follow.filter(function (addr) { return !urgent(addr); }).forEach(add);
           var name = r.number || r.label || r.id || "";
-          fu.appendChild(mini("", "copy", "Copy", "Copy " + name, function (b, label) {
+          fu.appendChild(mini("", "copy", "Copy number", "Copy " + name, function (b, label) {
             copy(String(name), function (ok) {
-              label.textContent = ok ? "Copied" : name;
-              setTimeout(function () { label.textContent = "Copy"; }, 1600);
+              label.textContent = ok ? "Copied" : "Copy failed";
+              setTimeout(function () { label.textContent = "Copy number"; }, 1600);
             });
           }));
           row.appendChild(fu);
@@ -616,7 +619,7 @@
             var line = text("span");
             line.appendChild(text("span", "what", e.summary || e.line || ""));
             var who = [e.by, e.on, typeof e.at_unix === "number" ? when(e.at_unix) : e.at].filter(function (x) { return typeof x === "string" && x; });
-            if (who.length) line.appendChild(text("span", "who", " — " + who.join(", ")));
+            if (who.length) line.appendChild(text("span", "who", " · " + who.join(", ")));
             var full = typeof e.message === "string" ? e.message.trim() : "";
             if (e.ok === false && full && full !== e.summary) {
               var more = text("span", "ac-full", full);
@@ -658,7 +661,7 @@
           showAll.addEventListener("click", function (ev) {
             ev.preventDefault();
             all = !all;
-            showAll.textContent = all ? "Show fewer" : "Show all (" + total + ")";
+            showAll.textContent = all ? "Show less" : "Show all (" + total + ")";
             drawList();
           });
           act.appendChild(showAll);
@@ -698,7 +701,7 @@
     if (ovRecs) {
       ovRecs.hidden = n === 0;
       ovRecs.previousSibling.hidden = n === 0;
-      ovRecs.textContent = n + (n === 1 ? " finding has records" : " findings have records");
+      ovRecs.textContent = n + (n === 1 ? " finding has a record" : " findings have records");
     }
     // The list follows the records as they change.
     var picked = document.querySelector('input[name="f-records"]:checked');

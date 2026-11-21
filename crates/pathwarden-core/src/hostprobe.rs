@@ -831,7 +831,7 @@ pub const TITLE: &str = "Management agents read on Tier Zero computers";
 /// The row's intro line.
 pub const INTRO: &str = "Whoever controls the server of an agent on a Tier Zero computer can run code there, so that server is Tier Zero too.";
 /// The ⓘ of the row.
-pub const TIP: &str = "The same settings files read them: have each server's admins run Get-PathwardenTierZeroSettings.ps1. A computer counts as read only when current files read every agent. A file older than 90 days, or one from a settings folder that nothing shows who wrote, can show an agent but can't show one gone.";
+pub const TIP: &str = "Read from the Tier Zero settings files. A computer counts as read only when current files read every agent. A file over 90 days old, or one of unknown origin, can show an agent but not that it was removed.";
 /// Rows the completeness row lists at least (hosts without a file fill up
 /// to it).
 pub const ROWS: usize = 5;

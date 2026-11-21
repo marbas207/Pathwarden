@@ -68,20 +68,20 @@ fn a_fixed_findings_view_offers_its_follow_ups() {
     let v = view(&file, &programs, fixed);
     assert!(v.offered.is_empty(), "{:?}", v.offered);
     assert_eq!(v.records.len(), 1);
-    assert_eq!(v.records[0].chip, "Fixed — RITM10816190 still Open");
+    assert_eq!(v.records[0].chip, "Fixed · RITM10816190 still Open");
     // The follow-up meant for a fixed finding comes first.
     assert_eq!(v.records[0].follow_ups, ["desk/close", "desk/status"]);
     assert_eq!(v.activity_count, 1);
     assert!(
         v.activity[0]
             .line
-            .starts_with(r"Opened RITM10816190 — NORTH\eddard.stark, SECOPS-WS02, "),
+            .starts_with(r"Opened RITM10816190 · NORTH\eddard.stark, SECOPS-WS02, "),
         "{}",
         v.activity[0].line
     );
     let j = serde_json::to_value(&v).unwrap();
     assert_eq!(j["records"][0]["number"], "RITM10816190");
-    assert_eq!(j["records"][0]["chip"], "Fixed — RITM10816190 still Open");
+    assert_eq!(j["records"][0]["chip"], "Fixed · RITM10816190 still Open");
     assert_eq!(j["activity"][0]["action"], "desk/open");
     // An open finding without records: its action, nothing else.
     let v = view(&file, &programs, open);

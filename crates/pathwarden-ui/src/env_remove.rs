@@ -135,11 +135,11 @@ impl Plan {
     pub fn lines(&self) -> Vec<String> {
         let mut parts = vec![match self.runs {
             0 => "no runs".to_string(),
-            1 => "1 run with its report".to_string(),
-            n => format!("{n} runs with their reports"),
+            1 => "1 run".to_string(),
+            n => format!("{n} runs"),
         }];
         if self.files {
-            parts.push("its settings, run history and labels".into());
+            parts.extend(["its settings", "its run history", "its labels"].map(String::from));
         }
         match self.collections {
             0 => {}
@@ -147,27 +147,25 @@ impl Plan {
             n => parts.push(format!("{n} kept collections")),
         }
         let mut out = vec![format!(
-            "Goes: {} ({} in all).",
+            "Moves out: {} ({} in all).",
             environments::and_list(&parts),
             size_words(self.bytes)
         )];
         out.push(format!(
-            "Nothing is deleted: it all moves to a new folder {}-<date>-<time> in {}, where {RESTORE_FILE} says how to put it back. To free the space later, delete that one folder, not {} itself.",
-            self.id,
-            workspace::shown_path(&self.removed_dir),
+            "Nothing is deleted: it moves to a new folder in {}. {RESTORE_FILE} there says how to put it back.",
             workspace::shown_path(&self.removed_dir)
         ));
         out.extend(self.kept.iter().cloned());
         out.extend(link_lines(&self.links));
         if self.default {
-            out.push("It is the first environment: its files move out of the workspace folder and it starts over empty.".into());
+            out.push("This is the Default environment: it starts over, empty.".into());
         }
         if self.demo {
-            out.push("It is the demo's environment: Try the demo makes it again.".into());
+            out.push("This is the demo environment. Try the demo brings it back.".into());
         }
         if self.current {
             out.push(if self.next_name == NO_ENV_YET {
-                "It is the current environment and the last one: the app then shows No environment yet, until the next collection makes one.".to_string()
+                "It is the only environment: the next collection makes a new one.".to_string()
             } else {
                 format!(
                     "It is the current environment: the app switches to {}.",
@@ -177,8 +175,9 @@ impl Plan {
         }
         if !self.demo {
             let (task, unit) = schedule_names(&self.id);
+            let name = if cfg!(windows) { task } else { unit };
             out.push(format!(
-                "A nightly schedule made for it (task {task}, or timer {unit} on Linux) keeps running on its server: remove it there if it should stop."
+                "If a schedule runs for it on a server, it keeps running. Remove {name} there to stop it."
             ));
         }
         out
@@ -232,7 +231,7 @@ impl Removed {
                 size_words(self.bytes),
                 workspace::shown_path(&self.folder)
             ),
-            format!("Nothing was deleted: {RESTORE_FILE} in that folder says how to put it back. Delete that one folder to free the space."),
+            format!("Nothing was deleted. {RESTORE_FILE} in that folder says how to put it back; delete that folder to free the space."),
         ];
         out.extend(self.kept.iter().cloned());
         out.extend(link_lines(&self.links));
@@ -240,7 +239,7 @@ impl Removed {
             out.push(format!("Now showing {}.", self.now_current_name));
         }
         if self.demo {
-            out.push("Try the demo makes the demo's environment again.".into());
+            out.push("Try the demo brings the demo environment back.".into());
         }
         out
     }
@@ -305,10 +304,10 @@ impl Stuck {
         };
         match self.why {
             Some(_) => format!(
-                "{who} still has the reserved ID \"{REMOVED_DIR}\" (from before 0.1.3): no environment can be removed until it gets another."
+                "{who} has an ID Pathwarden now uses itself (\"{REMOVED_DIR}\"), so no environment can be removed until it gets another."
             ),
             None => format!(
-                "{who} still has the ID \"{REMOVED_DIR}\" (from before 0.1.3, reserved since): the next start of the app, or the next removal, gives it another."
+                "{who} has an ID Pathwarden now uses itself (\"{REMOVED_DIR}\"): the next start of the app, or the next removal, gives it another."
             ),
         }
     }
@@ -696,7 +695,7 @@ pub fn remove(
         let plan = plan_in(root, reg, id, state)?;
         if expect.is_some_and(|k| k != plan.runs_key) {
             return Err(format!(
-                "{} changed since you confirmed (it has {} now). Nothing was removed: check it again.",
+                "Nothing was removed: {} now has {}. Check the list and confirm again.",
                 plan.name,
                 match plan.runs {
                     1 => "1 run".to_string(),
@@ -775,8 +774,12 @@ pub fn remove(
         journal.done = true;
         journal.message = removed.lines();
         write_journal(&removed.folder, &journal).map_err(|e| {
+            pathwarden_core::logs::session_line(&format!(
+                "Removing {}: its record couldn't be finished: {e}",
+                removed.name
+            ));
             format!(
-                "Everything was moved to {}, but its record couldn't be finished ({e}). {} is still listed; remove it again to finish.",
+                "Moved to {}, but {} is still listed. Remove it again to finish.",
                 removed.folder.display(),
                 removed.name
             )
@@ -900,7 +903,7 @@ pub fn movable(root: &Path, path: &Path) -> Result<PathBuf, String> {
     let meta = fs::symlink_metadata(path).map_err(|e| format!("{}: {e}", path.display()))?;
     if is_link(&meta) {
         return Err(format!(
-            "{} is a link (a symbolic link or junction), so Pathwarden leaves it as it is.",
+            "{} is a link, so it stays where it is.",
             path.display()
         ));
     }
@@ -1051,7 +1054,7 @@ impl Guard {
         if let Some(real) = state.and_then(|s| fs::canonicalize(s).ok()) {
             used.push((
                 real,
-                "it is the run history this session was started with".to_string(),
+                "it is the run history set when Pathwarden was started".to_string(),
             ));
         }
         if let Ok(ws) = Workspace::existing(root) {
@@ -1153,7 +1156,7 @@ fn plan_in(root: &Path, reg: &Registry, id: &str, state: Option<&Path>) -> Resul
     // removals move into.
     if let Some(e) = named.environments.iter().find(|e| e.id == REMOVED_DIR) {
         return Err(format!(
-            "Removing environments needs the folder {}, but the environment {} uses it (its ID is \"{REMOVED_DIR}\", from before that name was reserved). Nothing was removed. Stop Pathwarden, then rename that folder and its \"id\" in {REGISTRY_FILE} to another ID (for example removed-env).",
+            "Nothing was removed: the environment {1} uses the folder {0}, which Pathwarden needs. Stop Pathwarden, then rename that folder and its \"id\" in {REGISTRY_FILE} (for example to removed-env).",
             removed_root(root).display(),
             e.display()
         ));
@@ -1194,7 +1197,7 @@ fn plan_in(root: &Path, reg: &Registry, id: &str, state: Option<&Path>) -> Resul
                 runs.push(format!("and {} more", unknown.len() - 10));
             }
             return Err(format!(
-                "Some runs name environments that {REGISTRY_FILE} doesn't list ({}), so they would count as {name}'s: {} in {}. Nothing was removed. {REGISTRY_FILE} may be missing or older than those runs: put back the right one (a copy may be in {BACKUP_FILE}), then try again.",
+                "Nothing was removed: some runs belong to environments that are no longer listed ({}): {} in {}. Put back {REGISTRY_FILE} (a copy may be in {BACKUP_FILE}), then try again.",
                 ids.join(", "),
                 runs.join(", "),
                 ws.runs_dir().display()
@@ -1254,7 +1257,7 @@ fn plan_in(root: &Path, reg: &Registry, id: &str, state: Option<&Path>) -> Resul
         if let (Some(h), Some(_)) = (&history, state) {
             if h.exists() {
                 kept.push(format!(
-                    "Its run history in {} (the one this session was started with) stays where it is.",
+                    "Its run history in {} (set when Pathwarden was started) stays where it is.",
                     h.display()
                 ));
             }
@@ -1328,7 +1331,7 @@ fn plan_in(root: &Path, reg: &Registry, id: &str, state: Option<&Path>) -> Resul
         let real = match movable_in(root, &collections_dir, &p) {
             Ok(r) => r,
             Err(e) => {
-                kept.push(format!("The kept collection: {e}"));
+                kept.push(format!("The kept collection stays: {e}"));
                 continue;
             }
         };
@@ -1719,9 +1722,8 @@ mod tests {
         assert_eq!(p.next, DEFAULT_ENV);
         assert!(p.bytes > 0);
         assert!(
-            p.lines()[0].starts_with(
-                "Goes: 2 runs with their reports and its settings, run history and labels ("
-            ),
+            p.lines()[0]
+                .starts_with("Moves out: 2 runs, its settings, its run history and its labels ("),
             "{:?}",
             p.lines()
         );
@@ -1823,7 +1825,7 @@ mod tests {
         add_run(&d, 1, DEFAULT_ENV, "CONTOSO.LOCAL");
         let p = plan(&d, DEFAULT_ENV, None).unwrap();
         assert_eq!(p.next_name, NO_ENV_YET);
-        assert!(p.lines().iter().any(|l| l.contains("the last one")));
+        assert!(p.lines().iter().any(|l| l.contains("the only environment")));
         let r = remove(&d, DEFAULT_ENV, None, Some(&p.runs_key)).unwrap();
         assert_eq!(r.now_current_name, NO_ENV_YET);
         let ws = Workspace::existing(&d).unwrap();
@@ -1836,7 +1838,7 @@ mod tests {
     fn a_changed_environment_is_not_removed() {
         let d = two_envs("changed");
         let err = remove(&d, "lab", None, Some("0123")).unwrap_err();
-        assert!(err.contains("changed since you confirmed"), "{err}");
+        assert!(err.contains("Check the list and confirm again"), "{err}");
         assert_eq!(listed(&d, "lab"), 2);
         assert!(Registry::load(&d).get("lab").is_some());
         assert!(remove(&d, "nope", None, None).is_err());
@@ -1905,9 +1907,7 @@ mod tests {
         add_run(&d, 5, &id, "R.LOCAL");
         let p = plan(&d, &id, None).unwrap();
         assert!(
-            p.lines()[1].contains("a new folder removed-2-<date>-<time> in")
-                && p.lines()[1].contains("not ")
-                && !p.lines()[1].contains("Delete that folder later"),
+            p.lines()[1].contains("a new folder in") && !p.lines()[1].contains("free the space"),
             "{:?}",
             p.lines()
         );
@@ -1994,7 +1994,7 @@ mod tests {
         assert_eq!(note, problem);
         assert!(
             note.lead()
-                .starts_with("Old removed still has the reserved ID")
+                .starts_with("Old removed has an ID Pathwarden now uses itself")
                 && note.detail().contains("tries again")
                 && !note.to_string().contains("Nothing was removed"),
             "{note}"
@@ -2116,7 +2116,7 @@ mod tests {
             .ends_with("move it to C:\\a; b\\removed-2; and change it."));
         assert!(s
             .lead()
-            .starts_with("The environment \"removed\" still has"));
+            .starts_with("The environment \"removed\" has an ID"));
         #[cfg(windows)]
         assert_eq!(
             tidy(Path::new("C:/ws/x\\environments"))
@@ -2265,7 +2265,7 @@ mod tests {
             assert!(
                 p.kept
                     .iter()
-                    .any(|k| k.contains("this session was started with")),
+                    .any(|k| k.contains("set when Pathwarden was started")),
                 "{name}: {:?}",
                 p.kept
             );
@@ -2403,7 +2403,7 @@ mod tests {
         assert!(
             p.kept
                 .iter()
-                .any(|k| k.contains("the one this session was started with")),
+                .any(|k| k.contains("(set when Pathwarden was started)")),
             "{:?}",
             p.kept
         );
@@ -2482,7 +2482,7 @@ mod tests {
         fs::remove_dir_all(d.join("runs").join(run_id(2))).unwrap();
         add_run(&d, 4, "lab", "LAB.LOCAL");
         let err = remove(&d, "lab", None, Some(&p.runs_key)).unwrap_err();
-        assert!(err.contains("changed since you confirmed"), "{err}");
+        assert!(err.contains("Check the list and confirm again"), "{err}");
         let _ = fs::remove_dir_all(&d);
     }
 

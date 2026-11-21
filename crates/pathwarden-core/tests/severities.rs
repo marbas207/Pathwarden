@@ -330,7 +330,7 @@ fn the_report_says_what_the_team_set() {
     );
     let (html, _) = render(&set, earlier);
     assert!(html.contains(
-        r#"<span class="sevset" title="Severity set by your team. The default is Medium.">set</span>"#
+        r#"<span class="sevset" title="Severity set by your team. The default is Medium." aria-label="Severity set by your team, default Medium">Set</span>"#
     ));
     assert!(html.contains(
         "<div><dt>Severity</dt><dd>Low &middot; set by your team &middot; default Medium</dd></div>"
@@ -350,7 +350,7 @@ fn the_report_says_what_the_team_set() {
         env.contains("<td>Medium</td><td><span class=\"muted\">Not recorded</span></td>"),
         "{env}"
     );
-    assert!(env.contains("Other rules' attack paths are rated by exposure."));
+    assert!(env.contains("Other attack path rules are rated by exposure."));
     assert!(html.contains(
         "Rule severities set in Settings: PW-002 by exposure → Critical, PW-011 Medium → Low."
     ));
@@ -461,7 +461,7 @@ fn what_changed_is_neutral_when_only_the_settings_changed() {
     assert!(s.rating_changed && s.severities_changed.is_empty());
     assert_eq!(
         s.rating_line().unwrap(),
-        "Attack paths are rated another way in Settings. Findings by severity are not compared with the last run."
+        "Attack path severities were changed in Settings since the last run. Findings by severity are not compared with the last run."
     );
     // The same settings: nothing about them.
     let s = pathwarden_core::since::compare(&before, &point(&config(""), "e", 500), None);
@@ -502,14 +502,14 @@ fn what_changed_is_neutral_when_only_the_settings_changed() {
     let first = &lines[0].text;
     assert!(
         first.ends_with(
-            "so its counts are not compared with the last run. Rule severities set in Settings: PW-002 by exposure → Critical, PW-011 Medium → Low."
+            "so this run's counts aren't compared with the last run. Rule severities set in Settings: PW-002 by exposure → Critical, PW-011 Medium → Low."
         ),
         "{first}"
     );
     assert_eq!(
         lines
             .iter()
-            .filter(|l| l.text.contains("not compared"))
+            .filter(|l| l.text.contains("aren't compared"))
             .count(),
         1,
         "{lines:?}"

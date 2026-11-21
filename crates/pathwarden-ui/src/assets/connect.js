@@ -14,13 +14,13 @@
         var j = null;
         try { j = text ? JSON.parse(text) : {}; } catch (e) {}
         if (!r.ok) {
-          var err = new Error((j && j.error) || "Pathwarden didn't answer (" + r.status + "). Is it still running?");
+          var err = new Error((j && j.error) || "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs.");
           err.data = j || {};
           throw err;
         }
         return j || {};
       });
-    }, function () { throw new Error("Pathwarden is not answering. Is it still running?"); });
+    }, function () { throw new Error("Pathwarden isn't answering. Is it still running?"); });
   }
 
   // ------------------------------------------------ Step 1: where it is

@@ -193,9 +193,7 @@ impl ZonePreview {
             ));
         }
         for t in &self.tier_zero {
-            out.push(format!(
-                "{t} is Tier Zero, so it is left out: Tier Zero already sits above every zone."
-            ));
+            out.push(format!("{t} is Tier Zero, so it is left out."));
         }
         if self.population_percent > 50.0 {
             out.push(format!(

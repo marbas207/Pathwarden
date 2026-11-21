@@ -36,7 +36,7 @@ fn path(dir: &Path) -> PathBuf {
 
 /// What a newer `owned.json` makes every page and command say.
 pub const NEWER: &str =
-    "owned.json was saved by a newer Pathwarden. Update Pathwarden to change the owned marks.";
+    "The owned marks were saved by a newer Pathwarden. Update Pathwarden to change them.";
 
 /// Why an environment's marks can't be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,7 +99,9 @@ fn normal(id: &str) -> String {
 /// how many objects are marked after it.
 pub fn set(dir: &Path, ids: &[String], owned: bool) -> Result<usize, String> {
     let p = path(dir);
-    std::fs::create_dir_all(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+    std::fs::create_dir_all(dir).map_err(|e| {
+        format!("Couldn't save the owned mark: the environment folder can't be created ({e}).")
+    })?;
     crate::config_edit::with_lock(&p, || {
         let mut all = load(dir).map_err(|e| e.to_string())?;
         for id in ids.iter().map(|i| normal(i)).filter(|i| !i.is_empty()) {
@@ -110,7 +112,7 @@ pub fn set(dir: &Path, ids: &[String], owned: bool) -> Result<usize, String> {
                 Err(i) if owned => {
                     if all.len() >= MAX_OWNED {
                         return Err(format!(
-                            "at most {} objects can be marked as owned",
+                            "At most {} objects can be marked as owned.",
                             crate::text::num(MAX_OWNED)
                         ));
                     }
@@ -125,7 +127,7 @@ pub fn set(dir: &Path, ids: &[String], owned: bool) -> Result<usize, String> {
         };
         let text = serde_json::to_string_pretty(&doc).map_err(|e| e.to_string())?;
         crate::config_edit::write_atomic(&p, &text)
-            .map_err(|e| format!("writing {}: {e}", p.display()))?;
+            .map_err(|e| format!("Couldn't save the owned mark ({e})."))?;
         Ok(doc.objects.len())
     })
 }

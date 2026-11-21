@@ -673,7 +673,12 @@ pub fn spawn(
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             analyze_checked(&jobs, &ws, &spec, check_duplicate && !spec.demo)
         }))
-        .unwrap_or_else(|_| Err("The analysis stopped. Try again.".into()));
+        .unwrap_or_else(|_| {
+            Err(
+                "The analysis stopped unexpectedly. Try again; Settings › Logs has the details."
+                    .into(),
+            )
+        });
         let status = match result {
             Ok(None) => JobStatus::Done { run: id.clone() },
             Ok(Some(stopped)) => stopped,
@@ -1033,7 +1038,7 @@ pub fn save_analysis<P: RecordProgress>(
 fn env_still_there(ws: &Workspace) -> Result<(), String> {
     environments::still_listed(ws).map_err(|e| match e {
         environments::NotListed::Removed => {
-            "The environment this run was going to was removed meanwhile, so the run wasn't saved."
+            "The run's environment was removed during the analysis, so the run wasn't saved."
                 .to_string()
         }
         environments::NotListed::Unreadable(why) => why,
@@ -1166,11 +1171,20 @@ fn friendly_error(e: &IngestError, scratch: Option<&std::path::Path>) -> String 
         IngestError::Empty => {
             return "No collector files found. Use the .zip that SharpHound or RustHound-CE creates, or the .json files inside it.".into()
         }
-        IngestError::Json { .. } => format!(
-            "A file couldn't be read as collector data. Is it SharpHound or RustHound-CE output? ({e})"
-        ),
-        IngestError::Zip { .. } => {
-            format!("A .zip file couldn't be opened. It may be damaged or not a zip. ({e})")
+        // The parser's words go to the log; the page names the file.
+        IngestError::Json { path, .. } => {
+            pathwarden_core::logs::note(&e.to_string());
+            format!(
+                "{} couldn't be read as collector data. Is it SharpHound or RustHound-CE output?",
+                file_name(std::path::Path::new(path))
+            )
+        }
+        IngestError::Zip { path, .. } => {
+            pathwarden_core::logs::note(&e.to_string());
+            format!(
+                "{} couldn't be opened. It may be damaged or not a zip.",
+                file_name(path)
+            )
         }
         _ => e.to_string(),
     };
@@ -1178,6 +1192,14 @@ fn friendly_error(e: &IngestError, scratch: Option<&std::path::Path>) -> String 
         Some(dir) => strip_scratch(text, dir),
         None => text,
     }
+}
+
+/// The last part of `path`, for a message.
+fn file_name(path: &std::path::Path) -> String {
+    path.file_name().map_or_else(
+        || path.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    )
 }
 
 /// [`friendly_error`] for a job: neither of its upload folders named.

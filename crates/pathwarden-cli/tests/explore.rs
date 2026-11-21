@@ -155,7 +155,7 @@ fn explore_answers_match_the_app() {
         text.starts_with("Suggested zones\nCandidates for Tier 1"),
         "{text}"
     );
-    assert!(text.contains("Privileged logons · "), "{text}");
+    assert!(text.contains("Privileged sign-ins · "), "{text}");
     assert!(text.contains("SRV01.CONTOSO.LOCAL (Computer)"), "{text}");
 
     let _ = std::fs::remove_dir_all(&dir);

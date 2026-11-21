@@ -2797,14 +2797,14 @@ fn save_before_connect(config_path: &Path) -> Result<Option<(PathBuf, bool)>, St
     #[cfg(test)]
     if FAIL_COPY.with(std::cell::Cell::get) {
         return Err(format!(
-            "Could not save a copy of {}: failing for the test",
+            "Couldn't save a copy of {}: failing for the test",
             config_path.display()
         ));
     }
     let bytes = match std::fs::read(config_path) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(format!("Could not read {}: {e}", config_path.display())),
+        Err(e) => return Err(format!("Couldn't read {}: {e}", config_path.display())),
     };
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -2830,7 +2830,7 @@ fn save_before_connect(config_path: &Path) -> Result<Option<(PathBuf, bool)>, St
         let mut f = match open.open(&target) {
             Ok(f) => f,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(e) => return Err(format!("Could not save {}: {e}", target.display())),
+            Err(e) => return Err(format!("Couldn't save {}: {e}", target.display())),
         };
         // Private before it holds anything, or no copy, unless the file
         // system has no permissions to set.
@@ -2856,12 +2856,12 @@ fn save_before_connect(config_path: &Path) -> Result<Option<(PathBuf, bool)>, St
         if let Err(e) = f.write_all(&bytes).and_then(|()| f.sync_all()) {
             drop(f);
             let _ = std::fs::remove_file(&target);
-            return Err(format!("Could not save {}: {e}", target.display()));
+            return Err(format!("Couldn't save {}: {e}", target.display()));
         }
         return Ok(Some((target, folder_rights)));
     }
     Err(format!(
-        "Could not save a copy of {} before the first sync: too many copies today.",
+        "Couldn't save a copy of {} before the first sync: too many copies today.",
         config_path.display()
     ))
 }

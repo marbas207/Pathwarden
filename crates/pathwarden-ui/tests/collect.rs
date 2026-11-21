@@ -279,12 +279,10 @@ async fn the_wizard_page_and_its_assets() {
     let keep = body.find("Keep the raw collection").unwrap();
     let also = body.find(r#"<div class="also" id="also">"#).unwrap();
     assert!(keep < also && also < body.find(r#"id="ew""#).unwrap());
-    assert!(body.contains(
-        "<h3>Analyze other data with it <span class=\"muted small\">(optional)</span></h3>"
-    ));
+    assert!(body.contains("<h3>Add other data <span class=\"muted small\">(optional)</span></h3>"));
     assert!(body.contains("AzureHound, OpenGraph or SharpHound files. They are read with the collection when it finishes."));
     assert!(body.contains(r#"<input type="file" id="also-files" multiple accept=".zip,.json""#));
-    assert!(body.contains(r#"<span class="dz-hint">.zip, .json or a folder</span>"#));
+    assert!(body.contains(r#"<span class="dz-hint">.zip or .json, or drop a folder</span>"#));
     let row = body
         .find(r#"<div class="also-row" id="run-also" hidden>"#)
         .unwrap();
@@ -602,7 +600,7 @@ async fn the_schedule_page_and_files() {
     // them again to correct, and there are no files until they work.
     let bad = "os=windows&folder=C%3A%5Cx%27%3B%20calc&at=99%3A00";
     let (_, _, body) = a.get(&format!("/automate/schedule?{bad}")).await;
-    assert!(body.contains("The folder must be a full path"));
+    assert!(body.contains("Use a full path of its own"));
     assert!(body.contains("Enter the time as HH:MM"));
     assert!(body.contains(r#"value="C:\x&#39;; calc""#), "{body}");
     assert!(body.contains(r#"value="99:00""#));
@@ -612,7 +610,7 @@ async fn the_schedule_page_and_files() {
         r#"<input type="text" id="at" name="at" value="99:00" aria-invalid="true" aria-describedby="sf-err-at">"#
     ), "{body}");
     assert!(body.contains(r#"aria-invalid="true" aria-describedby="sf-err-folder""#));
-    assert!(body.contains(r#"<li id="sf-err-folder">The folder must be a full path"#));
+    assert!(body.contains(r#"<li id="sf-err-folder">Use a full path"#));
     assert!(body.contains(r#"<li id="sf-err-at">Enter the time"#));
     assert!(!body.contains("sf-err-account"));
     assert!(
@@ -708,7 +706,7 @@ async fn sharphound_collects_then_the_analysis_runs() {
     );
     assert_eq!(c.domain, "pathwarden.demo");
     assert!(c.current_user && c.kept.is_none());
-    assert!(summary.source.starts_with("Collected from pathwarden.demo"));
+    assert!(summary.source.starts_with("Collected from PATHWARDEN.DEMO"));
     let raw =
         std::fs::read_to_string(a.state.ws().run_dir(&job).unwrap().join("summary.json")).unwrap();
     assert!(raw.contains("\"collection\""));
@@ -735,7 +733,7 @@ async fn sharphound_collects_then_the_analysis_runs() {
     );
     assert!(!tab.contains("collector warning"), "{tab}");
     assert!(
-        tab.contains(r##"<a href="#" data-pw-run="schedule">Run it every night</a>"##),
+        tab.contains(r##"<a href="#" data-pw-run="schedule">Schedule this collection</a>"##),
         "{tab}"
     );
     let (_, _, sched) = a
@@ -840,10 +838,7 @@ async fn other_files_go_with_a_collection_before_and_after() {
         .post("/api/collect/start", Some(form("20990101-000000-000000")))
         .await;
     assert_eq!(s, StatusCode::CONFLICT);
-    assert_eq!(
-        v["error"],
-        "The files to analyze with the collection are no longer waiting. Add them again."
-    );
+    assert_eq!(v["error"], "The added files were cleared. Add them again.");
     let (s, v, text) = a.post("/api/collect/start", Some(form(&also))).await;
     assert_eq!(s, StatusCode::ACCEPTED, "{text}");
     let job = v["job"].as_str().unwrap().to_string();
@@ -857,7 +852,7 @@ async fn other_files_go_with_a_collection_before_and_after() {
     );
     let first = a.state.ws().summary(&job).unwrap();
     assert!(
-        first.source.starts_with("Collected from pathwarden.demo")
+        first.source.starts_with("Collected from PATHWARDEN.DEMO")
             && first.source.ends_with(", with contoso-azurehound.json"),
         "{}",
         first.source
@@ -970,7 +965,7 @@ async fn nothing_to_add_to_without_the_kept_collection() {
     assert!(pathwarden_ui::opengraph_ui::read_stats(&dir).is_none());
     let (_, _, tab) = a.get(&format!("/runs/{job}/report?embed=1")).await;
     assert!(
-        tab.contains(r#"<button type="button" class="rd-btn" disabled><span>Add files and analyze again</span></button><span class="why">The collection wasn&#39;t kept, so there is nothing to add to. Keep the raw collection when you collect.</span>"#),
+        tab.contains(r#"<button type="button" class="rd-btn" disabled><span>Add files and analyze again</span></button><span class="why">The raw collection wasn&#39;t kept. Tick Keep the raw collection next time.</span>"#),
         "{tab}"
     );
     let (s, v, _) = a
@@ -980,7 +975,7 @@ async fn nothing_to_add_to_without_the_kept_collection() {
     assert!(v["error"]
         .as_str()
         .unwrap()
-        .starts_with("The collection wasn't kept"));
+        .starts_with("The raw collection wasn't kept"));
 
     // Staged for a collection that stops: deleted with it.
     let slow = slow_sharphound(&a.dir.join("tools"));
@@ -1146,7 +1141,7 @@ async fn several_domains_one_fails_and_the_rest_are_analyzed() {
     let summary = a.state.ws().summary(&job).expect("run saved");
     assert!(summary
         .source
-        .starts_with("Collected from pathwarden.demo and 1 trusted domain"));
+        .starts_with("Collected from PATHWARDEN.DEMO and 1 trusted domain"));
     let c = summary.collection.expect("collection recorded");
     assert_eq!(c.domains.len(), 2);
     assert!(c.domains[0].collected && c.domains[0].objects.unwrap() > 0);
@@ -1310,13 +1305,14 @@ async fn the_progress_view_is_one_panel_in_the_domain_list() {
         .find(r#"<ul class="warn-list" id="run-warnings" hidden>"#)
         .unwrap();
     assert!(notes < warnings);
-    assert!(page[notes..warnings].contains(r#"aria-controls="run-warnings">Show</button>"#));
-    assert!(page[notes..warnings].contains(r#"id="run-output" aria-expanded="false" aria-controls="run-log-box" hidden>Collector output</button>"#));
+    assert!(page[notes..warnings]
+        .contains(r#"aria-controls="run-warnings" aria-label="Show warnings">Show</button>"#));
+    assert!(page[notes..warnings].contains(r#"id="run-output" aria-expanded="false" aria-controls="run-log-box" hidden>Collector log</button>"#));
     assert_eq!(page.matches(r#"role="progressbar""#).count(), 1);
     for k in ["done", "skipped", "waiting"] {
         assert!(
             list.contains(&format!(
-                r#"<button type="button" class="linkish dg-show" aria-expanded="false" aria-controls="run-{k}-list">Show</button></div><ol class="dg-list" id="run-{k}-list" hidden></ol>"#
+                r#"<button type="button" class="linkish dg-show" aria-expanded="false" aria-controls="run-{k}-list" aria-label="Show {k} domains">Show</button></div><ol class="dg-list" id="run-{k}-list" hidden></ol>"#
             )),
             "{k}"
         );

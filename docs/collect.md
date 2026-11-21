@@ -50,6 +50,19 @@ logged-on admins and local admin rights are missing.
   and mark findings fixed. The run warns when it wasn't named. The full
   name also makes the LDAPS certificate match.
 
+### From a computer outside the domain
+
+**Use my Windows account** needs a domain account. On a computer that
+isn't in the domain, either enter a user and password, or start Pathwarden
+as a domain user for network sign-ins only:
+
+```powershell
+runas /netonly /user:SCALE\svc-pathwarden "C:\Pathwarden\pathwarden.exe ui"
+```
+
+Then choose **Use my Windows account**. The computer must reach the
+domain's DNS and a domain controller.
+
 ### Signing in to computers
 
 The built-in collector signs in to computers with **Kerberos only** and

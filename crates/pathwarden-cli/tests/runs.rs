@@ -104,7 +104,7 @@ fn runs_list_show_and_report() {
     assert_eq!(point["source"], "numbers-only", "{v}");
     assert_eq!(point["tags"][0], "Scheduled");
     assert_eq!(point["tags"][1], "Numbers with names");
-    assert_eq!(point["note"], "no full run");
+    assert!(point["note"].is_null(), "the tag says it: {v}");
     assert_eq!(point["id"], point["run_id"]);
     assert_eq!(saved["source"], "local", "{v}");
     assert!(saved["run_id"].is_string(), "recorded too: {v}");
@@ -119,7 +119,7 @@ fn runs_list_show_and_report() {
     let text = list(&[]);
     assert!(text.contains("[Scheduled]  [Numbers with names]"), "{text}");
     assert!(
-        text.contains("Recorded by the schedule · no full run"),
+        text.contains("Recorded by the schedule") && !text.contains("no full run"),
         "{text}"
     );
     assert!(text.contains("With an attack path to Tier Zero:"), "{text}");
@@ -222,7 +222,7 @@ fn runs_list_show_and_report() {
     assert_eq!(v["open_in_full"]["numbers_only"], 1, "{v}");
     let text = words(storage(&[]));
     assert!(
-        text.contains("Full runs 1 of 2 runs open in full on this computer · 1 numbers only"),
+        text.contains("Full runs 1 of 2 runs open in full on this computer · 1 numbers with names"),
         "{text}"
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -429,9 +429,9 @@ fn runs_show_has_the_other_sources() {
     for want in [
         "    Source             TaskHound, OpenGraph · 1 file: taskhound.json",
         "    Relationships kept ",
-        "    Mapping            Trusted, ",
-        "    Coverage           No coverage file.",
-        "    For retests: Findings that rest on TaskHound can't be marked Fixed",
+        "    Mapping            Trusted mapping: ",
+        "    Coverage           No coverage file: its findings are never marked Fixed.",
+        "    For retests: findings from TaskHound can't be marked Fixed",
         "    Mappings lists what each pack means. `pathwarden mappings list` shows them.",
     ] {
         assert!(text.contains(want), "{want} in {text}");

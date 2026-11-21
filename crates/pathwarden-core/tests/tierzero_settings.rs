@@ -801,8 +801,8 @@ fn the_report_shows_the_tier_zero_settings_row() {
         "ESC6, ESC9, ESC10 and ESC11 need registry settings that only a settings file provides."
     ));
     assert!(
-        html.contains("Have each server&#39;s admins run Get-PathwardenTierZeroSettings.ps1")
-            || html.contains("Have each server's admins run Get-PathwardenTierZeroSettings.ps1")
+        html.contains("Settings files come from a script each server&#39;s admins run")
+            || html.contains("Settings files come from a script each server's admins run")
     );
     assert!(html.contains("<th>Enterprise CA</th><th>Settings</th><th>Still needed</th>"));
     assert!(html.contains(r#"<td>PKI-CA</td><td class="warn">No settings file yet.</td><td>A settings file from this CA.</td>"#));

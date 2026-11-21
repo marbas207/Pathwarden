@@ -30,9 +30,13 @@ fn a_local_account_defaults_to_a_password_and_says_why() {
     assert!(text.contains("isn't a domain account"), "{text}");
     assert!(!text.contains("No password needed"));
     assert!(why.contains("isn't a domain account"), "{why}");
-    assert!(why.contains("runas /netonly"));
+    assert!(why.contains("runs as a domain user"), "{why}");
+    assert!(
+        why.contains("collect.html#from-a-computer-outside-the-domain"),
+        "{why}"
+    );
     if BUILTIN {
-        assert!(why.contains("chose a user and password"), "{why}");
+        assert!(why.contains("a user and password are chosen"), "{why}");
     }
 }
 

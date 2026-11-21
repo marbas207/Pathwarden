@@ -391,13 +391,13 @@ impl Range {
         }
     }
 
-    /// "three months", in a sentence: "the three months up to the latest
+    /// "3 months", in a sentence: "the 3 months up to the latest
     /// run".
     pub fn span(self) -> &'static str {
         match self {
             Range::Week => "week",
             Range::Month => "month",
-            Range::Quarter => "three months",
+            Range::Quarter => "3 months",
             Range::All => "whole history",
         }
     }
@@ -472,7 +472,7 @@ fn collected(c: Option<CompletenessPoint>) -> String {
             let u = c.untargeted();
             match c.local_groups_percent {
                 _ if u.sessions && (u.local_groups || c.local_groups_percent.is_none()) => {
-                    "not targeted".into()
+                    "not collected".into()
                 }
                 Some(lg) if u.sessions => format!("-/{}%", crate::since::whole_percent(lg)),
                 _ => format!("{}/-", crate::since::whole_percent(c.sessions_percent)),
@@ -737,7 +737,7 @@ pub fn render(
     }
     let _ = writeln!(
         out,
-        "\nSteps: plan steps of the remediation path. -: not recorded then.\n\
+        "\nSteps: steps of the remediation path. -: not recorded then.\n\
          Protected: % of Tier Zero objects that no open attack path finding leads to.\n\
          Collected: % of computers with sessions / % of member computers with local groups{}.",
         if points.iter().any(|p| p
@@ -745,7 +745,7 @@ pub fn render(
             .as_ref()
             .is_some_and(|c| c.untargeted().any()))
         {
-            "; not targeted (or -): the run didn't ask for them"
+            "; not collected (or -): the run didn't ask for them"
         } else {
             ""
         }
@@ -1009,7 +1009,7 @@ mod tests {
             assert_eq!(Range::parse(r.key()), Some(r));
         }
         assert_eq!(Range::parse("2w"), None);
-        assert_eq!(Range::Quarter.span(), "three months");
+        assert_eq!(Range::Quarter.span(), "3 months");
     }
 
     #[test]

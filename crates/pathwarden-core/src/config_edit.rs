@@ -175,7 +175,7 @@ pub fn set_state_encrypted_in(path: &Path, on: bool) -> Result<(), String> {
         doc.set_state_encrypted(on)?;
         let text = doc.text_for_file();
         check(&text).map_err(|e| format!("Not saved: {e}"))?;
-        write_atomic(path, &text).map_err(|e| format!("Could not save {}: {e}", path.display()))
+        write_atomic(path, &text).map_err(|e| format!("Couldn't save {}: {e}", path.display()))
     })
 }
 
@@ -205,7 +205,7 @@ fn with_lock_within<T>(
                 // The file system can't lock (it never will): say so now.
                 Err(std::fs::TryLockError::Error(e)) => {
                     return Err(format!(
-                        "Could not lock {} to save {name}: {e}",
+                        "Couldn't lock {} to save {name}: {e}",
                         lock.display()
                     ))
                 }
@@ -218,7 +218,7 @@ fn with_lock_within<T>(
                 ) =>
             {
                 return Err(format!(
-                    "Could not lock {} to save {name}: {e}",
+                    "Couldn't lock {} to save {name}: {e}",
                     lock.display()
                 ))
             }
@@ -230,7 +230,7 @@ fn with_lock_within<T>(
                 None => format!(
                     "Another Pathwarden (the app or a command) is saving {name}. Try again in a moment."
                 ),
-                Some(e) => format!("Could not lock {} to save {name}: {e}", lock.display()),
+                Some(e) => format!("Couldn't lock {} to save {name}: {e}", lock.display()),
             });
         }
         std::thread::sleep(std::time::Duration::from_millis(25));
@@ -251,7 +251,9 @@ fn set_refresh(t: &mut dyn TableLike, backend: &str, n: u32) -> Result<(), Strin
         );
     }
     if !(1..=MAX_REFRESH_MINUTES).contains(&n) {
-        return Err(format!("Sync every 1 to {MAX_REFRESH_MINUTES} minutes."));
+        return Err(format!(
+            "Sync every: choose 1 to {MAX_REFRESH_MINUTES} minutes."
+        ));
     }
     if n == DEFAULT_REFRESH_MINUTES {
         t.remove("refresh");
@@ -330,10 +332,10 @@ pub fn check_settings_folder(f: &str) -> Result<(), String> {
 fn clean(what: &str, s: &str) -> Result<String, String> {
     let t = s.trim();
     if t.chars().any(char::is_control) {
-        return Err(format!("{what} contains a control character"));
+        return Err(format!("{what} contains a control character."));
     }
     if t.chars().count() > MAX_LEN {
-        return Err(format!("{what} is longer than {MAX_LEN} characters"));
+        return Err(format!("{what} is longer than {MAX_LEN} characters."));
     }
     Ok(t.to_string())
 }
@@ -350,7 +352,7 @@ fn clean_note(s: &str) -> Result<String, String> {
         .chars()
         .any(|c| (c.is_control() && c != '\n') || crate::text::is_bidi_control(c))
     {
-        return Err("The note contains a control character".into());
+        return Err("The note contains a control character.".into());
     }
     let mut out = String::with_capacity(text.len());
     let mut blank = 0;
@@ -369,7 +371,7 @@ fn clean_note(s: &str) -> Result<String, String> {
         out.push_str(line);
     }
     if out.chars().count() > MAX_LEN {
-        return Err(format!("The note is longer than {MAX_LEN} characters"));
+        return Err(format!("The note is longer than {MAX_LEN} characters."));
     }
     Ok(out)
 }
@@ -392,7 +394,7 @@ fn text_value(s: &str) -> Value {
 /// Trimmed, without empties or duplicates (case-insensitive), in order.
 fn clean_list(what: &str, items: &[String]) -> Result<Vec<String>, String> {
     if items.len() > MAX_ITEMS {
-        return Err(format!("{what}: more than {MAX_ITEMS} entries"));
+        return Err(format!("{what}: more than {MAX_ITEMS} entries."));
     }
     let mut seen = HashSet::new();
     let mut out = Vec::new();
@@ -880,7 +882,7 @@ impl ConfigDoc {
         match std::fs::read_to_string(path) {
             Ok(text) => Self::parse(&text),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::template()),
-            Err(e) => Err(format!("Could not read {}: {e}", path.display())),
+            Err(e) => Err(format!("Couldn't read {}: {e}", path.display())),
         }
     }
 
@@ -1073,18 +1075,18 @@ impl ConfigDoc {
             ("Seamless SSO key age days", r.sso_key_age_days.unwrap_or(1)),
         ] {
             if !(1..=36_500).contains(&v) {
-                return Err(format!("{what} must be a whole number from 1 to 36500"));
+                return Err(format!("{what} must be a whole number from 1 to 36500."));
             }
         }
         let severity = r.severity.trim().to_ascii_lowercase();
         if !matches!(severity.as_str(), "exposure" | "static") {
-            return Err("Severity must be \"exposure\" or \"static\"".into());
+            return Err("Choose By exposure or By rule.".into());
         }
         let known = findings::rules();
         let mut disabled = Vec::new();
         for d in clean_list("Disabled rules", &r.disabled)? {
             let Some(rule) = known.iter().find(|k| k.id.eq_ignore_ascii_case(&d)) else {
-                return Err(format!("{d} is not a rule (see `pathwarden rules`)"));
+                return Err(format!("{d} is not a rule Pathwarden has."));
             };
             disabled.push(rule.id.to_string());
         }
@@ -1154,7 +1156,7 @@ impl ConfigDoc {
                     rules
                         .iter()
                         .find(|k| k.id.eq_ignore_ascii_case(&r))
-                        .ok_or_else(|| format!("{r} is not a rule (see `pathwarden rules`)"))?
+                        .ok_or_else(|| format!("{r} is not a rule Pathwarden has."))?
                         .id
                         .to_string(),
                 ),
@@ -1177,10 +1179,10 @@ impl ConfigDoc {
                 (Some(format!("{}-{hash}", rule.id)), None)
             }
         };
-        let expires = opt("Expiry date", &s.expires)?;
+        let expires = opt("Review by", &s.expires)?;
         if let Some(d) = &expires {
             if time::parse_date(d).is_none() || d.len() != 10 {
-                return Err(format!("{d} is not a date (YYYY-MM-DD)"));
+                return Err(format!("{d} is not a date (YYYY-MM-DD)."));
             }
             // A day already over would accept nothing: the finding counts as
             // open again after it (Config::apply_suppressions). An entry
@@ -1194,7 +1196,7 @@ impl ConfigDoc {
                 .map_or(0, |d| d.as_secs() as i64);
             if kept.as_deref() != Some(d.as_str()) && crate::config::expired(d, now) {
                 return Err(format!(
-                    "{} has already passed (dates are in UTC): from the day after its date, an accepted risk counts as open again. Choose a later date, or none.",
+                    "{} has passed. Choose a later date, or none.",
                     crate::time::day_of(d)
                 ));
             }
@@ -1398,7 +1400,9 @@ impl ConfigDoc {
     pub fn set_state(&mut self, s: &StateEdit) -> Result<(), String> {
         let backend = s.backend.trim().to_ascii_lowercase();
         if !matches!(backend.as_str(), "local" | "git") {
-            return Err("Choose where to keep state: a local folder or a git repository.".into());
+            return Err(
+                "Choose where to keep the run history: a local folder or a git repository.".into(),
+            );
         }
         let path = opt("Folder", &s.path)?;
         let mut remote = opt("Repository", &s.remote)?;
@@ -1431,7 +1435,7 @@ impl ConfigDoc {
         }
         if backend == "git" {
             let Some(r) = &remote else {
-                return Err("Enter the repository URL to keep state in.".into());
+                return Err("Enter the repository URL to keep the run history in.".into());
             };
             validate_remote(r)?;
         }
@@ -1515,7 +1519,7 @@ impl ConfigDoc {
             return Err("Give the zone a name.".into());
         }
         if name.len() > 100 {
-            return Err("Keep the zone name under 100 characters.".into());
+            return Err("Keep the zone name to 100 characters or fewer.".into());
         }
         if is_tier_zero_name(&name) {
             return Err(TIER_ZERO_NAME.into());
@@ -3386,7 +3390,7 @@ reason = "LAPS rollout tracked in PRJ0042"
         // A folder that isn't there: refused at once, not after 10 seconds.
         let started = std::time::Instant::now();
         let e = with_lock(&dir.join("missing").join("pathwarden.toml"), || Ok(())).unwrap_err();
-        assert!(e.contains("Could not lock"), "{e}");
+        assert!(e.contains("Couldn't lock"), "{e}");
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
         // An error from the change still lets the next one in.
         assert_eq!(

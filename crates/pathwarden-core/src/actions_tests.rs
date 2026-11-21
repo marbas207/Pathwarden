@@ -1395,7 +1395,7 @@ fn cancel_kills_the_whole_tree() {
     assert!(alive.exists(), "the grandchild never started");
     assert_eq!(out.ended, Ended::Cancelled);
     assert!(!out.ok);
-    assert_eq!(out.message, "Cancelled: it was stopped before it finished.");
+    assert_eq!(out.message, "Canceled before it finished.");
     assert_eq!(out.progress, ["started"]);
     // What it wrote to stderr before the cancel is kept.
     assert_eq!(out.details, "working on it");
@@ -1476,7 +1476,7 @@ fn describe_is_kept_until_the_script_changes() {
     let e = describe(&a).unwrap_err().to_string();
     assert_eq!(
         e,
-        "test didn't list its actions: actions must be a list of the actions the program offers"
+        "test sent a list of actions Pathwarden can't read: actions must be a list of the actions the program offers"
     );
     let a = script(&dir, "exit 0\n", "exit 0\n", 60);
     let e = describe_fresh(&a, &mut |_| {}, &CancelHandle::new())
@@ -1484,7 +1484,7 @@ fn describe_is_kept_until_the_script_changes() {
         .to_string();
     assert_eq!(
         e,
-        "test didn't list its actions: it wrote nothing to the file named in PATHWARDEN_ACTION_RESULT"
+        "test sent a list of actions Pathwarden can't read: it wrote nothing to the file named in PATHWARDEN_ACTION_RESULT"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -1527,7 +1527,7 @@ fn a_failed_describe_is_kept_a_while() {
     let e = describe(&a).unwrap_err().to_string();
     assert_eq!(
         e,
-        "test didn't list its actions: it stopped with exit code 1"
+        "test sent a list of actions Pathwarden can't read: it stopped with exit code 1"
     );
     assert_eq!(describe(&a).unwrap_err().to_string(), e);
     let runs = std::fs::read_to_string(&count).unwrap_or_default();

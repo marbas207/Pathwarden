@@ -73,9 +73,9 @@ fn kept_words(source: &Option<Source>) -> String {
         Some(Source::File(_)) => {
             "passphrase stored on this computer (a protected file for this account)".into()
         }
-        Some(Source::Systemd) => "passphrase from the service's credential".into(),
+        Some(Source::Systemd) => "passphrase stored for the scheduled run".into(),
         Some(Source::Another) => "passphrase kept on this computer for another history".into(),
-        Some(Source::Env) => format!("passphrase from {}", keystore::ENV_VAR),
+        Some(Source::Env) => "passphrase from an environment variable".into(),
         Some(Source::Given) => "passphrase given for this session only".into(),
         None => "passphrase not stored on this computer".into(),
     }
@@ -94,9 +94,9 @@ pub fn in_use_row(e: &Encryption) -> String {
                 Some(Source::File(_)) => {
                     "Stored on this computer in a protected file, for this account.".into()
                 }
-                Some(Source::Systemd) => "From the service's credential.".into(),
+                Some(Source::Systemd) => "Stored for the scheduled run.".into(),
                 Some(Source::Another) => "Kept on this computer for another history.".into(),
-                Some(Source::Env) => format!("From {}.", keystore::ENV_VAR),
+                Some(Source::Env) => "From an environment variable.".into(),
                 Some(Source::Given) => "Given for this session only.".into(),
                 None => "Not stored on this computer.".into(),
             };
@@ -123,7 +123,7 @@ fn notes() -> String {
         tip(
             "tip-enc",
             "Encryption",
-            "The contents of every file Pathwarden writes to the folder or repository are encrypted. File names, run times, sizes and commit times stay visible.<br>The workspace on this computer is never encrypted.<br>Keep a copy of the passphrase in your password manager.<br>The scheduled task's account needs the passphrase stored once; the setup script asks for it.<br>Changing the passphrase re-encrypts the latest files. Older versions in the git history stay readable with the old one.<br>Encrypted files don't shrink between versions, so the repository grows faster.",
+            "Every file's contents are encrypted; names, sizes and times stay visible. Runs kept on this computer are not.<br>Keep a copy of the passphrase in your password manager.<br>A new passphrase re-encrypts the latest files only: older versions in a git history stay readable with the old one.",
             true
         )
     )
@@ -148,15 +148,15 @@ pub fn where_block(e: &Encryption) -> String {
         sub = if on {
             "On by default for full runs."
         } else {
-            "Available at this level too. Off: the history is kept as plain files."
+            "Off: the history is kept as plain files."
         },
     );
     if let Encryption::On(source) = e {
         let _ = write!(
             b,
-            r#"<div class="enc-body" id="enc-on"><p class="enc-status">{lock}<span><strong>Encrypted</strong> · {kept}</span></p><div class="enc-actions"><button type="button" class="btn small-btn" id="enc-change-open">Change passphrase</button><button type="button" class="btn small-btn" id="enc-check">Check the passphrase</button><span class="enc-msg small" id="enc-msg" aria-live="polite"></span></div>{notes}
-<div class="enc-setup" id="enc-change" hidden><p class="enc-title">{lock}<strong>Change the passphrase</strong></p>{current}{fields}<p class="hint">Every file is encrypted again. Other computers need the new passphrase.</p><div class="enc-actions"><button type="button" class="btn primary" id="enc-change-go" disabled>{lock} Change passphrase</button><button type="button" class="btn" id="enc-change-cancel">Cancel</button><span class="enc-msg small" aria-live="polite"></span></div></div>
-<div class="note warn enc-skip-warn" id="enc-off" hidden>{alert}<div><p><strong>Decrypt the history?</strong> Every file is written as plain text again, readable by anyone who can read this folder or repository. {tip_off}</p><div class="enc-actions"><button type="button" class="btn small-btn danger" id="enc-off-go">Decrypt and save</button><button type="button" class="btn small-btn" id="enc-off-cancel">Keep it encrypted</button><span class="enc-msg small" aria-live="polite"></span></div></div></div></div>"#,
+            r#"<div class="enc-body" id="enc-on"><p class="enc-status">{lock}<span><strong>Encrypted</strong> · {kept}</span></p><div class="enc-actions"><button type="button" class="btn small-btn" id="enc-change-open">Change passphrase</button><button type="button" class="btn small-btn" id="enc-check">Check passphrase</button><span class="enc-msg small" id="enc-msg" aria-live="polite"></span></div>{notes}
+<div class="enc-setup" id="enc-change" hidden><p class="enc-title">{lock}<strong>Change passphrase</strong></p>{current}{fields}<p class="hint">Every file is encrypted again. Other computers need the new passphrase.</p><div class="enc-actions"><button type="button" class="btn primary" id="enc-change-go" disabled>{lock} Change passphrase</button><button type="button" class="btn" id="enc-change-cancel">Cancel</button><span class="enc-msg small" aria-live="polite"></span></div></div>
+<div class="note warn enc-skip-warn" id="enc-off" hidden>{alert}<div><p><strong>Decrypt the history?</strong> Every file is written as plain text again, readable by anyone who can read this folder or repository. {tip_off}</p><div class="enc-actions"><button type="button" class="btn small-btn danger" id="enc-off-go">Decrypt and save</button><button type="button" class="btn small-btn" id="enc-off-cancel">Cancel</button><span class="enc-msg small" aria-live="polite"></span></div></div></div></div>"#,
             lock = icon("i-lock"),
             alert = icon("i-alert"),
             kept = esc(&kept_words(source)),
@@ -183,7 +183,7 @@ pub fn where_block(e: &Encryption) -> String {
     } else {
         let _ = write!(
             b,
-            r##"<div class="enc-body" id="enc-setup-wrap" hidden><div class="enc-setup"><p class="enc-title">{lock}<strong>Set the passphrase</strong></p>{fields}{notes}<label class="check-row"><input type="checkbox" id="enc-ack"><span><strong>I understand a lost passphrase can't be recovered</strong></span></label><div class="enc-actions"><button type="button" class="btn primary" id="enc-set" disabled>{lock} Set passphrase and save</button><a href="#enc-no" class="enc-skip" id="enc-skip">Don't encrypt</a><span class="enc-msg small" aria-live="polite"></span></div><div class="note warn enc-skip-warn" id="enc-no" hidden>{alert}<div><p><strong>Keep full runs unencrypted?</strong> Only if the repository is protected another way. Otherwise anyone who can read it can read <span class="nw">every full run. {tip_no}</span></p><div class="enc-actions"><button type="button" class="btn small-btn danger" id="enc-no-save">Save without encryption</button><button type="button" class="btn small-btn" id="enc-no-back">Encrypt after all</button></div></div></div></div></div>"##,
+            r##"<div class="enc-body" id="enc-setup-wrap" hidden><div class="enc-setup"><p class="enc-title">{lock}<strong>Set passphrase</strong></p>{fields}{notes}<label class="check-row"><input type="checkbox" id="enc-ack"><span><strong>I understand a lost passphrase can't be recovered</strong></span></label><div class="enc-actions"><button type="button" class="btn primary" id="enc-set" disabled>{lock} Set passphrase and save</button><a href="#enc-no" class="enc-skip" id="enc-skip">Don't encrypt</a><span class="enc-msg small" aria-live="polite"></span></div><div class="note warn enc-skip-warn" id="enc-no" hidden>{alert}<div><p><strong>Keep full runs unencrypted?</strong> Only if the repository is protected another way. Otherwise anyone who can read it can read <span class="nw">every full run. {tip_no}</span></p><div class="enc-actions"><button type="button" class="btn small-btn danger" id="enc-no-save">Save without encryption</button><button type="button" class="btn small-btn" id="enc-no-back">Encrypt after all</button></div></div></div></div></div>"##,
             lock = icon("i-lock"),
             alert = icon("i-alert"),
             fields = new_fields("enc", "Passphrase"),
@@ -244,7 +244,8 @@ pub fn gate(loc: &Location) -> Option<String> {
 
 /// The gate's line under its heading on Runs (and in `pathwarden runs
 /// list`).
-pub const GATE_LEAD: &str = "Enter the passphrase to open its runs. Runs analyzed here show below.";
+pub const GATE_LEAD: &str =
+    "Enter the passphrase to open its runs. Runs from this computer are below.";
 
 /// The terminal's lead for the same (`pathwarden runs`): no "below" and
 /// no field to type into; the command then says how to store it.
@@ -323,7 +324,7 @@ async fn with_location(
     if st.jobs.running().is_some() {
         return error(
             StatusCode::CONFLICT,
-            "An analysis is running. Try again when it has finished.",
+            "A collection or analysis is running. Try again when it finishes.",
         );
     }
     let ws = st.ws();
@@ -336,7 +337,10 @@ async fn with_location(
     match done {
         Ok(Ok(v)) => Json(v).into_response(),
         Ok(Err((status, message))) => error(status, message),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "That failed."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Pathwarden couldn't do that. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -377,9 +381,13 @@ fn turn_on(loc: &Location, p: Option<&Secret>) -> Result<Vec<String>, (StatusCod
     if let Err(e) = keystore::store(&loc.dir, &pass) {
         // Encrypted; this session keeps it, the next one asks.
         crypt::give_passphrase(&loc.dir, pass);
-        notes.push(format!(
-            "The history is encrypted, but the passphrase couldn't be stored on this computer ({e:#}); you'll be asked for it again."
+        pathwarden_core::logs::session_line(&format!(
+            "The passphrase couldn't be stored on this computer: {e:#}"
         ));
+        notes.push(
+            "The history is encrypted, but the passphrase couldn't be saved on this computer. You'll be asked for it again."
+                .to_string(),
+        );
     }
     Ok(notes)
 }
@@ -394,7 +402,7 @@ async fn save_and_encrypt(
     if st.jobs.running().is_some() {
         return error(
             StatusCode::CONFLICT,
-            "An analysis is running. Try again when it has finished.",
+            "A collection or analysis is running. Try again when it finishes.",
         );
     }
     // Not another place for the history from a page session.
@@ -440,7 +448,10 @@ async fn save_and_encrypt(
             Json(notes_json(&notes)).into_response()
         }
         Ok(Err((status, message))) => error(status, message),
-        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "That failed."),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Couldn't change the encryption. Try again; if it keeps failing, see Settings › Logs.",
+        ),
     }
 }
 
@@ -483,7 +494,7 @@ async fn encryption_api(
                 notes.insert(
                     0,
                     format!(
-                        "Accepted the history as no longer encrypted ({by}). Nothing was written."
+                        "The history is now marked as not encrypted ({by}). No files were changed."
                     ),
                 );
             }
@@ -547,7 +558,7 @@ async fn check_api(State(st): State<Shared>) -> Response {
             return Err(bad(CryptError::NeedPassphrase.into()));
         };
         if crypt::opens(&loc.dir, &pass).map_err(bad)? {
-            Ok(serde_json::json!({ "message": "It opens this history." }))
+            Ok(serde_json::json!({ "message": "The passphrase works." }))
         } else {
             Err(bad(CryptError::WrongPassphrase(source).into()))
         }
@@ -578,9 +589,13 @@ async fn open_api(State(st): State<Shared>, SecretJson(body): SecretJson<OpenBod
         let mut notes = Vec::new();
         if body.remember {
             if let Err(e) = keystore::store(&loc.dir, &pass) {
-                notes.push(format!(
-                    "It opens the history, but couldn't be stored on this computer ({e:#}); it is kept for this session."
+                pathwarden_core::logs::session_line(&format!(
+                    "The passphrase couldn't be stored on this computer: {e:#}"
                 ));
+                notes.push(
+                    "The passphrase works, but couldn't be saved on this computer. You'll be asked again next time."
+                        .to_string(),
+                );
             }
         }
         crypt::give_passphrase(&loc.dir, pass);

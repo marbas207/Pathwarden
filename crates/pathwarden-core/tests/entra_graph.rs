@@ -413,7 +413,7 @@ fn administrative_unit_roles_are_never_tenant_wide() {
     );
     let html = a.report_html(1_800_000_000, &mut analyze::Quiet);
     assert!(html.contains(
-        "AzureHound: 3 role assignments scoped to an administrative unit or one object not modeled (never counted as tenant-wide)"
+        "AzureHound: 3 role assignments scoped to an administrative unit or one object not analyzed"
     ));
 }
 

@@ -305,7 +305,7 @@ async fn answers_match_the_analysis() {
         [
             "Objects many paths cross",
             "Control over many objects",
-            "Privileged logons"
+            "Privileged sign-ins"
         ]
     );
     let items = v["items"].as_array().unwrap();
@@ -475,7 +475,7 @@ async fn the_page_and_its_assets() {
     std::fs::remove_file(dir.join("graph.bin.gz")).unwrap();
     let (s, body) = a.get(&format!("/runs/{run}/explore")).await;
     assert_eq!(s, StatusCode::OK);
-    assert!(body.contains("Re-analyze to explore"));
+    assert!(body.contains("Analyze again to explore"));
     assert!(!body.contains("/static/explore.js"));
     let (s, v) = a.api(&format!("/api/runs/{run}/explore")).await;
     assert_eq!(s, StatusCode::NOT_FOUND);

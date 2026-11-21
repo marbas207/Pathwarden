@@ -747,7 +747,7 @@ fn the_apps_history_in_git_keeps_every_run() {
         &["history", "storage", "pull", "--workspace", &w],
         &[],
     ));
-    assert!(pulled.contains("are not pushed yet"), "{pulled}");
+    assert!(pulled.contains("waiting to be shared"), "{pulled}");
     assert_eq!(log(&remote).len(), 2);
     std::fs::remove_file(&pre_receive).unwrap();
 

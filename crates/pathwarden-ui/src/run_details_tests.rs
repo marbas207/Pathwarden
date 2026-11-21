@@ -51,7 +51,7 @@ fn a_source_read_part_way_needs_a_look() {
     assert!(whole.incomplete_sources.is_empty() && !attention(&whole));
     assert!(!rows(&whole, None, &applies)
         .iter()
-        .any(|r| r.title == "Sources read part way"));
+        .any(|r| r.title == "Sources not read in full"));
 
     let kept = azure_run("kept", "[opengraph]\nmax_kept_mib = 0\n", |t| t);
     assert!(attention(&kept));
@@ -59,10 +59,10 @@ fn a_source_read_part_way_needs_a_look() {
     assert!(needs_a_look(&all));
     let row = all
         .iter()
-        .find(|r| r.title == "Sources read part way")
+        .find(|r| r.title == "Sources not read in full")
         .unwrap();
     assert!(row.warn);
-    assert_eq!(row.status, "AzureHound read part way");
+    assert_eq!(row.status, "AzureHound not read in full");
     assert_eq!(
         row.text,
         [
@@ -73,7 +73,7 @@ fn a_source_read_part_way_needs_a_look() {
     );
     let panel = panel_html(&kept, None, &applies, Remove::Hide, "n", None);
     assert!(
-            panel.contains(r#"<details class="row env" open><summary><span class="title">Sources read part way</span><span class="aside warn">AzureHound read part way</span></summary>"#),
+            panel.contains(r#"<details class="row env" open><summary><span class="title">Sources not read in full</span><span class="aside warn">AzureHound not read in full</span></summary>"#),
             "{panel}"
         );
     for never in ["pathwarden.toml", "max_kept_mib", "[opengraph]"] {
@@ -99,7 +99,7 @@ fn a_source_read_part_way_needs_a_look() {
     let all = rows(&over, None, &applies);
     let row = all
         .iter()
-        .find(|r| r.title == "Sources read part way")
+        .find(|r| r.title == "Sources not read in full")
         .unwrap();
     assert!(row.warn && attention(&over));
     assert_eq!(
@@ -237,7 +237,7 @@ fn a_sign_in_row() {
         .into_iter()
         .find(|r| r.title == HISTORY_ROW)
         .unwrap();
-    assert_eq!(row.text, ["This run is recorded here, but not pushed: this computer isn't signed in to the repository. Git here has no sign-in helper. Install Git for Windows with Git Credential Manager, then sync again."]);
+    assert_eq!(row.text, ["This run is saved here, but not shared yet: this computer isn't signed in to the repository. Git can't ask you to sign in. Install Git for Windows (it includes Git Credential Manager), then sync again."]);
     assert!(!row.sign_in, "no helper: nothing to open");
 
     // After a sign-in that worked, the push took it: recorded.
@@ -391,17 +391,17 @@ fn rows_say_what_needs_a_look() {
             r#"<details class="row env" open><summary><span class="title">Objects skipped</span><span class="aside warn">2 objects skipped</span></summary>"#,
             "<p>2 objects were too large to read safely. Findings that depend on them may be missing from this run.</p>",
             r#"<span class="aside warn">1 collector warning</span>"#,
-            "<p>This run was collected with the built-in collector, Quick (directory only). It read CONTOSO.LOCAL from dc01.contoso.local over LDAPS, signed in as your Windows account.</p>",
+            "<p>This run was collected with the built-in collector, Quick (directory only). It read CONTOSO.LOCAL from dc01.contoso.local over LDAPS, signed in as the Windows account that ran it.</p>",
             "<p>Group policy local groups (SYSVOL) are not collected without a password.</p>",
             "<li>LDAPS certificates were not checked, so anyone on the network path could read or change the collection.</li>",
-            r"<code>C:\c\x.zip</code>. Delete it when you no longer need it, because it is a complete map of your domain.",
-            r##"<a href="#" data-pw-run="schedule">Run it every night</a>"##,
-            r#"<span class="aside warn">Recorded here, not pushed yet</span>"#,
+            r"<code>C:\c\x.zip</code>. Delete it when done: it maps your whole domain.",
+            r##"<a href="#" data-pw-run="schedule">Schedule this collection</a>"##,
+            r#"<span class="aside warn">Saved here, not shared yet</span>"#,
             r##"<a href="#" data-pw-run="history">History storage</a>"##,
             r#"<span class="aside warn">1 difference to check</span>"#,
             r#"<details class="row env" open><summary><span class="title">History upgrade</span><span class="aside warn">Not finished</span></summary>"#,
             "<p>2 files in the history couldn&#39;t be upgraded. Pathwarden tries again on the next run.</p>",
-            r#"<span class="aside warn">Slower than the previous one</span>"#,
+            r#"<span class="aside warn">Slower than the previous collection</span>"#,
             r##"<a href="#" data-pw-run="performance">Collection slower</a>"##,
         ] {
             assert!(panel.contains(want), "{want} in {panel}");
@@ -418,7 +418,7 @@ fn rows_say_what_needs_a_look() {
         "{below}"
     );
     let schedule = format!(
-        r#"<a href="/automate/schedule?run={}">Run it every night</a>"#,
+        r#"<a href="/automate/schedule?run={}">Schedule this collection</a>"#,
         esc(&r.id)
     );
     assert!(below.contains(&schedule), "{below}");
@@ -442,7 +442,7 @@ fn rows_say_what_needs_a_look() {
     let history = all.iter().find(|r| r.title == "Run history").unwrap();
     assert_eq!(
             history.text,
-            ["This run is recorded here, but the change couldn't be pushed. Its full run goes with it."]
+            ["This run is recorded here, but the change couldn't be pushed. The report and graph go with it."]
         );
     assert!(history.warn);
     // A name keeps its case.
@@ -475,7 +475,7 @@ fn rows_say_what_needs_a_look() {
     assert_eq!(
         all[0].status,
         format!(
-            "From the repository · loaded {}",
+            "From the run history · loaded {}",
             pathwarden_core::time::format_local_date(1)
         )
     );
@@ -490,7 +490,7 @@ fn history_points_say_recorded_from() {
     assert_eq!(words("schedule"), "Recorded by the schedule");
     assert_eq!(words("ui"), "Recorded in the app");
     assert_eq!(words("import"), "Imported from the app");
-    assert_eq!(words("other"), "Recorded by a run");
+    assert_eq!(words("other"), "Source not recorded");
 }
 
 /// A report made before the tab held Run details' rows
@@ -617,7 +617,7 @@ fn add_other_data_goes_above_remove_this_run() {
     r.collection.as_mut().unwrap().kept = None;
     let panel = panel_html(&r, None, &applies, Remove::Hide, "n", None);
     let below = below_html(&r, None, &applies, Remove::Hide, None);
-    assert!(panel.contains(r#"<button type="button" class="rd-btn" disabled><span>Add files and analyze again</span></button><span class="why">The collection wasn&#39;t kept"#), "{panel}");
+    assert!(panel.contains(r#"<button type="button" class="rd-btn" disabled><span>Add files and analyze again</span></button><span class="why">The raw collection wasn&#39;t kept"#), "{panel}");
     assert!(
         below.contains(
             r#"<button type="button" class="btn" disabled>Add files and analyze again</button>"#
@@ -724,7 +724,7 @@ fn a_one_domain_run_names_the_trusted_domains_left_out() {
     assert!(!row.warn);
     assert_eq!(row.text, ["2 trusted domains weren't collected."]);
     let panel = panel_html(&r, None, &applies, Remove::Hide, "n", None);
-    assert!(panel.contains(r##"2 trusted domains weren&#39;t collected. <a href="#" data-pw-run="collect">Collect them</a></p>"##), "{panel}");
+    assert!(panel.contains(r##"2 trusted domains weren&#39;t collected. <a href="#" data-pw-run="collect">Collect the missing domains</a></p>"##), "{panel}");
     assert_eq!(
         crate::collect::collect_again_href(&r).as_deref(),
         Some("/collect?domain=contoso.local&pick=CHILD.CONTOSO.LOCAL,FABRIKAM.COM")
@@ -811,7 +811,7 @@ fn how_computers_were_signed_in_to() {
     };
     assert!(crate::collect::computers_sentence(&sharphound)
         .unwrap()
-        .contains("weren't enforced: SharpHound"));
+        .contains("don't apply to SharpHound"));
     let windows = crate::workspace::CollectionInfo {
         current_user: true,
         smb_signing: None,
@@ -883,15 +883,15 @@ fn the_settings_files_row_lists_each_file() {
     assert!(row.warn);
     assert_eq!(
         row.settings[0].text.text(),
-        "Domain controller. Settings read Oct 29, 2026."
+        "Domain controller · settings read Oct 29, 2026."
     );
     assert_eq!(
             row.settings[1].text.text(),
-            "Domain controller. Settings read Jul 14, 2026. Over 90 days old, so it can confirm a weakness but can't show that one was fixed."
+            "Domain controller · settings read Jul 14, 2026. Over 90 days old, so it can confirm a weakness but can't show that one was fixed."
         );
     assert_eq!(
         row.settings[2].text.text(),
-        "Certification authority. Settings read Oct 29, 2026."
+        "Certification authority · settings read Oct 29, 2026."
     );
     assert_eq!(
         row.settings[1].detail,
@@ -906,7 +906,7 @@ fn the_settings_files_row_lists_each_file() {
     // The tab: the date in local time on the page, the file name behind
     // an (i), the link asks the run page for the settings folders.
     let panel = panel_html(&r, None, &applies, Remove::Hide, "n", None);
-    assert!(panel.contains(r#"<li><span class="n">DC04.contoso.local</span><span class="bad">Domain controller. Settings read <time data-unix="#), "{panel}");
+    assert!(panel.contains(r#"<li><span class="n">DC04.contoso.local</span><span class="bad">Domain controller · settings read <time data-unix="#), "{panel}");
     assert!(panel.contains(r#"data-fmt="date" datetime="2026-07-14T10:00:00Z" title="Jul 14, 2026, 10:00 AM UTC">Jul 14, 2026</time>. Over 90 days old"#), "{panel}");
     assert!(panel.contains("File name: pathwarden-tierzero-DC04.contoso.local.json"));
     assert!(
@@ -1011,15 +1011,19 @@ fn other_sources_follow_where_it_came_from() {
         "{:?}",
         row.facts
     );
-    assert_eq!(get("Read"), "Read whole");
-    assert!(get("Mapping").starts_with("Trusted, "), "{:?}", row.facts);
+    assert_eq!(get("Read"), "Complete");
     assert!(
-        get("Mapping").ends_with(" pack: its mapped relationships make attack paths and findings.")
+        get("Mapping").starts_with("Trusted mapping: "),
+        "{:?}",
+        row.facts
+    );
+    assert!(
+        get("Mapping").ends_with(" pack's mapped relationships make attack paths and findings.")
     );
     assert_eq!(get("Coverage"), "From the collector: 1 tenant.");
     assert_eq!(
             row.text.last().unwrap(),
-            "For retests: Findings that rest on these sources are marked Fixed only when this coverage says the affected host was scanned again."
+            "For retests: findings that rest on these sources are marked Fixed only when this coverage says the affected host was scanned again."
         );
     assert_eq!(row.go, Some(Go::Mappings));
 
@@ -1094,15 +1098,15 @@ fn other_sources_that_need_a_look() {
     let has = |k: &str, v: &str| row.facts.iter().any(|(f, t, _)| *f == k && t == v);
     for (k, v) in [
             ("Source", "ContosoHound, OpenGraph · 1 file: contoso.json"),
-            ("Objects", "1,200 read: 3 matched to AD, 1,190 new, 7 unknown"),
+            ("Objects", "1,200: 3 matched to AD objects, 1,190 new, 7 not found"),
             ("Relationships kept", "40 (40 context only)"),
-            ("Dropped", "2 AD relationships (only AD data may say them); 1 with an end not found"),
-            ("Mapping", "Untrusted, context only: the Contoso pack labels its kinds; nothing from it is part of a path until the pack is trusted on Mappings."),
-            ("Coverage", "No coverage file. Its findings can open, but are never marked Fixed: a missing finding could be a host the collector didn't reach."),
+            ("Dropped", "2 AD relationships (ignored: only AD data sets these); 1 with an end not found"),
+            ("Mapping", "Untrusted mapping: context only. The Contoso pack labels its kinds; nothing from it is part of a path until the pack is trusted on Mappings."),
+            ("Coverage", "No coverage file: its findings are never marked Fixed."),
             ("Source", "<b>FabrikamHound</b>, OpenGraph · 1 file: a.zip!fabrikam.json"),
-            ("Read", "Read only partly (limit hit: edges)"),
-            ("Mapping", "No mapping, context only: shown in Explore; never part of a path, finding or plan."),
-            ("Coverage", "Coverage file bound, declared by a person: every enabled computer in FABRIKAM.LOCAL, 1 computer listed."),
+            ("Read", "Read only partly (stopped at the edges limit)"),
+            ("Mapping", "No mapping: context only. Shown in Explore; never part of a path, finding or the remediation path."),
+            ("Coverage", "Coverage file, declared by hand: every enabled computer in FABRIKAM.LOCAL, 1 computer listed."),
         ] {
             assert!(has(k, v), "{k}: {v} in {:?}", row.facts);
         }
@@ -1110,8 +1114,8 @@ fn other_sources_that_need_a_look() {
             row.text,
             [
                 "Relationship kinds no pack describes (context only): FB_Knows 3.",
-                "Coverage files not used: stray.coverage.json.",
-                "For retests: Findings that rest on ContosoHound can't be marked Fixed by a later run or retest: without coverage, their absence proves nothing. To declare what was scanned, analyze the files again from Analyze and fill in the coverage form under Detected sources.",
+                "Unused coverage files: stray.coverage.json.",
+                "For retests: findings from ContosoHound can't be marked Fixed without coverage. Declare it on Analyze.",
             ]
         );
     let panel = panel_html(&r, None, &applies, Remove::Hide, "n", None);
@@ -1130,10 +1134,7 @@ fn other_sources_that_need_a_look() {
             .unwrap();
     r.other_sources = Some(Box::new(only));
     let all = rows(&r, None, &applies);
-    assert_eq!(all[1].status, "Coverage files not used");
-    assert_eq!(
-        all[1].text,
-        ["Coverage files not used: stray.coverage.json."]
-    );
+    assert_eq!(all[1].status, "Unused coverage files");
+    assert_eq!(all[1].text, ["Unused coverage files: stray.coverage.json."]);
     assert_eq!(all[1].go, None);
 }

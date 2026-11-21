@@ -52,7 +52,7 @@ pub const SCRIPTS: &str = r#"<link rel="stylesheet" href="/static/retest.css"><l
 pub const BUSY_WORDS: &str = "Another action is running. Try again when it has finished.";
 /// Refused during a collection or an analysis.
 pub const ANALYZING_WORDS: &str =
-    "A collection or analysis is running. Run the action when it has finished.";
+    "A collection or analysis is running. Try again when it finishes.";
 
 pub fn routes() -> Router<Shared> {
     Router::new()
@@ -170,7 +170,7 @@ fn dialog_body() -> String {
   <span class="muted small ac-saved" id="ac-saved"></span>
   <span class="grow"></span>
   <button type="button" class="btn" id="ac-cancel">Cancel</button>
-  <button type="submit" form="ac-form" class="btn primary" id="ac-go"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg> <span>Run</span></button>
+  <button type="submit" form="ac-form" class="btn primary" id="ac-go"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg> <span>Start</span></button>
 </div>"##,
         i_x = icon("i-x"),
     )
@@ -252,7 +252,10 @@ async fn request_api(
     match done {
         Ok(Ok(request)) => Json(json!({ "request": request })).into_response(),
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Try again."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Something went wrong. Try again.",
+        ),
     }
 }
 
@@ -285,7 +288,10 @@ async fn run_api(
     match prepared {
         Ok(Ok((ready, blocks))) => start(&st, ws, ready, blocks),
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Try again."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Something went wrong. Try again.",
+        ),
     }
 }
 
@@ -317,7 +323,10 @@ async fn test_api(State(st): State<Shared>, Json(body): Json<TestBody>) -> Respo
     match prepared {
         Ok(Ok((ready, blocks))) => start(&st, ws, ready, blocks),
         Ok(Err(e)) => json_error(StatusCode::BAD_REQUEST, e),
-        Err(_) => json_error(StatusCode::INTERNAL_SERVER_ERROR, "Try again."),
+        Err(_) => json_error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Something went wrong. Try again.",
+        ),
     }
 }
 
@@ -457,6 +466,7 @@ fn said(
 ) -> String {
     match saved {
         None => actions_ui::DRY_RUN_PAGE_WORDS.to_string(),
+        Some(Err(why)) if out.ok => format!("Done, but not saved on the finding: {why}"),
         Some(Err(why)) => format!("Not saved on the finding: {why}"),
         Some(Ok(s)) if !s.saved => String::new(),
         Some(Ok(s)) if !s.pushed => actions_ui::SAVED_HERE_PAGE_WORDS.to_string(),
@@ -495,7 +505,7 @@ pub fn settings_section(st: &AppState, blocks: &[ActionConfig]) -> String {
             String::new()
         } else {
             format!(
-                r#"<div class="rh-actions"><a class="btn" href="/actions/new">{} Add an action program</a></div>"#,
+                r#"<div class="rh-actions"><a class="btn" href="/actions/new">{} Add a finding action</a></div>"#,
                 icon("i-plus")
             )
         },
@@ -581,11 +591,14 @@ pub fn settings_section(st: &AppState, blocks: &[ActionConfig]) -> String {
                     .iter()
                     .find(|(n, _)| *n == a.name)
                     .map(|(_, w)| w.as_str())
-                    .unwrap_or("It didn't say what it offers.");
+                    .unwrap_or("The program didn't list its actions.");
+                // One plain line; what the program's author needs is
+                // behind Show details.
                 let _ = write!(
                     b,
-                    r#"<p class="ac-problem">{} {}</p>"#,
+                    r#"<div class="ac-problem">{} {} <details class="ac-why"><summary>Show details</summary><p class="muted small">{}</p></details></div>"#,
                     icon("i-alert"),
+                    esc(&format!("{} sent a list Pathwarden can't read.", a.name)),
                     esc(why)
                 );
             }
@@ -598,11 +611,11 @@ pub fn settings_section(st: &AppState, blocks: &[ActionConfig]) -> String {
         r#"<p class="muted small after-list">{}</p></section>"#,
         match &latest {
             Some((r, _)) => format!(
-                "<strong>Test</strong> runs the action as a dry run on the first matching finding of the latest analysis ({}, {}). Nothing is sent for real or saved.",
+                "<strong>Test</strong> uses the first matching finding of the latest run ({}, {}). Nothing is sent or saved.",
                 esc(&r.environment()),
                 pages::time(r.created_at)
             ),
-            None => "Testing needs one analysis first: <a href=\"/analyze\">analyze a collection</a> or try the demo.".into(),
+            None => "Testing needs one run first. <a href=\"/analyze\">Analyze a collection</a> or try the demo.".into(),
         }
     );
     b
@@ -617,9 +630,9 @@ fn env_chips(names: &[String]) -> String {
             r#"<span class="envchip {cls}" title="{title}"><span class="dot" aria-hidden="true"></span><code>{name}</code> {state}</span>"#,
             cls = if set { "set" } else { "unset" },
             title = if set {
-                "Set in the environment Pathwarden was started from"
+                "Environment variable set for Pathwarden"
             } else {
-                "Not set in the environment Pathwarden was started from"
+                "Environment variable not set for Pathwarden"
             },
             name = esc(n),
             state = if set { "set" } else { "not set" },
@@ -699,7 +712,7 @@ fn action_row(
                 r#"<span class="ac-fu">{}{}</span>"#,
                 esc(&x.label),
                 if actions_ui::for_fixed(x) {
-                    r#" <span class="when">once fixed</span>"#
+                    r#" <span class="when">after the fix</span>"#
                 } else {
                     ""
                 }
@@ -769,7 +782,7 @@ fn applies_words(a: &ActionConfig, def: &actions::ActionDef) -> String {
     if def.offered_when(actions::FindingStatus::Fixed)
         && !def.offered_when(actions::FindingStatus::Open)
     {
-        parts.push("once fixed".into());
+        parts.push("after the fix".into());
     }
     let s = parts.join(" · ");
     let mut c = s.chars();
@@ -812,7 +825,7 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
         .unwrap_or(&blank);
     let locked = !st.allow_destinations;
     let title = match index {
-        None => "Add an action program".to_string(),
+        None => "Add a finding action".to_string(),
         Some(_) => format!("Edit {}", a.name),
     };
     let ro = if locked { " readonly" } else { "" };
@@ -848,7 +861,7 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
     }
     let mut sevs = String::new();
     for (v, label) in [
-        ("", "Every finding"),
+        ("", "All findings"),
         ("critical", "Critical only"),
         ("high", "High and above"),
         ("medium", "Medium and above"),
@@ -875,30 +888,31 @@ fn form_page(st: &AppState, index: Option<usize>) -> Html<String> {
     let body = format!(
         r#"<div class="page-head"><div><p class="eyebrow"><a href="/automate/ticketing#finding-actions">{page}</a></p><h1 class="panel-title">{title}</h1></div></div>
 <form class="card setting plugin-form ac-form-page" id="action-form" data-action-form="{meta}" novalidate>
-{lock}<div class="field"><label for="af-name">Name</label><input class="input mono" id="af-name" value="{name}" placeholder="service-desk" maxlength="64" autocomplete="off" spellcheck="false"><p class="hint">Lowercase letters, digits and dashes. Its actions are called <code>name/action</code>.</p></div>
+{lock}<div class="field"><label for="af-name">Name</label><input class="input mono" id="af-name" value="{name}" placeholder="service-desk" maxlength="64" autocomplete="off" spellcheck="false"><p class="hint">Lowercase letters, digits and dashes.</p></div>
 <fieldset class="choice"><legend>What to run</legend>
-  <label class="option card"><input type="radio" name="af-how" value="plugin"{plugin_on}{dis}><span><strong>A plugin program</strong><span class="muted"><code>pathwarden-action-&lt;name&gt;</code> from the plugins folder.</span></span></label>
+  <label class="option card"><input type="radio" name="af-how" value="plugin"{plugin_on}{dis}><span><strong>A plugin program</strong><span class="muted">An action plugin from the plugins folder.</span></span></label>
   <label class="option card"><input type="radio" name="af-how" value="command"{cmd_on}{dis}><span><strong>A script or program</strong><span class="muted">PowerShell, Python or any program, with its arguments.</span></span></label>
 </fieldset>
 <div class="field" data-when-how="plugin"><label for="af-plugin">Plugin</label><input class="input mono" id="af-plugin" value="{plugin}" placeholder="teams-alert" autocomplete="off" spellcheck="false"{ro}></div>
 <div class="fields2" data-when-how="command">
-  <div class="field"><label for="af-program">Program</label><input class="input mono" id="af-program" value="{program}" placeholder="python" autocomplete="off" spellcheck="false"{ro}><p class="hint">A full path, or one of: powershell, pwsh, python, python3, node, bash, sh, cmd. Not a network path.</p></div>
+  <div class="field"><label for="af-program">Program</label><input class="input mono" id="af-program" value="{program}" placeholder="python" autocomplete="off" spellcheck="false"{ro}><p class="hint">{program_hint}</p></div>
   <div class="field"><label for="af-args">Arguments, one per line</label><textarea class="input mono" id="af-args" rows="3" spellcheck="false"{ro}>{args}</textarea><p class="hint">Give scripts by their full path.</p></div>
 </div>
 <h3 class="form-title">Settings</h3>
-<p class="hint">Passed to the program in its request. For a secret, add a setting ending in <code>_env</code> whose value is the <em>name</em> of an environment variable.</p>
+<p class="hint">Sent to the program. For a secret, give the name of an environment variable (a setting ending in _env).</p>
 <div class="kvs" id="af-settings">{settings_rows}</div>{kept}
 <button type="button" class="btn small-btn" data-add-kv="af-settings"{dis}>{plus} Add a setting</button>
 <h3 class="form-title">When it runs</h3>
 <div class="fields2">
   <div class="field"><label for="af-timeout">Time limit (seconds)</label><input class="input" id="af-timeout" type="number" min="1" max="{max}" step="1" value="{timeout}" inputmode="numeric"><p class="hint">A run past it is stopped. Default {default}.</p></div>
-  <div class="field"><label for="af-min">For</label><select class="input" id="af-min">{sevs}</select></div>
+  <div class="field"><label for="af-min">For findings</label><select class="input" id="af-min">{sevs}</select></div>
   <div class="field"><label for="af-rules">Only these rules <span class="muted">(optional)</span></label><input class="input mono" id="af-rules" value="{rules}" placeholder="PW-006, PW-002" autocomplete="off" spellcheck="false"></div>
   <div class="field"><span class="label">Only <span class="muted">(optional)</span></span><label class="check"><input type="checkbox" id="af-cat-attack"{c_attack}> Attack paths</label> <label class="check"><input type="checkbox" id="af-cat-hygiene"{c_hygiene}> Hygiene</label></div>
 </div>
 <div class="card-actions"><button type="submit" class="btn primary">{check} Save</button><a class="btn" href="/automate/ticketing#finding-actions">Cancel</a><span class="save-status muted small" aria-live="polite"></span></div>
 </form>{saved}<script src="/static/config.js" defer></script>{scripts}"#,
         page = esc(crate::plugins_ui::PAGE_TITLE),
+        program_hint = esc(crate::plugins_ui::PROGRAM_HINT),
         title = esc(&title),
         meta = pages::json_attr(&meta.to_string()),
         lock = if locked {
@@ -1012,7 +1026,7 @@ impl SaveBody {
                 continue;
             }
             if plugin_form::looks_secret(k) {
-                return Err(format!("Don't put secrets in the file. Instead of {k}, add {k}_env with the name of an environment variable that holds it."));
+                return Err(format!("Secrets can't be saved here. Instead of {k}, add {k}_env with the name of the environment variable that holds it."));
             }
             if k.ends_with("_env") && !pathwarden_core::plugins::valid_env_name(v) {
                 return Err(format!(

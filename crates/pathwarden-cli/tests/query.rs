@@ -222,10 +222,7 @@ fn refusals_and_caps_are_plain() {
             "10",
         ],
     ));
-    assert!(
-        out.contains("Stopped at the 10-row cap: there are more rows."),
-        "{out}"
-    );
+    assert!(out.contains("Stopped at 10 rows: there are more."), "{out}");
     assert!(out.trim_end().ends_with("Raise --limit for more."), "{out}");
     let out = ok(&pw(
         &dir,
@@ -336,7 +333,7 @@ fn a_saved_run_and_kept_owned_marks() {
     // A newer Pathwarden's marks: refused to change, and queries run
     // without them and say why, as the app does.
     let newer =
-        "owned.json was saved by a newer Pathwarden. Update Pathwarden to change the owned marks.";
+        "The owned marks were saved by a newer Pathwarden. Update Pathwarden to change them.";
     std::fs::write(
         PathBuf::from(ws).join("owned.json"),
         r#"{"version": 9, "marks": {}}"#,

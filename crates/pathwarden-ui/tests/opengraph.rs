@@ -238,16 +238,16 @@ async fn run_details_lists_the_other_sources() {
     );
     // MSSQLHound's pack is named in its mapping.
     assert!(
-        row.contains("the MSSQLHound pack labels its kinds"),
+        row.contains("The MSSQLHound pack labels its kinds"),
         "{row}"
     );
     for want in [
         "<dt>Source</dt><dd>TaskHound, OpenGraph · 1 file: taskhound.json</dd>",
         "<dt>Relationships kept</dt>",
-        "<dt>Mapping</dt><dd>Trusted, ",
-        "Untrusted, context only: the ",
-        "No mapping, context only: shown in Explore",
-        "<dt>Coverage</dt><dd>No coverage file.",
+        "<dt>Mapping</dt><dd>Trusted mapping: ",
+        "Untrusted mapping: context only. The ",
+        "No mapping: context only. Shown in Explore",
+        "<dt>Coverage</dt><dd>No coverage file:",
         "can&#39;t be marked Fixed",
         r##"<a href="#" data-pw-run="mappings">Mappings</a> lists what each pack means."##,
     ] {
@@ -257,7 +257,7 @@ async fn run_details_lists_the_other_sources() {
         );
     }
     // The forged native edges in WidgetHound's file are reported as dropped.
-    assert!(page.contains("AD relationships (only AD data may say them)"));
+    assert!(page.contains("AD relationships (ignored: only AD data sets these)"));
     // A run without OpenGraph data has no such row.
     let plain = a.analyze(&[Part::Path(&ad)]).await;
     let page = a.run_details(&plain).await;
@@ -386,8 +386,8 @@ async fn a_declared_coverage_is_bound_to_the_upload() {
     }])));
     let run = a.analyze(&parts).await;
     let page = a.run_details(&run).await;
-    assert!(page.contains("Coverage file bound"), "{page}");
-    assert!(page.contains("declared by a person"));
+    assert!(page.contains("Coverage file, "), "{page}");
+    assert!(page.contains("declared by hand"));
     assert!(page.contains("every enabled computer in CORP.LOCAL"));
     let stats: Value = serde_json::from_str(
         &std::fs::read_to_string(a.state.ws().run_dir(&run).unwrap().join("opengraph.json"))
@@ -435,11 +435,11 @@ async fn mappings_lists_packs_and_trust_needs_a_confirm() {
         "TaskHound",
         "TH_HasTaskWithStoredCreds",
         "MSSQLHound",
-        "Untrusted: context only",
+        "Untrusted mapping: context only",
         // An untrusted pack's summary doesn't call its relationships
         // attack paths yet.
         "attack paths once trusted</summary>",
-        "Mark as trusted",
+        "Trust…",
         "Stop storing a password",
         "/static/opengraph.js",
     ] {
@@ -516,7 +516,7 @@ async fn user_packs_show_on_mappings() {
     .unwrap();
     let (s, page) = a.get("/mappings").await;
     assert_eq!(s, StatusCode::OK);
-    assert!(page.contains("Yours: packs/widget.toml"), "{page}");
+    assert!(page.contains("Your pack (widget.toml)"), "{page}");
     assert!(page.contains("Widget&lt;b&gt;Hound&lt;/b&gt;"));
     assert!(page.contains("fill=\"#0EA5E9\""));
     assert!(page.contains("packs/bad.toml was refused"));

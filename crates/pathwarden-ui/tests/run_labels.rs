@@ -571,7 +571,7 @@ async fn run_labels_are_set_edited_and_shown() {
     assert!(runs.contains(&format!(r#"action="/runs/{run}/label""#)));
     let (_, page) = a.get(&format!("/runs/{run}")).await;
     assert!(page.contains(r#"<h1 class="panel-title">&lt;b&gt;before&lt;/b&gt; &amp; after</h1>"#));
-    assert!(page.contains("Leave it empty to show CONTOSO.LOCAL +1."));
+    assert!(page.contains("Empty shows CONTOSO.LOCAL +1."));
     // The report: the label in its title and rail, and the file name.
     let (_, h, report) = a
         .send(

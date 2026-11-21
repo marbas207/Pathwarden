@@ -144,8 +144,8 @@ async fn the_passphrase_from_the_pages() {
         page.contains("Encrypt the history with a passphrase"),
         "{page}"
     );
-    assert!(page.contains("Available at this level too. Off: the history is kept as plain files."));
-    assert!(page.contains("Set the passphrase"));
+    assert!(page.contains("Off: the history is kept as plain files."));
+    assert!(page.contains("Set passphrase"));
     assert!(
         page.contains("I understand a lost passphrase can&#39;t be recovered")
             || page.contains("I understand a lost passphrase can't be recovered")
@@ -183,14 +183,14 @@ async fn the_passphrase_from_the_pages() {
         "{page}"
     );
     assert!(page.contains("On (passphrase)"));
-    assert!(page.contains("Change passphrase") && page.contains("Check the passphrase"));
+    assert!(page.contains("Change passphrase") && page.contains("Check passphrase"));
     assert!(page.contains("Readers need repository access and the passphrase."));
     // Against reusing one passphrase for several histories.
     assert!(page.contains("Give each history its own passphrase."));
     assert!(page.contains("1 run, the latest"), "{page}");
     let (s, b) = a.post("/api/history/passphrase/check", json!({})).await;
     assert_eq!(s, StatusCode::OK, "{b}");
-    assert!(b.contains("It opens this history."), "{b}");
+    assert!(b.contains("The passphrase works."), "{b}");
 
     // Another session on a computer without it: Runs asks.
     keystore::forget(&state).unwrap();

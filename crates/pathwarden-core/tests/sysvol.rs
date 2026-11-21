@@ -285,7 +285,7 @@ fn plan_steps_say_what_to_change() {
         .expect("a plan step for the SYSVOL folder");
     assert_eq!(
         report::step_headline(step),
-        r#"Take away the write access of <b title="BOB@SYS.LOCAL">BOB</b> to the SYSVOL folder of the GPO <b title="DEFAULT DOMAIN POLICY@SYS.LOCAL">DEFAULT DOMAIN POLICY</b>"#
+        r#"Remove <b title="BOB@SYS.LOCAL">BOB</b>'s write access to the SYSVOL folder of GPO <b title="DEFAULT DOMAIN POLICY@SYS.LOCAL">DEFAULT DOMAIN POLICY</b>"#
     );
     assert!(step.action.contains("/remove:g"), "{}", step.action);
     let script = plan

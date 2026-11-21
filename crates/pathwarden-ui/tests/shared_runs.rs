@@ -1124,7 +1124,7 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     // pages, not Progress.
     let (status, _, list) = page(&reader, "/runs");
     assert_eq!(status, 200);
-    assert_eq!(list.matches("From the repository").count(), 2, "{list}");
+    assert_eq!(list.matches("From the run history").count(), 2, "{list}");
     assert!(list.contains("Recorded by the schedule"), "{list}");
     for r in &runs {
         assert!(
@@ -1150,7 +1150,7 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     assert_eq!(status, 200, "{body}");
     // The header: tagged, nothing more about where it came from (the
     // owner's choice). What the report opens stays sandboxed.
-    assert!(body.contains("From the repository"), "{body}");
+    assert!(body.contains("From the run history"), "{body}");
     assert!(!body.contains("ecorded by the schedule"), "{body}");
     assert!(
         body.contains(r#"sandbox="allow-scripts allow-popups">"#),
@@ -1158,7 +1158,7 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     );
     assert!(!body.contains("allow-popups-to-escape-sandbox"), "{body}");
     assert!(body.contains(&format!("/runs/{folder}/explore")));
-    assert!(!body.contains("Remove from the history"));
+    assert!(!body.contains("Remove from the run history"));
     // The Run details tab, in the report as the run page embeds it: where
     // it came from and, on a computer that only reads, Hide.
     let (status, _, embed) = page(&reader, &format!("/runs/{folder}/report?embed=1"));
@@ -1171,8 +1171,8 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     );
     assert!(embed.contains(&format!("<code>{r2}</code>")), "the run ID");
     assert!(embed.contains("Hide on this computer"));
-    assert!(embed.contains("It stays in the repository for everyone else."));
-    assert!(!embed.contains("Remove from the history"));
+    assert!(embed.contains("It stays in the run history for everyone else."));
+    assert!(!embed.contains("Remove from the run history"));
     assert!(
         embed.contains(r#"id="i-trash""#),
         "the report's icons have the trash"
@@ -1221,12 +1221,15 @@ fn a_reader_opens_the_full_runs_another_computer_recorded() {
     assert_eq!(w.len(), 1);
     let (status, _, embed) = page(&writer, &format!("/runs/{}/report?embed=1", w[0].id));
     assert_eq!(status, 200);
-    assert!(embed.contains("Remove from the history"), "{embed}");
+    assert!(embed.contains("Remove from the run history"), "{embed}");
     assert!(embed.contains("This removes it on every computer."));
     assert!(!embed.contains("Hide on this computer"));
     // The page's dialog asks to remove it from the history.
     let (_, _, body) = page(&writer, &format!("/runs/{}", w[0].id));
-    assert!(body.contains("Remove this run from the history?"), "{body}");
+    assert!(
+        body.contains("Remove this run from the run history?"),
+        "{body}"
+    );
     pathwarden_ui::history_ui::delete_run(&writer, None, &w[0].id).unwrap();
     assert!(remote_bundles(&remote).is_empty());
     assert!(!remote_points(&remote).contains(&r2));
@@ -1286,7 +1289,7 @@ fn changed_damaged_and_newer_full_runs() {
     // What was left out, and that Explore can't open it when it
     // needed one of them.
     let status = plain(&body)
-        .split(r#"<span class="rd-s">From the repository · "#)
+        .split(r#"<span class="rd-s">From the run history · "#)
         .nth(1)
         .and_then(|s| s.split("</span>").next())
         .map(str::to_string)
@@ -1337,7 +1340,7 @@ fn changed_damaged_and_newer_full_runs() {
     let said = get_latest(&reader).unwrap_or_default();
     assert!(
         said.contains(&format!(
-            "Couldn't load the full run of {id2}: graph.bin.gz doesn't match its manifest"
+            "Couldn't load the full run of {id2}: it is damaged: graph.bin.gz changed"
         )),
         "{said}"
     );
@@ -1361,7 +1364,7 @@ fn changed_damaged_and_newer_full_runs() {
     let said = get_latest(&reader).unwrap_or_default();
     assert!(
         said.contains(&format!(
-            "Run {id2} was recorded by Pathwarden 0.1.9: update Pathwarden to open it."
+            "Run {id2} was saved by Pathwarden 0.1.9. Update Pathwarden to open it."
         )),
         "{said}"
     );
@@ -1373,16 +1376,13 @@ fn changed_damaged_and_newer_full_runs() {
     assert!(list.contains("Needs a newer Pathwarden"), "{list}");
     assert!(list.contains("update Pathwarden to open it"), "{list}");
     assert!(
-        !list.contains("recorded before full runs were kept"),
+        !list.contains("recorded before reports were kept"),
         "{list}"
     );
     let writer = other_computer(&dir, &remote, "writer", true);
     get_latest(&writer);
     let (_, _, list) = page(&writer, "/runs");
-    assert!(
-        list.contains("recorded before full runs were kept"),
-        "{list}"
-    );
+    assert!(list.contains("recorded before reports were kept"), "{list}");
 
     // Another schema: not a full run of ours, so not "update Pathwarden".
     m["schema"] = "someone.else.v7".into();
@@ -1397,7 +1397,7 @@ fn changed_damaged_and_newer_full_runs() {
     let said = get_latest(&reader).unwrap_or_default();
     assert!(
         said.contains(&format!(
-            "Couldn't load the full run of {id2}: its run.json isn't a Pathwarden full run"
+            "Couldn't load the full run of {id2}: it isn't a Pathwarden full run"
         )),
         "{said}"
     );
@@ -1768,7 +1768,7 @@ fn a_loaded_run_is_shown_not_trusted() {
         body.contains(r#"class="card rd-below" id="run-details" aria-label"#),
         "{body}"
     );
-    assert!(body.contains("Remove from the history"), "{body}");
+    assert!(body.contains("Remove from the run history"), "{body}");
     assert!(
         body.contains("This removes it on every computer."),
         "{body}"
@@ -1800,7 +1800,7 @@ fn home_shows_a_loaded_run_s_overview_from_its_data() {
     assert!(home.contains(r#"<div class="hero card"#), "{home}");
     assert!(home.contains("have an attack path to Tier"), "{home}");
     assert!(home.contains(r#"<div class="ov-cards">"#), "{home}");
-    assert!(home.contains("Plan steps"), "{home}");
+    assert!(home.contains("Remediation path"), "{home}");
     // The trend and What changed, from the history.
     assert!(home.contains(r#"<div class="hero-trend">"#), "{home}");
     assert!(home.contains("What changed since"), "{home}");
@@ -1911,11 +1911,11 @@ fn home_shows_a_loaded_quick_run_as_not_targeted() {
     let (_, _, home) = page(&reader, "/");
     assert!(home.contains(r#"<div class="hero card"#), "{home}");
     assert!(
-        home.contains(r#"<span class="ov-num">Not targeted</span>"#),
+        home.contains(r#"<span class="ov-num">Not collected</span>"#),
         "{home}"
     );
     assert!(
-        home.contains("Sessions and local groups were not targeted this run, so its counts are not compared with the last run."),
+        home.contains("Sessions and local groups weren&#39;t collected in this run, so this run&#39;s counts aren&#39;t compared with the last run."),
         "{home}"
     );
     assert!(!home.contains("hero-change"), "{home}");
@@ -1967,7 +1967,7 @@ fn another_environment_s_run_follows_its_own_history_under_state() {
         .to_string();
     let (_, _, _, embed) = request(&st, &format!("/runs/{f}/report?embed=1&rd={nonce}"));
     assert!(embed.contains("Hide on this computer"), "{embed}");
-    assert!(!embed.contains("Remove from the history"), "{embed}");
+    assert!(!embed.contains("Remove from the run history"), "{embed}");
     assert!(body.contains("Hide this run on this computer?"), "{body}");
     // And Delete hides it: the repository keeps it, the flag's folder is
     // left alone.
@@ -2015,7 +2015,7 @@ fn a_loaded_run_from_the_future_and_the_schedule_picker() {
         !page.contains(&format!(r#"<option value="{}""#, r.id)),
         "{page}"
     );
-    assert!(page.contains("No analysis of your own data yet"), "{page}");
+    assert!(page.contains("No run of your own yet"), "{page}");
     remove_all(&dir);
 }
 
@@ -2135,7 +2135,7 @@ fn the_limit_follows_the_setting_and_github_holds_it() {
     .unwrap();
     assert_eq!(
         get_latest(&ws).as_deref(),
-        Some("1 full run loaded from the history folder.")
+        Some("1 full run loaded from the folder.")
     );
     let r = ws.runs().remove(0);
     let kept = std::fs::metadata(ws.run_dir(&r.id).unwrap().join("retest.json.gz")).unwrap();
@@ -2187,7 +2187,7 @@ fn a_run_without_its_object_index_says_so() {
     let body = plain(&body);
     assert!(
         body.contains(
-            r#"<span class="rd-s">From the repository · object index left out, so Explore can't open it</span>"#
+            r#"<span class="rd-s">From the run history · object index left out, so Explore can't open it</span>"#
         ),
         "{body}"
     );
@@ -2200,14 +2200,14 @@ fn a_run_without_its_object_index_says_so() {
     assert_eq!(status, 200);
     let body = plain(&body);
     assert!(
-        body.contains("This run's object index wasn't shared."),
+        body.contains("This run was shared without its object list."),
         "{body}"
     );
     assert!(!body.contains("analyzed before"), "{body}");
     let (status, _, body) = page(&reader, &format!("/api/runs/{}/explore", newer.id));
     assert_eq!(status, 404);
     assert!(
-        body.contains("This run's object index wasn't shared."),
+        body.contains("This run was shared without its object list."),
         "{body}"
     );
     let err = pathwarden_ui::explore_ui::read_run(&reader.run_dir(&newer.id).unwrap())
@@ -2215,7 +2215,7 @@ fn a_run_without_its_object_index_says_so() {
         .unwrap();
     assert_eq!(
         err,
-        "this run's object index wasn't shared, so it can't be explored on this computer"
+        "this run was shared without its object list, so it can't be explored on this computer"
     );
     // Explore's entry opens the earlier run, and says which and why.
     let (status, location, _) = page(&reader, "/explore");
@@ -2223,7 +2223,7 @@ fn a_run_without_its_object_index_says_so() {
     assert_eq!(location, format!("/runs/{}/explore?from=latest", older.id));
     let (_, _, body) = page(&reader, &location);
     let line = format!(
-        "Showing the run of {}. The latest run, {}, can't be explored: its object index wasn't shared.",
+        "Showing the run of {}. The latest run, {}, can't be explored: it was shared without its object list.",
         pathwarden_core::time::format_local(older.created_at),
         pathwarden_core::time::format_local(newer.created_at),
     );
@@ -2255,7 +2255,7 @@ fn a_run_without_its_object_index_says_so() {
     let said = get_latest(&reader).unwrap_or_default();
     assert!(
         said.contains(&format!(
-            "Couldn't load the full run of {id}: graph.bin.gz doesn't match its manifest"
+            "Couldn't load the full run of {id}: it is damaged: graph.bin.gz changed"
         )),
         "{said}"
     );

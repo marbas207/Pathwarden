@@ -93,7 +93,7 @@ impl Unsupported {
     /// Why, as a sentence.
     pub fn reason(&self) -> String {
         match self {
-            Unsupported::Cypher(m) => format!("Pathwarden can't run this query yet. {m}"),
+            Unsupported::Cypher(m) => format!("Pathwarden can't run this query: {m}"),
             Unsupported::Fields(f) => format!(
                 "This query reads {}, which saved runs don't keep.",
                 crate::text::and_list(f)

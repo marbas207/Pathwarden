@@ -189,7 +189,7 @@ fn rules_and_risks_go_through_the_settings_checks() {
         ],
     ));
     assert!(
-        e.contains("Jan 1, 2020 has already passed (dates are in UTC)"),
+        e.contains("Jan 1, 2020 has passed. Choose a later date, or none."),
         "{e}"
     );
     ok(&run(

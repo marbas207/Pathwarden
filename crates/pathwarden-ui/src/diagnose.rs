@@ -164,9 +164,9 @@ impl Performance {
             // A full run from the history carries no timings.
             SHARED_MISSING
         } else if self.recorded {
-            "No collection timings: Pathwarden keeps them with a recorded run when pathwarden collect wrote its data (as a schedule does), and this run's data came from elsewhere or was recorded before Pathwarden kept them."
+            "No collection timings: this run's data wasn't collected by Pathwarden, or was recorded before Pathwarden kept them."
         } else if self.run.collection.is_none() {
-            "No collection timings: Pathwarden times the collections it runs itself (the Collect wizard, pathwarden collect, a schedule), and this run's data was uploaded, read from files it didn't collect, or analyzed again after a run recorded its collection."
+            "No collection timings: only collections Pathwarden runs itself are timed."
         } else {
             "No collection timings: this run was collected before Pathwarden saved them."
         }
@@ -306,7 +306,7 @@ pub fn run_link(p: &Performance) -> String {
     let class = if slower { " slower" } else { "" };
     let words = crate::run_details::perf_words(slower);
     format!(
-        r#"<a class="rh-perf{class}" href="/runs/{id}/performance" title="How long the collection took, against the previous one, and the diagnostics download">{i} {words}</a>"#,
+        r#"<a class="rh-perf{class}" href="/runs/{id}/performance" title="Collection timings and diagnostics">{i} {words}</a>"#,
         id = esc(&p.run.id),
         i = icon("i-clock"),
     )
@@ -317,7 +317,7 @@ pub fn run_link(p: &Performance) -> String {
 /// `name_run`, the line under the title names the run it is of.
 fn panel_in(p: &Performance, open: bool, id: &str, level: u8, name_run: bool) -> String {
     let download = format!(
-        r#"<a class="btn" href="/runs/{}/diagnostics.zip" title="A zip of numbers that is safe to share: timings, completeness, posture and plan size, every name replaced">{} Download diagnostics</a>"#,
+        r#"<a class="btn" href="/runs/{}/diagnostics.zip" title="Numbers only, every name replaced. Safe to share.">{} Download diagnostics</a>"#,
         esc(&p.run.id),
         icon("i-download")
     );
@@ -713,8 +713,8 @@ fn names_of(ws: &Workspace, perf: &Performance, dir: &Path) -> Result<NameScan, 
         })
         .ok_or_else(|| {
             BundleError::Unreadable(
-                "this run's object list (objects.json.gz) can't be read, so its names can't be \
-                 searched for; analyze the data again for a bundle"
+                "this run's data can't be read, so its names can't be removed. Analyze the \
+                 collection again to make the diagnostics"
                     .into(),
             )
         })?;
@@ -931,7 +931,7 @@ async fn performance(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> 
         Ok(Some(v)) => Json(v).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
-            Json(json!({ "error": "No such run." })),
+            Json(json!({ "error": "That run no longer exists." })),
         )
             .into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -1038,10 +1038,10 @@ async fn download(State(st): State<Shared>, UrlPath(id): UrlPath<String>) -> Res
 /// The page a refused or failed bundle opens instead of a download.
 fn not_made(text: &str, back: &str) -> String {
     format!(
-        r#"<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>No diagnostics bundle · Pathwarden</title>
+        r#"<!doctype html><html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>No diagnostics · Pathwarden</title>
 {links}
 <link rel="stylesheet" href="/static/app.css"><script src="/static/theme.js"></script></head>
-<body class="app bare"><main class="card lone"><h1 class="panel-title">No diagnostics bundle</h1><p class="muted">{text}</p><p><a class="btn primary" href="{back}">Back to the run</a></p></main></body></html>"#,
+<body class="app bare"><main class="card lone"><h1 class="panel-title">No diagnostics</h1><p class="muted">{text}</p><p><a class="btn primary" href="{back}">Back to the run</a></p></main></body></html>"#,
         links = crate::brand::HEAD_LINKS,
         text = esc(text),
         back = esc(back),

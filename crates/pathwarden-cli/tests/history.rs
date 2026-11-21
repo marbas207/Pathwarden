@@ -336,7 +336,7 @@ fn history_says_what_changed_since_the_last_run() {
         .nth(1)
         .expect(&out[1]);
     assert!(
-        after.contains("  ! 2 new findings\n      high PW-002 "),
+        after.contains("  ! 2 new findings\n      High PW-002 "),
         "{after}"
     );
     assert!(
@@ -350,7 +350,7 @@ fn history_says_what_changed_since_the_last_run() {
     );
     assert!(text.starts_with("Since the last run ("), "{text}");
     assert!(
-        text.contains("  ! 2 new findings\n      high PW-002 "),
+        text.contains("  ! 2 new findings\n      High PW-002 "),
         "{text}"
     );
     assert!(text.contains("      see: pathwarden findings\n"), "{text}");
@@ -566,7 +566,7 @@ fn history_over_an_older_point() {
     );
     assert!(
         text.contains(
-            "  + 1 finding fixed\n      high PW-003 DEMO-USER has GenericAll on DEMO-DC01\n"
+            "  + 1 finding fixed\n      High PW-003 DEMO-USER has GenericAll on DEMO-DC01\n"
         ),
         "{text}"
     );
@@ -888,7 +888,7 @@ fn a_quick_run_is_not_targeted_and_never_a_false_win() {
         )
     };
     let first = run(&full);
-    assert!(!first.contains("not targeted"), "{first}");
+    assert!(!first.contains("not collected"), "{first}");
     let second = run(&quick);
     let since = second
         .split("\nSince the last run (")
@@ -896,7 +896,7 @@ fn a_quick_run_is_not_targeted_and_never_a_false_win() {
         .expect(&second);
     assert!(
         since.contains(
-            "Sessions and local groups were not targeted this run, so its counts are not compared with the last run."
+            "Sessions and local groups weren't collected in this run, so this run's counts aren't compared with the last run."
         ),
         "{since}"
     );
@@ -905,8 +905,8 @@ fn a_quick_run_is_not_targeted_and_never_a_false_win() {
     // The summary says it once, without the incomplete-collection warning.
     assert!(
         second.contains(
-            "Note: Sessions and local groups were not targeted in this collection. Paths through \
-             logged-on sessions and local administrator rights are not in this run."
+            "Note: Sessions and local groups weren't collected in this run. Paths through \
+             sessions and local administrator rights are not in this run."
         ),
         "{second}"
     );
@@ -927,12 +927,12 @@ fn a_quick_run_is_not_targeted_and_never_a_false_win() {
     // The posture and the history table say "not targeted".
     let posture = pw(&dir, &["posture", "-i", &quick], &[]);
     assert!(
-        posture.contains("sessions not targeted   local groups not targeted"),
+        posture.contains("sessions not collected   local groups not collected"),
         "{posture}"
     );
     assert!(
         posture.contains(
-            "  Not targeted: this collection read the directory only, so paths through logged-on \
+            "  Not collected: this collection read the directory only, so paths through \
              sessions and local administrator rights are not in this run."
         ),
         "{posture}"
@@ -950,15 +950,15 @@ fn a_quick_run_is_not_targeted_and_never_a_false_win() {
         since.starts_with(pts[0]["run_id"].as_str().unwrap()),
         "{since}"
     );
-    assert!(!since.contains("not targeted"), "{since}");
+    assert!(!since.contains("not collected"), "{since}");
     let history = pw(&dir, &["history", "--state", &state_arg], &[]);
-    assert!(history.contains("  not targeted "), "{history}");
+    assert!(history.contains(" not collected"), "{history}");
     assert!(
         history.contains("  Not every run read sessions and local groups (see Collected)"),
         "{history}"
     );
     assert!(
-        history.contains("; not targeted (or -): the run didn't ask for them."),
+        history.contains("; not collected (or -): the run didn't ask for them."),
         "{history}"
     );
 }

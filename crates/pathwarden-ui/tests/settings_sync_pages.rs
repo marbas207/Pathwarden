@@ -195,17 +195,20 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
         "shown once"
     );
     assert!(
-        page.contains("From the repository"),
+        page.contains("From the run history"),
         "a risk from another computer"
     );
 
     // Mappings: the pack came, untrusted here whatever it says.
     let (_, page) = a.get("/mappings").await;
     assert!(
-        page.contains("From the repository · not trusted here"),
+        page.contains("From the run history · not trusted here"),
         "{page}"
     );
-    assert!(page.contains("Never travels."), "{page}");
+    assert!(
+        page.contains("Trust isn&#39;t shared") || page.contains("Trust isn't shared"),
+        "{page}"
+    );
 
     // Two saves from the page, one right after the other: each answered at
     // once with its own sharing, shared in order.
@@ -339,7 +342,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     );
     assert!(
         page.contains(
-            r##"<a href="#rules" title="A setting has two values">Rules<span class="sr-only">"##
+            r##"<a href="#rules" title="Settings differ from the shared settings">Rules<span class="sr-only">"##
         ),
         "the jump link's dot: {page}"
     );
@@ -373,7 +376,7 @@ async fn settings_pages_show_and_settle_the_shared_settings() {
     let (_, page) = a.get("/runs").await;
     assert!(dot(&page), "{page}");
     assert!(
-        page.contains(r#"<span class="sr-only">: a setting has two values</span>"#),
+        page.contains(r#"<span class="sr-only">: settings differ from the shared settings</span>"#),
         "a name for screen readers: {page}"
     );
     let foot = page

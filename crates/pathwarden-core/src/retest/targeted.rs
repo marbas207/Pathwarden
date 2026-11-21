@@ -82,19 +82,19 @@ fn unsupported(rule: &str) -> Option<&'static str> {
             "AD CS findings depend on templates, CAs and their settings across the forest. \
              Collect again to retest this finding."
         }
-        "PW-022" => "Privilege Zone findings are retested with a new collection.",
+        "PW-022" => "Zone findings are retested with a new collection. Collect again to retest this finding.",
         "PW-026" | "PW-027" | "PW-038" => {
             "SYSVOL files and their permissions are read from the domain controller's SYSVOL \
              share, not the directory. Collect again with the built-in collector to retest \
              this finding."
         }
         "PW-025" | "PW-028" | "PW-029" => {
-            "Management plane findings depend on accounts, groups and containers across the \
+            "Management system findings depend on accounts, groups and containers across the \
              domain. Collect again to retest this finding."
         }
         "PW-033" => {
             "This finding rests on what the computers store (their services, or TaskHound's \
-             data), which a directory re-read can't refresh. Run a Full collection again, or \
+             data), which a directory re-read can't refresh. Run a full collection again, or \
              TaskHound with its coverage file, and analyze."
         }
         "PW-039" => {
@@ -324,8 +324,8 @@ pub fn hosts_over_cap(total: usize) -> String {
 /// Why no computer is read when signed in as the current account where it
 /// can't read them (outside Windows). On Windows the account reads them
 /// with Windows' own calls.
-pub const HOSTS_NEED_PASSWORD: &str = "Reading the computers on its path needs a user and \
-     password, so it can't be checked as your Windows account.";
+pub const HOSTS_NEED_PASSWORD: &str =
+    "Reading the computers on its path needs a user and password here.";
 /// Why no computer is read in a build without the built-in collector.
 pub const HOSTS_NO_COLLECTOR: &str = "This build has no built-in collector, so it can't read \
      the computers on its path.";

@@ -144,7 +144,7 @@ pub fn mark_reviewed(
         let mut o = load(dir).unwrap_or_default();
         let k = path_key(path);
         let text = std::fs::read_to_string(dir.join(path.trim()))
-            .map_err(|e| format!("Could not read {path}: {e}"))?;
+            .map_err(|e| format!("Couldn't read {path}: {e}"))?;
         let now = text_digest(&text);
         if trusted && reviewed.map(str::trim) != Some(now.as_str()) {
             return Err(CHANGED_SINCE_REVIEW.into());

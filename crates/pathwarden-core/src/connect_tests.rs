@@ -171,8 +171,8 @@ fn sign_in_and_reach_are_told_apart() {
             refused: false,
         }
         .sentence(),
-        "This computer isn't signed in to the repository. Git here has no sign-in helper. \
-             Install Git for Windows with Git Credential Manager, then look again."
+        "This computer isn't signed in to the repository. Git can't ask you to sign in. \
+             Install Git for Windows (it includes Git Credential Manager), then look again."
     );
 }
 

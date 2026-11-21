@@ -1399,12 +1399,12 @@ pub fn acceptable_records(dir: &Path) -> Result<Vec<PathBuf>> {
 
 /// What the app and `pathwarden history storage accept` say before
 /// accepting the history as it is.
-pub const ACCEPT_WORDS: &str = "This computer will trust the history's files as they are now. Use \
-                                it only after restoring the history on purpose.";
+pub const ACCEPT_WORDS: &str = "This computer will trust the history's files as they are now. Do \
+                                this only if you restored an older copy on purpose. You can't undo it.";
 
 /// Why [`accept_history`] refuses: reading the history here met no
 /// refusal that accepting it gets past.
-pub const NOTHING_REFUSED: &str = "Nothing in this history is refused.";
+pub const NOTHING_REFUSED: &str = "Nothing needs accepting: the history is fine. Reload the page.";
 
 /// The refusal that accepting the history in `dir` would get past, as
 /// reading it in this process last met it ([`binding::refused`]).

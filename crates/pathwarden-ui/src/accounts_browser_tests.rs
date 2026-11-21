@@ -207,8 +207,8 @@ fn the_account_lists_draw_in_a_browser() {
     assert_eq!(got["imgs"], 0, "a hostile name made an element: {got}");
     assert!(got["step"].as_u64().unwrap() >= 1, "{got}");
     assert!(
-        got["firstHops"].as_str().unwrap().ends_with("hop")
-            || got["firstHops"].as_str().unwrap().ends_with("hops"),
+        got["firstHops"].as_str().unwrap().ends_with("step")
+            || got["firstHops"].as_str().unwrap().ends_with("steps"),
         "{got}"
     );
     assert!(got["searched"].as_u64().unwrap() >= 1, "{got}");
@@ -235,7 +235,7 @@ fn the_account_lists_draw_in_a_browser() {
         serde_json::json!(["No path now · path on Oct 7"]),
         "{got}"
     );
-    assert_eq!(got["hops"], serde_json::json!(["1 hop"]), "{got}");
+    assert_eq!(got["hops"], serde_json::json!(["1 step"]), "{got}");
     // Key 5 was never in the earlier graph: still counted.
     assert_eq!(
         got["unnamed"], "1 more is no longer in the directory.",

@@ -183,6 +183,10 @@ pub struct RetestLog {
 /// Results kept per finding.
 const KEEP_PER_FINDING: usize = 20;
 
+/// What a Pathwarden without the built-in collector says of a retest;
+/// `retest.js` says the same in the dialog.
+pub const NO_COLLECTOR: &str = "This version of Pathwarden can't collect, so it can't re-read single objects. Upload a new collection or collect again to retest.";
+
 /// The newest `retests.json` version this one reads (docs/dev/formats.md).
 pub const RETESTS_VERSION: u32 = 1;
 
@@ -615,13 +619,14 @@ pub const EARLIER_REPORT_SCRIPTS: &[&str] = &[
     "KUQ9qAmctZuO6WKtzQLSb5E6ck/b3stgi8XU+RvnNng=",
     "lXJbStW1yOKg02kmMsyEXLKKEq48frcwW0swkENLVTw=",
     "BaJqGQMyfGUD4uGLGHtGjUjW1YZCJxRmr9Jk2oW+LaY=",
+    "MlCUNENbgU13e0VaRlD4GESD7HYvDWOlgOyiVhSIMNw=",
 ];
 
 /// The hash of today's `report.js`. A test holds it to the script, so a
 /// change to the script can't go in without its old hash in
 /// [`EARLIER_REPORT_SCRIPTS`] and this one updated.
 #[cfg(test)]
-const REPORT_SCRIPT: &str = "MlCUNENbgU13e0VaRlD4GESD7HYvDWOlgOyiVhSIMNw=";
+const REPORT_SCRIPT: &str = "3QaDwkiDyxUw1/F0/blVt8DBZMVdrZ8Fh86IDLmyVSM=";
 
 /// The CSP hash of a report's own script: its last `<script>`.
 fn own_script_hash(html: &str) -> Option<String> {
@@ -1003,13 +1008,13 @@ fn dialogs(
         <label class="rt-check"><input type="checkbox" name="kerberos_only" id="rt-kerberos-only" checked> Kerberos only for computers</label>
         <label class="rt-check"><input type="checkbox" name="smb_signing" id="rt-smb-signing" checked> Require SMB signing</label>
       </div>
-      <p class="rt-limit">{i_alert}<span>Only this finding's objects are re-read, and only the computers on its path are contacted. A new path that doesn't go through them isn't detected. The password is used for this check only and never saved.</span></p>
+      <p class="rt-limit">{i_alert}<span>Re-reads only this finding's objects and computers; new paths elsewhere aren't found. The password isn't saved.</span></p>
     </form>
   </section>
   <p class="rt-why muted small" id="rt-why" hidden></p>
   <div class="rt-result" id="rt-result" aria-live="polite" hidden></div>
   <div class="rt-foot">
-    <p class="rt-auto muted small">The next collection retests every finding<span class="tip"><button type="button" class="tip-btn" aria-label="About: retesting with a new collection" aria-describedby="tip-rt-auto">{i_info}</button><span class="tip-text" role="tooltip" id="tip-rt-auto">Each new analysis of this environment (a collection, a schedule or an uploaded collection) compares every open finding of this run with it and marks the fixed ones, new paths and sessions included. Nothing to retest by hand.</span></span> · <a href="/collect">Collect</a></p>
+    <p class="rt-auto muted small">The next collection retests every finding<span class="tip"><button type="button" class="tip-btn" aria-label="About: retesting with a new collection" aria-describedby="tip-rt-auto">{i_info}</button><span class="tip-text" role="tooltip" id="tip-rt-auto">Each new analysis of this environment compares every open finding of this run with it and marks the fixed ones, new paths and sessions included. Nothing to retest by hand.</span></span> · <a href="/collect">Collect</a></p>
     <button type="submit" form="rt-form" class="btn primary" id="rt-submit" hidden>{i_retest} Retest now</button>
   </div>
 </dialog>
@@ -1019,16 +1024,16 @@ fn dialogs(
   <h2 class="sub" id="ar-title"></h2>
   <p class="muted small ar-id">Finding ID <code id="ar-fp"></code></p>
   <form id="ar-form" class="rt-form" autocomplete="off">
-    <label><span>Reason <span class="muted">(required)</span></span><textarea id="ar-reason" rows="3" maxlength="2000" required placeholder="e.g. Break-glass account, reviewed quarterly (CHG0012345)"></textarea></label>
+    <label><span>Reason <span class="muted">(required)</span></span><textarea id="ar-reason" rows="3" maxlength="2000" required placeholder="for example Break-glass account, reviewed quarterly (CHG0012345)"></textarea></label>
     <label class="ar-date"><span>Review by <span class="muted">(optional)</span></span><input type="date" id="ar-expires"></label>
-    <p class="rt-limit">{i_alert}<span>This adds an accepted risk to <code>pathwarden.toml</code>. From the next analysis the finding is shown as accepted, with your reason, instead of open; after the review date it counts as open again. This run's report doesn't change.</span></p>
+    <p class="rt-limit">{i_alert}<span>Shown as accepted from the next analysis, open again after the review date. This report doesn't change.</span></p>
     <div class="dialog-actions"><a class="btn" href="/settings#risks">Accepted risks in Settings</a><button type="submit" class="btn primary" id="ar-submit">{i_check} Accept risk</button></div>
   </form>
   <div class="rt-result" id="ar-result" aria-live="polite" hidden></div>
 </dialog>
 <dialog id="an-dialog" class="card rt-dialog" aria-labelledby="an-title" data-accepted="{accepted}">
   <form method="dialog" class="rt-close-form"><button class="rt-x" value="close" aria-label="Close">{i_x}</button></form>
-  <p class="eyebrow">Add a note</p>
+  <p class="eyebrow">Add note</p>
   <h2 class="sub" id="an-title"></h2>
   <div class="an-risk">
     <p class="an-reason" id="an-reason"></p>
@@ -1036,8 +1041,8 @@ fn dialogs(
   </div>
   <form id="an-form" class="rt-form" autocomplete="off">
     <label for="an-text"><span>Note</span></label>
-    <textarea id="an-text" rows="3" maxlength="2000" required placeholder="e.g. Checked with the CAB: still needed until the new jump host is in."></textarea>
-    <p class="muted small">Kept with this accepted risk in <code>pathwarden.toml</code>, with your name, this computer and the time. A note doesn't change the reason or the review date; the report shows it from the next analysis.</p>
+    <textarea id="an-text" rows="3" maxlength="2000" required placeholder="for example Checked with the CAB: still needed until the new jump host is in."></textarea>
+    <p class="muted small">Saved with your name and the time. Shows in the report from the next analysis.</p>
     <div class="dialog-actions"><a class="btn" href="/settings#risks">Accepted risks in Settings</a><button type="submit" class="btn primary" id="an-submit">{i_check} Add note</button></div>
   </form>
   <div class="rt-result" id="an-result" aria-live="polite" hidden></div>
@@ -1135,22 +1140,21 @@ async fn retest(
     SecretJson(form): SecretJson<RetestForm>,
 ) -> Response {
     if !workspace::valid_run_id(&id) || !valid_fingerprint(&form.fingerprint) {
-        return json_error(StatusCode::BAD_REQUEST, "Invalid run or finding.");
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "That run or finding doesn't exist. Reload the page.",
+        );
     }
     let (Some(dir), Some(summary)) = (st.workspace.run_dir(&id), st.workspace.run(&id)) else {
         return json_error(StatusCode::NOT_FOUND, "That run no longer exists.");
     };
     if !collect::BUILTIN {
-        return json_error(
-            StatusCode::CONFLICT,
-            "This build has no built-in collector, so it can't re-read single objects. Upload a \
-             new collection or collect again to retest.",
-        );
+        return json_error(StatusCode::CONFLICT, NO_COLLECTOR);
     }
     if st.jobs.running().is_some() {
         return json_error(
             StatusCode::CONFLICT,
-            "Pathwarden is collecting or analyzing. Wait for it to finish, then retest.",
+            "A collection or analysis is running. Try again when it finishes.",
         );
     }
     let Some(slot) = Slot::take() else {
@@ -1214,7 +1218,7 @@ async fn retest(
             }
             json_error(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "The retest stopped. Try again.",
+                "The retest stopped unexpectedly. Try again; if it happens again, see Settings › Logs.",
             )
         }
     }
@@ -1376,9 +1380,13 @@ pub fn targeted(
                 return failure(StatusCode::UNPROCESSABLE_ENTITY, ce.to_string());
             }
             let text = format!("{e:#}");
+            // The detail goes to the retest's log; the dialog says it plainly.
+            pathwarden_core::logs::note(&format!("The retest failed: {text}"));
             let message = match Problem::classify(&text) {
-                Problem::Other | Problem::Settings => format!("The retest failed: {text}"),
-                p => format!("{} ({text})", p.explain()),
+                Problem::Other | Problem::Settings => {
+                    "The retest failed. Settings › Logs has the details.".to_string()
+                }
+                p => p.explain().to_string(),
             };
             failure(StatusCode::UNPROCESSABLE_ENTITY, message)
         })
@@ -1386,9 +1394,10 @@ pub fn targeted(
             let mut ing = pathwarden_core::ingest::Ingestor::new();
             for f in &r.files {
                 ing.ingest_path(f).map_err(|e| {
+                    pathwarden_core::logs::note(&format!("Couldn't read what was re-read: {e}"));
                     failure(
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        format!("Couldn't read what was re-read: {e}"),
+                        "The retest's results couldn't be read. Try again.".to_string(),
                     )
                 })?;
             }
