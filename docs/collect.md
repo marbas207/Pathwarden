@@ -63,6 +63,25 @@ runas /netonly /user:SCALE\svc-pathwarden "C:\Pathwarden\pathwarden.exe ui"
 Then choose **Use my Windows account**. The computer must reach the
 domain's DNS and a domain controller.
 
+### Plain LDAP when LDAPS fails
+
+Some domain controllers have no working LDAPS certificate. **Allow plain
+LDAP** under **Advanced** on the Collect page (`--allow-unencrypted-ldap`)
+lets a password sign-in use plain LDAP on port 389:
+
+- With LDAPS on (`--ldaps --allow-unencrypted-ldap`), LDAPS is tried first.
+  A domain controller whose LDAPS fails (port closed, no answer, a
+  certificate that isn't trusted) is read over plain LDAP, and the run says
+  which one and why, on the Collect page, in **Run details** and in the
+  job log.
+- With LDAPS off, only plain LDAP is used.
+
+Over plain LDAP the directory and the sign-in cross the network
+unencrypted. Domain controllers that require LDAP signing refuse it. It is
+off by default, so nothing on the network can force a run down to plain
+LDAP unless you allowed it. An account from another domain still needs
+LDAPS.
+
 ### Signing in to computers
 
 The built-in collector signs in to computers with **Kerberos only** and

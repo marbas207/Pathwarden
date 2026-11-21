@@ -142,6 +142,10 @@ pub struct CollectForm {
     pub password: Option<Secret>,
     pub ldaps: bool,
     pub skip_verify: bool,
+    /// "Allow plain LDAP": with a password, LDAPS is no longer required;
+    /// with LDAPS too, a domain controller whose LDAPS fails is read over
+    /// plain LDAP.
+    pub allow_plain: bool,
     /// "Kerberos only" turned off. Named for the opt-out so a form
     /// that doesn't say gets Kerberos only.
     pub allow_ntlm: bool,
@@ -474,7 +478,7 @@ pub fn build_request(form: CollectForm, output_dir: PathBuf) -> Result<CollectRe
                      password.",
                 ));
             }
-            if password && !form.ldaps {
+            if password && !form.ldaps && !form.allow_plain {
                 return Err(FieldError::new(
                     2,
                     "ldaps",
@@ -569,7 +573,8 @@ pub fn build_request(form: CollectForm, output_dir: PathBuf) -> Result<CollectRe
         auth,
         ldaps: form.ldaps,
         insecure_skip_tls_verify: form.ldaps && form.skip_verify,
-        allow_unencrypted_ldap: false,
+        // Only a password sign-in by the built-in collector asks.
+        allow_unencrypted_ldap: password && method == Method::Builtin && form.allow_plain,
         allow_ntlm: form.allow_ntlm,
         allow_unsigned_smb: form.allow_unsigned_smb,
         // Set by the caller: the page's answer, else the environment's.
@@ -854,6 +859,8 @@ pub fn read_streams(ws: Option<&Workspace>) -> Option<usize> {
 pub fn collection_info(req: &CollectRequest) -> CollectionInfo {
     CollectionInfo {
         read_started: None,
+        plain_allowed: req.allow_unencrypted_ldap,
+        plain_fallback: false,
         method: match req.method {
             Method::Builtin => "builtin",
             Method::External { .. } => "sharphound",
@@ -1813,6 +1820,9 @@ impl CollectJob {
         record_domains(&mut self.info, &results, &names);
         let outcome = pathwarden_collect::merged(&results);
         self.info.read_started = outcome.read_started;
+        // LDAPS failed on a domain controller, read over plain LDAP: the
+        // run says so (its warnings say where); `ldaps` stays as asked.
+        self.info.plain_fallback = outcome.plain_ldap;
 
         let warnings: Vec<String> = outcome.warnings.iter().map(|w| capitalize(w)).collect();
         if let Some(l) = &log {
@@ -2279,6 +2289,36 @@ mod tests {
             let r = build_request(f, "o".into()).unwrap();
             assert_eq!(r.scope, Scope::All);
             assert_eq!(r.domain, "contoso.local");
+            assert!(!r.allow_unencrypted_ldap);
+        }
+    }
+
+    /// "Allow plain LDAP": a password no longer needs LDAPS; with LDAPS
+    /// too, LDAPS first. Only a password sign-in by the built-in collector
+    /// asks for it.
+    #[test]
+    fn allow_plain_ldap() {
+        if !BUILTIN {
+            return;
+        }
+        let pw = |ldaps: bool| {
+            let mut f = form("contoso.local");
+            f.auth = AuthChoice::Password;
+            f.user = "svc".into();
+            f.password = Some(Secret::new("x"));
+            f.ldaps = ldaps;
+            f.allow_plain = true;
+            f
+        };
+        for ldaps in [true, false] {
+            let r = build_request(pw(ldaps), "o".into()).unwrap();
+            assert_eq!((r.ldaps, r.allow_unencrypted_ldap), (ldaps, true));
+        }
+        if cfg!(windows) {
+            let mut f = form("contoso.local");
+            f.auth = AuthChoice::Current;
+            f.allow_plain = true;
+            assert!(!build_request(f, "o".into()).unwrap().allow_unencrypted_ldap);
         }
     }
 

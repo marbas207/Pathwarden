@@ -312,6 +312,8 @@ fn rows_say_what_needs_a_look() {
     // information, in today's words and an older run's, not a warning.
     let mut quick = crate::workspace::CollectionInfo {
         read_started: None,
+        plain_allowed: false,
+        plain_fallback: false,
         method: "builtin".into(),
         scope: "dc-only".into(),
         domain: "CONTOSO.LOCAL".into(),
@@ -345,6 +347,8 @@ fn rows_say_what_needs_a_look() {
     // A read that stopped and was resumed: when it started.
     r.collection = Some(crate::workspace::CollectionInfo {
         read_started: Some(1_793_000_000),
+        plain_allowed: false,
+        plain_fallback: false,
         ..quick.clone()
     });
     let all = rows(&r, Some(false), &applies);
@@ -559,6 +563,8 @@ fn collected(domains: Vec<crate::workspace::DomainOutcome>) -> crate::workspace:
     r.objects = 1204;
     r.collection = Some(crate::workspace::CollectionInfo {
         read_started: None,
+        plain_allowed: false,
+        plain_fallback: false,
         method: "builtin".into(),
         scope: "dc-only".into(),
         domain: "contoso.local".into(),
@@ -755,6 +761,8 @@ fn how_computers_were_signed_in_to() {
     let mut r = point("cli");
     let full = crate::workspace::CollectionInfo {
         read_started: None,
+        plain_allowed: false,
+        plain_fallback: false,
         method: "builtin".into(),
         scope: "all".into(),
         domain: "scale.local".into(),

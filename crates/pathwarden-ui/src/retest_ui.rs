@@ -1328,6 +1328,7 @@ pub fn targeted(
         password: form.password,
         ldaps: form.ldaps,
         skip_verify: form.skip_verify,
+        allow_plain: false,
         allow_ntlm: form.allow_ntlm,
         allow_unsigned_smb: form.allow_unsigned_smb,
         service_reads: None,

@@ -1347,3 +1347,214 @@ async fn the_progress_view_is_one_panel_in_the_domain_list() {
 fn demo_zip_exists() {
     assert!(demo_zip().is_file());
 }
+
+/// "Allow plain LDAP" through the router, against 127.0.0.1 where nothing
+/// listens: a password no longer needs LDAPS; with LDAPS too, LDAPS is
+/// tried first and plain LDAP after it, and the error says both.
+#[tokio::test]
+async fn plain_ldap_when_allowed() {
+    if !BUILTIN {
+        return;
+    }
+    let a = app("plain-ldap");
+    let form = |ldaps: bool, allow_plain: bool| {
+        json!({
+            "domain": "contoso.local", "server": "127.0.0.1",
+            "auth": "password", "user": "svc-test", "password": "x",
+            "ldaps": ldaps, "allow_plain": allow_plain,
+            "depth": "quick", "collector": "builtin",
+        })
+    };
+    // Without it, a password needs LDAPS, as before.
+    let (s, v, text) = a.post("/api/collect/test", Some(form(false, false))).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "{text}");
+    assert_eq!(v["field"], "ldaps", "{text}");
+    // Plain LDAP only: port 389 is tried.
+    let (s, _, text) = a.post("/api/collect/test", Some(form(false, true))).await;
+    assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY, "{text}");
+    assert!(text.contains("ldap://127.0.0.1:389"), "{text}");
+    assert!(!text.contains("LDAPS had failed first"), "{text}");
+    // LDAPS first: 636 fails, then 389, and the error says both.
+    let (s, _, text) = a.post("/api/collect/test", Some(form(true, true))).await;
+    assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY, "{text}");
+    assert!(text.contains("ldap://127.0.0.1:389"), "{text}");
+    assert!(text.contains("LDAPS had failed first"), "{text}");
+    // LDAPS without plain LDAP allowed: 636 only, no fallback.
+    let (s, _, text) = a.post("/api/collect/test", Some(form(true, false))).await;
+    assert_eq!(s, StatusCode::UNPROCESSABLE_ENTITY, "{text}");
+    assert!(text.contains("ldaps://127.0.0.1:636"), "{text}");
+    assert!(!text.contains(":389"), "{text}");
+}
+
+/// Headless Edge or Chrome: `PATHWARDEN_TEST_BROWSER`, else where they
+/// are usually installed.
+fn browser() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("PATHWARDEN_TEST_BROWSER") {
+        return Some(PathBuf::from(p));
+    }
+    let candidates: &[&str] = if cfg!(windows) {
+        &[
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        ]
+    } else {
+        &[
+            "/usr/bin/google-chrome",
+            "/usr/bin/chromium",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/microsoft-edge",
+        ]
+    };
+    candidates.iter().map(PathBuf::from).find(|p| p.is_file())
+}
+
+/// What the page does after the wizard's script: ticks the boxes as a user
+/// would and writes what each control then shows into `#pw-out`.
+const PLAIN_LDAP_SCRIPT: &str = r#"(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function pick(name, v) {
+    var r = document.querySelector('input[name="' + name + '"][value="' + v + '"]');
+    r.disabled = false;
+    r.checked = true;
+    r.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function tick(id, v) {
+    $(id).checked = v;
+    $(id).dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function state() {
+    return {
+      ldaps: $("ldaps").checked, ldaps_off: $("ldaps").disabled,
+      plain: $("allow-plain").checked, plain_off: $("allow-plain").disabled,
+      note: !$("plain-note").hidden, hint: $("ldaps-hint").textContent
+    };
+  }
+  var out = {};
+  try {
+    pick("auth", "password");
+    pick("collector", "builtin");
+    out.forced = state();
+    tick("allow-plain", true);
+    out.allowed = state();
+    tick("ldaps", false);
+    out.plain_only = state();
+    tick("allow-plain", false);
+    out.again = state();
+  } catch (e) { out.error = String(e); }
+  var pre = document.createElement("pre");
+  pre.id = "pw-out";
+  pre.textContent = JSON.stringify(out);
+  document.body.appendChild(pre);
+})();"#;
+
+/// The Collect page in a real browser: with a password and the built-in
+/// collector, LDAPS is forced on until "Allow plain LDAP" is ticked; then
+/// LDAPS is the user's to turn off, its hint says LDAPS is tried first and
+/// the warning shows; unticking it forces LDAPS again. Skipped with a note
+/// when there is no browser.
+#[tokio::test]
+async fn allow_plain_ldap_unlocks_ldaps_in_a_browser() {
+    if !BUILTIN {
+        return;
+    }
+    let Some(exe) = browser() else {
+        eprintln!("no Edge or Chrome: skipped");
+        return;
+    };
+    let a = app("plain-ldap-browser");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let origin = format!("http://{}", listener.local_addr().unwrap());
+    let (s, _, page) = a.get("/collect").await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(page.contains("</body>"));
+    let page = page.replacen(
+        "</body>",
+        r#"<script src="/pw-test.js" defer></script></body>"#,
+        1,
+    );
+    // The page's own files, from the router; the page and the script above
+    // served as they are.
+    let mut files = std::collections::HashMap::new();
+    for path in ["/static/collect.js", "/static/app.js", "/static/theme.js"] {
+        files.insert(path.to_string(), ("text/javascript", a.get(path).await.2));
+    }
+    for path in ["/static/app.css", "/static/collect.css"] {
+        files.insert(path.to_string(), ("text/css", a.get(path).await.2));
+    }
+    files.insert("/".into(), ("text/html; charset=utf-8", page));
+    files.insert(
+        "/pw-test.js".into(),
+        ("text/javascript", PLAIN_LDAP_SCRIPT.to_string()),
+    );
+    let files = Arc::new(files);
+    std::thread::spawn(move || {
+        use std::io::{Read, Write};
+        for stream in listener.incoming() {
+            let Ok(mut s) = stream else { continue };
+            let files = files.clone();
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 4096];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]);
+                let path = req.split_whitespace().nth(1).unwrap_or("/");
+                let path = path.split('?').next().unwrap_or("/");
+                let (status, kind, body) = match files.get(path) {
+                    Some((k, b)) => ("200 OK", *k, b.clone()),
+                    None => ("404 Not Found", "text/plain", String::new()),
+                };
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 {status}\r\nContent-Type: {kind}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            });
+        }
+    });
+    let profile = std::env::temp_dir().join(format!("pw-collect-browser-{}", std::process::id()));
+    let out = pathwarden_core::spawn::quiet(&exe)
+        .args([
+            "--headless=new",
+            "--disable-gpu",
+            "--no-first-run",
+            "--window-size=1500,1200",
+            "--dump-dom",
+        ])
+        .arg(format!("--user-data-dir={}", profile.display()))
+        .arg(format!("{origin}/"))
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(&profile);
+    let dom = String::from_utf8_lossy(&out.stdout).into_owned();
+    let json = dom
+        .split(r#"<pre id="pw-out">"#)
+        .nth(1)
+        .and_then(|s| s.split("</pre>").next())
+        .unwrap_or("{}")
+        .replace("&quot;", "\"")
+        .replace("&amp;", "&");
+    let got: Value = serde_json::from_str(&json).unwrap_or_default();
+    let why = format!("{got}\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(got.get("error").is_none(), "{why}");
+    // A password: LDAPS forced on, plain LDAP offered, no warning.
+    assert_eq!(got["forced"]["ldaps"], true, "{why}");
+    assert_eq!(got["forced"]["ldaps_off"], true, "{why}");
+    assert_eq!(got["forced"]["plain_off"], false, "{why}");
+    assert_eq!(got["forced"]["note"], false, "{why}");
+    // Allowed: LDAPS stays on but can be turned off; tried first.
+    assert_eq!(got["allowed"]["ldaps"], true, "{why}");
+    assert_eq!(got["allowed"]["ldaps_off"], false, "{why}");
+    assert_eq!(got["allowed"]["note"], true, "{why}");
+    assert_eq!(
+        got["allowed"]["hint"],
+        "Tried first. A domain controller whose LDAPS fails is read over plain LDAP.",
+        "{why}"
+    );
+    // LDAPS off: plain LDAP only.
+    assert_eq!(got["plain_only"]["ldaps"], false, "{why}");
+    assert_eq!(got["plain_only"]["note"], true, "{why}");
+    // Not allowed again: LDAPS forced on again, the warning gone.
+    assert_eq!(got["again"]["ldaps"], true, "{why}");
+    assert_eq!(got["again"]["ldaps_off"], true, "{why}");
+    assert_eq!(got["again"]["note"], false, "{why}");
+}

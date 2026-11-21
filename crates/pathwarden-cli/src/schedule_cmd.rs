@@ -73,6 +73,11 @@ pub struct ScheduleArgs {
     /// there).
     #[arg(long)]
     ldaps: bool,
+    /// Linux: a domain controller whose LDAPS fails is read over plain LDAP
+    /// (unencrypted), as `pathwarden collect --ldaps
+    /// --allow-unencrypted-ldap` does.
+    #[arg(long)]
+    allow_unencrypted_ldap: bool,
     /// What to collect.
     #[arg(long, value_enum, default_value = "dc-only")]
     scope: Scope,
@@ -130,6 +135,7 @@ impl ScheduleArgs {
             domains: self.domains.clone(),
             server: self.server.clone(),
             ldaps: self.ldaps,
+            allow_unencrypted_ldap: self.allow_unencrypted_ldap,
             sharphound: self.sharphound,
             full: self.scope == Scope::All,
             env,

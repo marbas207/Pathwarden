@@ -125,6 +125,7 @@
         ldaps: $("ldaps").checked,
         ldaps_auto: ldapsAuto,
         skip_verify: $("skip-verify").checked,
+        allow_plain: $("allow-plain").checked,
         kerberos_only: $("kerberos-only").checked,
         smb_signing: $("smb-signing").checked,
         service_reads: $("service-reads").checked,
@@ -166,6 +167,7 @@
     // no longer needed.
     ldapsAuto = s.ldaps_auto === true && $("ldaps").checked;
     box("skip-verify", s.skip_verify);
+    box("allow-plain", s.allow_plain);
     box("kerberos-only", s.kerberos_only);
     box("smb-signing", s.smb_signing);
     box("service-reads", s.service_reads);
@@ -197,6 +199,9 @@
       user: $("user").value.trim(),
       ldaps: $("ldaps").checked,
       skip_verify: $("ldaps").checked && $("skip-verify").checked,
+      // Only with a password and the built-in collector.
+      allow_plain: $("allow-plain").checked && radio("auth") === "password" &&
+        (radio("collector") || "builtin") === "builtin",
       // Opt-outs, so a missing answer means the safe default.
       allow_ntlm: !$("kerberos-only").checked,
       allow_unsigned_smb: !$("smb-signing").checked,
@@ -492,17 +497,28 @@
     var pw = a.auth === "password";
     $("cred-fields").hidden = !pw;
 
-    // LDAPS: required with a password and the built-in collector.
+    // LDAPS: required with a password and the built-in collector, unless
+    // plain LDAP is allowed.
     var ldaps = $("ldaps");
-    var mustLdaps = pw && a.collector === "builtin";
+    var plainOk = pw && a.collector === "builtin";
+    var plain = $("allow-plain");
+    plain.disabled = !plainOk;
+    if (!plainOk) plain.checked = false;
+    var mustLdaps = plainOk && !plain.checked;
     // Ticked here only because a password needs it: unticked again when
-    // it no longer does (a box the user ticked stays ticked).
+    // it no longer does (a box the user ticked stays ticked). With plain
+    // LDAP allowed it stays as it is, now the user's to change.
     if (mustLdaps && !ldaps.checked) { ldaps.checked = true; ldapsAuto = true; }
-    else if (!mustLdaps && ldapsAuto) { ldaps.checked = false; ldapsAuto = false; }
+    else if (!mustLdaps && !plain.checked && ldapsAuto) { ldaps.checked = false; ldapsAuto = false; }
     ldaps.disabled = mustLdaps;
-    $("ldaps-hint").textContent = pw
+    $("ldaps-hint").textContent = plain.checked
+      ? (ldaps.checked
+        ? "Tried first. A domain controller whose LDAPS fails is read over plain LDAP."
+        : "Off: plain LDAP only, not encrypted.")
+      : pw
       ? "Required with a password. Needs a certificate this computer trusts."
       : "Optional: Windows already encrypts the connection.";
+    $("plain-note").hidden = !plain.checked;
     $("skip-verify").disabled = !ldaps.checked;
     if (!ldaps.checked) $("skip-verify").checked = false;
     // Kerberos only and SMB signing turned off, or Kerberos only with the
@@ -605,7 +621,9 @@
     if (a.trusted.length) row("Trusted domains", a.trusted.join(", "));
     var me = document.querySelector("[data-account]").getAttribute("data-account");
     row("Sign in as", a.auth === "password" ? a.user : "Your Windows account" + (me ? " (" + me + ")" : ""));
-    row("Connection", a.ldaps ? (a.skip_verify ? "LDAPS, certificate not checked" : "LDAPS") : "LDAP, signed and encrypted by Windows");
+    row("Connection", a.ldaps
+      ? (a.skip_verify ? "LDAPS, certificate not checked" : "LDAPS") + (a.allow_plain ? ", plain LDAP if it fails" : "")
+      : a.allow_plain ? "Plain LDAP, not encrypted" : "LDAP, signed and encrypted by Windows");
     row("Depth", a.depth === "full" ? "Full: directory, sessions and local groups" : "Quick: directory only");
     row("Collector", sh ? "SharpHound" : "Built-in");
     row("Computers", sh ? "Not enforced: SharpHound signs in its own way"

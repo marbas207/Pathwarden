@@ -264,6 +264,7 @@ pub(crate) fn run(
         timings: Some(timings),
         signed_in_as: None,
         read_started: None,
+        plain_ldap: false,
     })
 }
 

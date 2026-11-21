@@ -46,3 +46,40 @@ fn elsewhere_only_a_password_works() {
     assert!(!current);
     assert!(why.is_empty());
 }
+
+/// A run reads LDAPS, LDAP as the Windows account, or plain LDAP with a
+/// password (a domain controller whose LDAPS failed).
+#[test]
+fn the_connection_is_said_as_it_was() {
+    let mut c = CollectionInfo {
+        read_started: None,
+        plain_allowed: false,
+        plain_fallback: false,
+        method: "builtin".into(),
+        scope: "dc-only".into(),
+        domain: "CONTOSO.LOCAL".into(),
+        server: Some("dc01.contoso.local".into()),
+        ldaps: true,
+        current_user: false,
+        warnings: Vec::new(),
+        kept: None,
+        kerberos_only: Some(true),
+        smb_signing: Some(true),
+        domains: Vec::new(),
+    };
+    assert!(collected_words(&c).0.contains("over LDAPS,"));
+    // A domain controller fell back: said, and LDAPS stays as asked.
+    c.plain_fallback = true;
+    assert!(
+        collected_words(&c).0.contains(
+            "over LDAPS (plain LDAP where it failed), signed in with a user and password."
+        ),
+        "{}",
+        collected_words(&c).0
+    );
+    c.plain_fallback = false;
+    c.ldaps = false;
+    assert!(collected_words(&c).0.contains("over plain LDAP,"));
+    c.current_user = true;
+    assert!(collected_words(&c).0.contains("over LDAP,"));
+}

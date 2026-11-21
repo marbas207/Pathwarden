@@ -40,6 +40,10 @@ pub struct Target {
     pub extra_domains: Vec<String>,
     pub server: Option<String>,
     pub ldaps: bool,
+    /// Linux: plain LDAP allowed, as the run was collected: a domain
+    /// controller whose LDAPS fails is read over plain LDAP
+    /// (`--allow-unencrypted-ldap`).
+    pub allow_plain: bool,
     /// The nightly run collects with SharpHound (else built-in).
     pub sharphound: bool,
     /// Sessions and local groups too.
@@ -66,6 +70,9 @@ pub struct Spec {
     pub server: Option<String>,
     /// Windows: connect with LDAPS (Linux always does).
     pub ldaps: bool,
+    /// Linux: a domain controller whose LDAPS fails is read over plain
+    /// LDAP (`--allow-unencrypted-ldap`).
+    pub allow_unencrypted_ldap: bool,
     /// Windows: collect with SharpHound.
     pub sharphound: bool,
     /// Sessions and local groups too (`--scope all`).
@@ -505,6 +512,8 @@ impl Target {
         let sharphound = spec.sharphound || (!linux && spec.full);
         let info = CollectionInfo {
             read_started: None,
+            plain_allowed: spec.allow_unencrypted_ldap,
+            plain_fallback: false,
             method: if sharphound { "sharphound" } else { "builtin" }.into(),
             scope: if spec.full { "all" } else { "dc-only" }.into(),
             domain: domains.first().cloned().unwrap_or_default(),
@@ -621,6 +630,15 @@ impl Target {
                     .to_string(),
             );
         }
+        // Only a password sign-in falls back: on Linux.
+        let allow_plain = linux && info.is_some_and(|i| i.plain_allowed);
+        if allow_plain {
+            notes.push(
+                "This run allowed plain LDAP, so the nightly run does too: a domain controller \
+                 whose LDAPS fails is read over plain LDAP, unencrypted."
+                    .to_string(),
+            );
+        }
         if linux && server.is_none() {
             notes.push(format!(
                 "If the domain name isn't on the domain controller's certificate, LDAPS fails: see {}.",
@@ -698,6 +716,7 @@ impl Target {
             server,
             // Linux binds with a password, which needs LDAPS.
             ldaps: linux || info.is_some_and(|i| i.ldaps),
+            allow_plain,
             sharphound,
             full,
             folder,
@@ -814,6 +833,9 @@ impl Target {
         }
         if self.ldaps {
             a.push(("--ldaps", None));
+        }
+        if self.allow_plain {
+            a.push(("--allow-unencrypted-ldap", None));
         }
         if self.linux {
             a.push(("--user", Some(quote(&self.bind_user()))));
@@ -1394,6 +1416,8 @@ mod tests {
     fn info(method: &str, scope: &str) -> CollectionInfo {
         CollectionInfo {
             read_started: None,
+            plain_allowed: false,
+            plain_fallback: false,
             method: method.into(),
             scope: scope.into(),
             domain: "contoso.local".into(),
@@ -2132,6 +2156,74 @@ Lock "$dir\good" ($admins + @(, @($me, 'FullControl', 'None')))
             assert_eq!(page.files(), cli.files(), "{os}");
             assert_eq!(page.notes, cli.notes, "{os}");
         }
+    }
+
+    /// A run collected with plain LDAP allowed is scheduled with it on
+    /// Linux (the password sign-in that falls back), the page and the
+    /// command line alike; on Windows the gMSA's Kerberos doesn't fall
+    /// back, so nothing changes. A run without it never gets it.
+    #[test]
+    fn plain_ldap_allowed_carries_over() {
+        let mut i = info("builtin", "dc-only");
+        i.ldaps = true;
+        i.plain_allowed = true;
+        let s = summary(i.clone());
+        let text = |t: &Target| {
+            t.files()
+                .into_iter()
+                .map(|(_, f)| f)
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        for os in ["windows", "linux"] {
+            let p = Params {
+                os: Some(os.into()),
+                ..Params::default()
+            };
+            let (page, errors) = Target::resolve(&p, Some(&s), &Detected::default());
+            assert!(errors.is_empty(), "{errors:?}");
+            let linux = os == "linux";
+            assert_eq!(page.allow_plain, linux, "{os}");
+            assert_eq!(
+                text(&page).contains("--allow-unencrypted-ldap"),
+                linux,
+                "{os}"
+            );
+            assert_eq!(
+                page.notes.iter().any(|n| n.contains("allowed plain LDAP")),
+                linux,
+                "{os}"
+            );
+            let spec = Spec {
+                domains: vec!["contoso.local".into()],
+                ldaps: !linux,
+                allow_unencrypted_ldap: true,
+                ..Spec::default()
+            };
+            let (cli, errors) = Target::for_command_line(&p, &spec);
+            assert!(errors.is_empty(), "{errors:?}");
+            assert_eq!(cli.allow_plain, linux, "{os}");
+
+            let mut without = i.clone();
+            without.plain_allowed = false;
+            let (page, _) = Target::resolve(&p, Some(&summary(without)), &Detected::default());
+            assert!(!text(&page).contains("--allow-unencrypted-ldap"), "{os}");
+        }
+    }
+
+    /// The fields are left out when off, and a run without them reads as
+    /// off: older runs and older releases are unaffected.
+    #[test]
+    fn plain_ldap_fields_are_optional() {
+        let i = info("builtin", "dc-only");
+        let json = serde_json::to_string(&i).unwrap();
+        assert!(!json.contains("plain_"), "{json}");
+        let mut on = i.clone();
+        on.plain_allowed = true;
+        on.plain_fallback = true;
+        let json = serde_json::to_string(&on).unwrap();
+        let back: CollectionInfo = serde_json::from_str(&json).unwrap();
+        assert!(back.plain_allowed && back.plain_fallback);
     }
 
     #[test]

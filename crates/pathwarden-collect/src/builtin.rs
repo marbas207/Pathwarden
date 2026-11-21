@@ -144,6 +144,9 @@ enum Msg {
     /// A warning for the collection's warnings (and the log): one line
     /// that sums up what the log says per computer.
     Warning(String),
+    /// LDAPS failed on the domain controller, so it is read over plain
+    /// LDAP: the warning ([`fell_back_warning`]).
+    FellBack(String),
     /// Units done in the current step, of `total` when known.
     Units {
         done: u64,
@@ -244,6 +247,13 @@ struct Job {
     server: Option<String>,
     ldaps: bool,
     skip_verify: bool,
+    /// LDAPS first, plain LDAP when LDAPS fails on the domain controller
+    /// ([`fall_back`]): `--ldaps` with `--allow-unencrypted-ldap` and a
+    /// password.
+    plain_fallback: bool,
+    /// Why LDAPS failed on the domain controller, in plain words, once the
+    /// job switched to plain LDAP ([`to_plain`]).
+    ldaps_failed: Option<String>,
     auth: JobAuth,
     method: CollectionMethod,
     out_dir: PathBuf,
@@ -641,11 +651,7 @@ pub(crate) fn plan(req: &CollectRequest) -> anyhow::Result<Plan> {
         );
     }
     if req.ldaps && req.insecure_skip_tls_verify {
-        warnings.push(
-            "LDAPS certificates were not checked, so a machine in the middle could read or \
-             change the collection and capture the sign-in."
-                .into(),
-        );
+        warnings.push(UNCHECKED_CERTIFICATES.into());
     }
     // Opting out of Kerberos only or required signing. Every
     // built-in collection reads at least SYSVOL over SMB.
@@ -683,6 +689,19 @@ pub(crate) fn plan(req: &CollectRequest) -> anyhow::Result<Plan> {
         }
     };
     Ok(Plan { method, warnings })
+}
+
+/// The run warning with the LDAPS certificate not checked. Dropped when the
+/// domain controller was read over plain LDAP instead ([`fall_back`]).
+const UNCHECKED_CERTIFICATES: &str =
+    "LDAPS certificates were not checked, so a machine in the middle could read or change the \
+     collection and capture the sign-in.";
+
+/// A collection's warnings once LDAPS failed on its domain controller and
+/// it was read over plain LDAP (`w`): no certificate was used.
+fn fell_back_in(warnings: &mut Vec<String>, w: String) {
+    warnings.retain(|x| x != UNCHECKED_CERTIFICATES);
+    warnings.push(w);
 }
 
 /// The run warning when the domain controller wasn't named by its full name:
@@ -727,6 +746,111 @@ fn url_for(host: &str, ldaps: bool) -> String {
         format!("ldaps://{host}:636")
     } else {
         format!("ldap://{host}:389")
+    }
+}
+
+/// Whether a request tries LDAPS first and reads a domain controller whose
+/// LDAPS fails over plain LDAP: LDAPS with plain LDAP allowed, signing in
+/// with a password. Without `allow_unencrypted_ldap` nothing falls back.
+pub(crate) fn falls_back(req: &CollectRequest) -> bool {
+    req.ldaps && req.allow_unencrypted_ldap && matches!(req.auth, Auth::Password { .. })
+}
+
+/// How long trying LDAPS before falling back to plain LDAP may take.
+const LDAPS_TRY: Duration = Duration::from_secs(10);
+
+/// Connects to `url` (LDAPS) and completes the TLS handshake, the
+/// certificate checked unless `skip_verify`, then hangs up.
+async fn try_ldaps(url: String, skip_verify: bool) -> Result<(), String> {
+    let settings = LdapConnSettings::new()
+        .set_conn_timeout(LDAPS_TRY)
+        .set_no_tls_verify(skip_verify);
+    match tokio::time::timeout(LDAPS_TRY, LdapConnAsync::with_settings(settings, &url)).await {
+        Ok(Ok((conn, ldap))) => {
+            drop(ldap);
+            drop(conn);
+            Ok(())
+        }
+        Ok(Err(e)) => Err(e.to_string()),
+        Err(_) => Err(format!(
+            "timeout: no answer within {} seconds",
+            LDAPS_TRY.as_secs()
+        )),
+    }
+}
+
+/// Why LDAPS failed, in a few plain words, from its error `e`. Words that
+/// [`crate::Problem::classify`] reads as their own problem are avoided, so
+/// a plain LDAP error that carries them keeps its own reason.
+fn ldaps_failure_words(e: &str) -> &'static str {
+    use crate::Problem;
+    match Problem::classify(e) {
+        Problem::CertificateUntrusted => "the certificate isn't trusted",
+        Problem::CertificateName => "the certificate doesn't match its name",
+        Problem::CertificateExpired => "the certificate has expired or isn't valid yet",
+        Problem::Tls => "the encrypted connection couldn't be set up",
+        Problem::Refused => "nothing answered on port 636",
+        Problem::Timeout => "no answer on port 636 in time",
+        Problem::Unreachable => "no network route to it",
+        Problem::Dns => "its name wasn't found",
+        _ => "the connection didn't work",
+    }
+}
+
+/// Switches `job` to plain LDAP (port 389) on the same host for every
+/// later connection, LDAPS having failed there for `why`.
+fn to_plain(job: &mut Job, why: &str) {
+    job.ldaps = false;
+    job.url = url_for(connected_host(job), false);
+    job.ldaps_failed = Some(why.to_string());
+}
+
+/// With [`Job::plain_fallback`], after the domain controller was chosen:
+/// LDAPS is tried on it (`try_it`, [`try_ldaps`] outside tests), and when
+/// that fails for any reason the job switches to plain LDAP
+/// ([`to_plain`]). Returns the warning when the job is on plain LDAP
+/// because LDAPS failed ([`fell_back_warning`]; `done`: the collection's
+/// words, else the check's). `log` gets LDAPS's own error.
+async fn fall_back<F, Fut>(
+    job: &mut Job,
+    try_it: F,
+    done: bool,
+    log: &dyn Fn(String),
+) -> Option<String>
+where
+    F: FnOnce(String, bool) -> Fut,
+    Fut: std::future::Future<Output = Result<(), String>>,
+{
+    if job.plain_fallback && job.ldaps && job.ldaps_failed.is_none() {
+        if let Err(e) = try_it(job.url.clone(), job.skip_verify).await {
+            log(format!(
+                "[ldaps] {} failed: {}",
+                job.url,
+                crate::one_line(&without_unsupported_names(&e))
+            ));
+            to_plain(job, ldaps_failure_words(&e));
+            log(format!("[ldaps] plain LDAP from now on: {}", job.url));
+        }
+    }
+    let why = job.ldaps_failed.as_deref()?;
+    Some(fell_back_warning(connected_host(job), why, done))
+}
+
+/// The warning a domain controller read over plain LDAP after its LDAPS
+/// failed (`why`) gives: the collection's (`done`) or the check's.
+fn fell_back_warning(host: &str, why: &str, done: bool) -> String {
+    if done {
+        format!("LDAPS failed on {host} ({why}), so it was read over plain LDAP, unencrypted.")
+    } else {
+        format!("LDAPS failed on {host} ({why}), so it will be read over plain LDAP, unencrypted.")
+    }
+}
+
+/// An error of plain LDAP after LDAPS failed: says both.
+fn with_ldaps_failure(job: &Job, e: String) -> String {
+    match &job.ldaps_failed {
+        Some(why) => format!("{e}. LDAPS had failed first: {why}"),
+        None => e,
     }
 }
 
@@ -835,6 +959,8 @@ fn job_for(req: &CollectRequest, method: CollectionMethod) -> Result<Job, String
         server: req.server.clone(),
         ldaps: req.ldaps,
         skip_verify: req.insecure_skip_tls_verify,
+        plain_fallback: falls_back(req),
+        ldaps_failed: None,
         auth,
         method,
         out_dir: req.output_dir.clone(),
@@ -868,14 +994,17 @@ pub(crate) fn check(
         .build()
         .map_err(|e| ConnectionError::new(format!("cannot start async runtime: {e}")))?;
     let tgt = needs_tgt(req);
+    let fell_back = runtime.block_on(fall_back(&mut job, try_ldaps, false, &|_| {}));
     let result = runtime.block_on(async {
         tokio::time::timeout(CHECK_TIMEOUT, check_async(&job, tgt, not_found.as_ref()))
             .await
             .unwrap_or_else(|_| Err(ConnectionError::new("timeout: no answer within a minute")))
     });
+    let ldaps = job.ldaps;
     drop(job);
     let mut check = result?;
-    if req.ldaps && req.insecure_skip_tls_verify {
+    check.warnings.extend(fell_back);
+    if ldaps && req.insecure_skip_tls_verify {
         check.warnings.push(
             "The certificate is not checked, so another machine on the network could pretend \
              to be the domain controller. Use this for test labs only."
@@ -1294,6 +1423,7 @@ pub(crate) fn run(
     let mut stopped = false;
     let mut read_started = None;
     let mut dc_host = None;
+    let mut plain_ldap = false;
     let result = loop {
         if cancel.load(Ordering::Relaxed) {
             stop.store(true, Ordering::Relaxed);
@@ -1303,6 +1433,11 @@ pub(crate) fn run(
             Ok(Msg::Warning(w)) => {
                 rep.log(format!("warning: {w}"));
                 warnings.push(w);
+            }
+            Ok(Msg::FellBack(w)) => {
+                rep.log(format!("warning: {w}"));
+                fell_back_in(&mut warnings, w);
+                plain_ldap = true;
             }
             Ok(Msg::Timings(t)) => saved_timings = Some(*t),
             Ok(Msg::Refused(e)) => refused = Some(*e),
@@ -1328,6 +1463,11 @@ pub(crate) fn run(
                 rep.log(format!("warning: {w}"));
                 warnings.push(w);
             }
+            Msg::FellBack(w) => {
+                rep.log(format!("warning: {w}"));
+                fell_back_in(&mut warnings, w);
+                plain_ldap = true;
+            }
             _ => {}
         }
     }
@@ -1344,6 +1484,7 @@ pub(crate) fn run(
                 timings: saved_timings,
                 signed_in_as,
                 read_started,
+                plain_ldap,
             })
         }
         Err(e) => {
@@ -1449,6 +1590,7 @@ fn apply(rep: &mut Reporter, msg: Msg, expected_total: &mut Option<u64>) {
         // Taken by `run`.
         Msg::Done(_)
         | Msg::Warning(_)
+        | Msg::FellBack(_)
         | Msg::Timings(_)
         | Msg::Refused(_)
         | Msg::SignedInAs(_)
@@ -1579,6 +1721,16 @@ fn locate_dc(
             job.server = Some(host);
             None
         }
+        // LDAPS first with plain LDAP allowed: one that answers on 389,
+        // read over plain LDAP ([`fall_back`] says so).
+        Err(none) if job.ldaps && job.plain_fallback => match find(&job.domain, 389, log) {
+            Ok(host) => {
+                job.server = Some(host);
+                to_plain(job, "nothing answered on port 636");
+                None
+            }
+            Err(_) => Some(none),
+        },
         Err(none) => Some(none),
     }
 }
@@ -1600,7 +1752,7 @@ fn pick_dc(
     locate_dc(job, req, find, log)
 }
 
-fn worker(job: Job, tx: mpsc::Sender<Msg>, stop: Arc<AtomicBool>) {
+fn worker(mut job: Job, tx: mpsc::Sender<Msg>, stop: Arc<AtomicBool>) {
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .thread_name("pathwarden-collect-rt")
@@ -1616,6 +1768,12 @@ fn worker(job: Job, tx: mpsc::Sender<Msg>, stop: Arc<AtomicBool>) {
     // `collect` waits for `Done`.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         runtime.block_on(async {
+            let log = |l: String| {
+                let _ = tx.send(Msg::Log(l));
+            };
+            if let Some(w) = fall_back(&mut job, try_ldaps, true, &log).await {
+                let _ = tx.send(Msg::FellBack(w));
+            }
             let mut work = std::pin::pin!(collect_async(&job, &tx));
             loop {
                 match tokio::time::timeout(Duration::from_millis(100), work.as_mut()).await {
@@ -3843,6 +4001,17 @@ async fn open(
     phase: &dyn Fn(String),
     log: &dyn Fn(String),
 ) -> Result<(ldap3::Ldap, Driver, String, NamingContexts), String> {
+    open_once(job, phase, log)
+        .await
+        .map_err(|e| with_ldaps_failure(job, e))
+}
+
+/// [`open`], whose errors don't yet say LDAPS failed first.
+async fn open_once(
+    job: &Job,
+    phase: &dyn Fn(String),
+    log: &dyn Fn(String),
+) -> Result<(ldap3::Ldap, Driver, String, NamingContexts), String> {
     phase(format!("Connecting to {}", job.url));
     let connected_addrs = resolve_dc(job).await?;
     let settings = LdapConnSettings::new()
@@ -4403,6 +4572,228 @@ mod tests {
         assert_eq!(p.method, CollectionMethod::DCOnly);
         r.scope = Scope::All;
         assert_eq!(plan(&r).unwrap().method, CollectionMethod::All);
+    }
+
+    /// LDAPS with plain LDAP allowed is planned as LDAPS: no plain LDAP
+    /// warning until a domain controller actually falls back.
+    #[test]
+    fn ldaps_with_plain_allowed_plans_as_ldaps() {
+        let mut r = password_req();
+        r.ldaps = true;
+        r.allow_unencrypted_ldap = true;
+        let p = plan(&r).unwrap();
+        assert!(
+            !p.warnings.iter().any(|w| w.contains("plain LDAP")),
+            "{:?}",
+            p.warnings
+        );
+        assert!(falls_back(&r));
+        r.allow_unencrypted_ldap = false;
+        assert!(!falls_back(&r));
+        // Plain LDAP only, or as the Windows account: nothing to fall back from.
+        r.allow_unencrypted_ldap = true;
+        r.ldaps = false;
+        assert!(!falls_back(&r));
+        let mut me = CollectRequest::new("contoso.local", "out");
+        me.ldaps = true;
+        me.allow_unencrypted_ldap = true;
+        assert!(!falls_back(&me));
+    }
+
+    /// Runs [`fall_back`] on `job` with LDAPS's result `tried` (`None`: it
+    /// must not be tried at all). The warning and the log.
+    fn falls_back_with(
+        job: &mut Job,
+        tried: Option<Result<(), String>>,
+    ) -> (Option<String>, Vec<String>) {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let log = std::cell::RefCell::new(Vec::new());
+        let w = rt.block_on(fall_back(
+            job,
+            |url: String, _skip: bool| async move {
+                assert!(url.starts_with("ldaps://"), "{url}");
+                tried.expect("LDAPS must not be tried")
+            },
+            true,
+            &|l| log.borrow_mut().push(l),
+        ));
+        (w, log.into_inner())
+    }
+
+    /// LDAPS that works stays LDAPS; LDAPS that fails, with plain LDAP
+    /// allowed, switches the job to plain LDAP on the same host with a
+    /// warning naming it and why; without plain LDAP allowed nothing is
+    /// tried and the job stays LDAPS (its connection fails as before);
+    /// plain LDAP only tries no LDAPS.
+    #[test]
+    fn ldaps_falls_back_only_when_allowed() {
+        let mut req = password_req();
+        req.ldaps = true;
+        req.allow_unencrypted_ldap = true;
+        req.server = Some("DC01.CONTOSO.LOCAL".into());
+        let method = CollectionMethod::DCOnly;
+
+        let mut job = job_for(&req, method.clone()).unwrap();
+        assert_eq!(falls_back_with(&mut job, Some(Ok(()))).0, None);
+        assert!(job.ldaps);
+        assert_eq!(job.url, "ldaps://DC01.CONTOSO.LOCAL:636");
+
+        let mut job = job_for(&req, method.clone()).unwrap();
+        let (w, log) = falls_back_with(
+            &mut job,
+            Some(Err(
+                "rustls error: invalid peer certificate: UnknownIssuer".into()
+            )),
+        );
+        assert_eq!(
+            w.as_deref(),
+            Some(
+                "LDAPS failed on DC01.CONTOSO.LOCAL (the certificate isn't trusted), so it was \
+                 read over plain LDAP, unencrypted."
+            )
+        );
+        assert!(!job.ldaps);
+        assert_eq!(job.url, "ldap://DC01.CONTOSO.LOCAL:389");
+        assert!(log[0].contains("UnknownIssuer"), "{log:?}");
+        // Every later connection is plain: the readers' too.
+        let c = Connector::of(&job, "dc01.contoso.local");
+        assert_eq!(
+            (c.url.as_str(), c.ldaps),
+            ("ldap://DC01.CONTOSO.LOCAL:389", false)
+        );
+        // Plain LDAP failing too says both, and keeps its own reason.
+        let e = with_ldaps_failure(
+            &job,
+            "cannot connect to ldap://DC01.CONTOSO.LOCAL:389: connection refused (os error 10061)"
+                .into(),
+        );
+        assert!(
+            e.ends_with("LDAPS had failed first: the certificate isn't trusted"),
+            "{e}"
+        );
+        assert_eq!(crate::Problem::classify(&e), crate::Problem::Refused);
+        // The check's words.
+        assert!(fell_back_warning("DC01.CONTOSO.LOCAL", "x", false).contains("will be read"));
+
+        // Not allowed: nothing tried, LDAPS as before.
+        req.allow_unencrypted_ldap = false;
+        let mut job = job_for(&req, method.clone()).unwrap();
+        assert_eq!(falls_back_with(&mut job, None).0, None);
+        assert!(job.ldaps);
+        assert_eq!(with_ldaps_failure(&job, "e".into()), "e");
+
+        // Plain LDAP only: no LDAPS tried, no warning.
+        req.allow_unencrypted_ldap = true;
+        req.ldaps = false;
+        let mut job = job_for(&req, method).unwrap();
+        assert_eq!(falls_back_with(&mut job, None).0, None);
+        assert_eq!(job.url, "ldap://DC01.CONTOSO.LOCAL:389");
+    }
+
+    /// A domain controller read over plain LDAP after its LDAPS failed:
+    /// the certificate warning goes, the fallback's is said.
+    #[test]
+    fn a_fallback_drops_the_certificate_warning() {
+        let mut r = password_req();
+        r.ldaps = true;
+        r.allow_unencrypted_ldap = true;
+        r.insecure_skip_tls_verify = true;
+        let mut warnings = plan(&r).unwrap().warnings;
+        assert!(warnings.iter().any(|w| w == UNCHECKED_CERTIFICATES));
+        let before = warnings.len();
+        fell_back_in(
+            &mut warnings,
+            fell_back_warning("dc01.contoso.local", "x", true),
+        );
+        assert!(!warnings.iter().any(|w| w == UNCHECKED_CERTIFICATES));
+        assert_eq!(warnings.len(), before);
+        assert!(warnings
+            .last()
+            .unwrap()
+            .starts_with("LDAPS failed on dc01.contoso.local"));
+    }
+
+    /// LDAPS's errors in a few plain words.
+    #[test]
+    fn ldaps_failures_in_plain_words() {
+        for (e, want) in [
+            (
+                "invalid peer certificate: UnknownIssuer",
+                "the certificate isn't trusted",
+            ),
+            (
+                "invalid peer certificate: certificate not valid for name \"x\"",
+                "the certificate doesn't match its name",
+            ),
+            (
+                "invalid peer certificate: certificate expired",
+                "the certificate has expired or isn't valid yet",
+            ),
+            (
+                "received fatal alert: HandshakeFailure (tls)",
+                "the encrypted connection couldn't be set up",
+            ),
+            (
+                "I/O error: connection refused (os error 10061)",
+                "nothing answered on port 636",
+            ),
+            (
+                "timeout: no answer within 10 seconds",
+                "no answer on port 636 in time",
+            ),
+            ("something else", "the connection didn't work"),
+        ] {
+            assert_eq!(ldaps_failure_words(e), want, "{e}");
+        }
+    }
+
+    /// A trusted domain whose domain controllers answer on 389 only, with
+    /// plain LDAP allowed: one is found there and read over plain LDAP, the
+    /// warning said without trying LDAPS on it. Not allowed: none found,
+    /// as before.
+    #[test]
+    fn a_dc_found_on_389_only_falls_back() {
+        let mut req = password_req();
+        req.domain = "north.lab".into();
+        req.ldaps = true;
+        req.allow_unencrypted_ldap = true;
+        req.locate_dc = true;
+        let asked = std::cell::RefCell::new(Vec::new());
+        let mut find = |d: &str, port: u16, _: &mut dyn FnMut(String)| {
+            asked.borrow_mut().push(port);
+            if port == 389 {
+                Ok("dc02.north.lab".to_string())
+            } else {
+                Err(crate::locate::NotFound {
+                    why: format!("dc02.{d} (from DNS) didn't answer on port {port}"),
+                    found: true,
+                    outside: false,
+                })
+            }
+        };
+        let mut job = job_for(&req, CollectionMethod::DCOnly).unwrap();
+        assert_eq!(pick_dc(&mut job, &req, &mut find, &mut |_| {}), None);
+        assert_eq!(*asked.borrow(), [636, 389]);
+        assert_eq!(job.url, "ldap://dc02.north.lab:389");
+        assert_eq!(job.server.as_deref(), Some("dc02.north.lab"));
+        let (w, _) = falls_back_with(&mut job, None);
+        assert_eq!(
+            w.as_deref(),
+            Some(
+                "LDAPS failed on dc02.north.lab (nothing answered on port 636), so it was read \
+                 over plain LDAP, unencrypted."
+            )
+        );
+
+        asked.borrow_mut().clear();
+        req.allow_unencrypted_ldap = false;
+        let mut job = job_for(&req, CollectionMethod::DCOnly).unwrap();
+        assert!(pick_dc(&mut job, &req, &mut find, &mut |_| {}).is_some());
+        assert_eq!(*asked.borrow(), [636]);
+        assert_eq!(job.url, "ldaps://north.lab:636");
     }
 
     #[test]

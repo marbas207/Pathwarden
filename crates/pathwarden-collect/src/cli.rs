@@ -74,6 +74,8 @@ pub struct CollectArgs {
     pub insecure_skip_tls_verify: bool,
 
     /// Allow --user over plain LDAP (NTLM without signing or encryption).
+    /// With --ldaps, LDAPS is tried first and a domain controller whose
+    /// LDAPS fails is read over plain LDAP, with a warning.
     #[arg(long)]
     pub allow_unencrypted_ldap: bool,
 
@@ -417,6 +419,22 @@ mod tests {
             Verbosity::Quiet
         );
         assert!(parse(&["-v", "-q"]).is_err());
+    }
+
+    /// `--ldaps --allow-unencrypted-ldap` together: LDAPS first, plain
+    /// LDAP where it fails; each alone as before.
+    #[test]
+    fn ldaps_with_plain_ldap_allowed() {
+        let req = |extra: &[&str]| {
+            let mut a = vec!["collect", "-d", "contoso.local", "-o", "o"];
+            a.extend_from_slice(extra);
+            let r = Cli::try_parse_from(a).unwrap().args.into_request().unwrap();
+            (r.ldaps, r.allow_unencrypted_ldap)
+        };
+        assert_eq!(req(&["--ldaps", "--allow-unencrypted-ldap"]), (true, true));
+        assert_eq!(req(&["--allow-unencrypted-ldap"]), (false, true));
+        assert_eq!(req(&["--ldaps"]), (true, false));
+        assert_eq!(req(&[]), (false, false));
     }
 
     /// `--domain` again names trusted domains for the same run; the

@@ -885,6 +885,16 @@ pub struct CollectionInfo {
     /// (Unix time). The run is dated by when it finished.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub read_started: Option<i64>,
+    /// Plain LDAP was allowed (`--allow-unencrypted-ldap`, "Allow plain
+    /// LDAP"): with `ldaps`, LDAPS first and plain LDAP where it fails. A
+    /// repeat or a schedule of the run allows it too.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub plain_allowed: bool,
+    /// LDAPS was asked for but failed on a domain controller, which was
+    /// read over plain LDAP (the warnings name it). `ldaps` stays what
+    /// was asked.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub plain_fallback: bool,
 }
 
 /// How collecting one domain of a run went.

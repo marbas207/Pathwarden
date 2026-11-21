@@ -270,6 +270,8 @@ pub fn wizard(
       <summary>Advanced</summary>
       <label class="toggle"><input type="checkbox" id="skip-verify" disabled><span class="t-body"><strong>Don't check the certificate</strong><span>For test labs only. Anyone on the network could pretend to be your domain controller and capture the sign-in. Needs LDAPS.</span></span></label>
       <div class="note warn" id="krb-cert-note" hidden>{i_alert}<p><strong>Certificate not checked.</strong> A machine pretending to be your domain controller would also get the Kerberos sign-in.</p></div>
+      <label class="toggle"><input type="checkbox" id="allow-plain"><span class="t-body"><strong>Allow plain LDAP</strong><span>When LDAPS fails, or with LDAPS unticked. For domain controllers without a working LDAPS certificate.</span></span></label>
+      <div class="note warn" id="plain-note" hidden>{i_alert}<p><strong>Plain LDAP allowed.</strong> Over plain LDAP, the directory and the sign-in cross the network unencrypted. Domain controllers that require LDAP signing refuse it. {plain_docs}</p></div>
     </details>
   </fieldset>
 </section>
@@ -277,6 +279,10 @@ pub fn wizard(
         i_user = icon("i-user"),
         i_lock = icon("i-lock"),
         i_alert = icon("i-alert"),
+        plain_docs = crate::pages::repo_link(
+            "docs/collect.md#plain-ldap-when-ldaps-fails",
+            "When LDAPS fails"
+        ),
         tip_krb = crate::pages::tip(
             "tip-krb",
             "Kerberos only",
@@ -580,7 +586,7 @@ pub fn collected_words(c: &CollectionInfo) -> (String, String) {
             return (
                 format!(
                     "This run was collected with {collector}, {depth}. It read {n} domains over {}, {}.",
-                    if c.ldaps { "LDAPS" } else { "LDAP" },
+                    connection_words(c),
                     if c.current_user {
                         "signed in as the Windows account that ran it"
                     } else {
@@ -601,10 +607,22 @@ pub fn collected_words(c: &CollectionInfo) -> (String, String) {
         format!(
             "This run was collected with {collector}, {depth}. It read {}{from} over {}, {sign_in}.",
             c.domain.to_uppercase(),
-            if c.ldaps { "LDAPS" } else { "LDAP" }
+            connection_words(c)
         ),
         short.to_string(),
     )
+}
+
+/// How a run reached its domain controllers: LDAPS, with plain LDAP
+/// where it failed; LDAP as the Windows account (signed and encrypted by
+/// Kerberos); plain LDAP with a password and LDAPS turned off.
+fn connection_words(c: &CollectionInfo) -> &'static str {
+    match (c.ldaps, c.current_user) {
+        (true, _) if c.plain_fallback => "LDAPS (plain LDAP where it failed)",
+        (true, _) => "LDAPS",
+        (false, true) => "LDAP",
+        (false, false) => "plain LDAP",
+    }
 }
 
 /// How a run's computers were signed in to, as Run details says it

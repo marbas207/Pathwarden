@@ -169,6 +169,10 @@ pathwarden schedule --domain scale.local --account 'SCALE\svc-pathwarden$' --at 
 pathwarden schedule --os linux --domain scale.local --user svc-pathwarden --output ./schedule
 ```
 
+A run collected with **Allow plain LDAP** is scheduled with it on Linux
+(`--allow-unencrypted-ldap`): a domain controller whose LDAPS fails is read
+over plain LDAP, as in [collect.md](collect.md#plain-ldap-when-ldaps-fails).
+
 ### Windows Task Scheduler with a gMSA
 
 The gMSA needs the grant in [collector-account.md](collector-account.md),

@@ -905,6 +905,8 @@ mod tests {
         let mut r = pathwarden_ui::history_ui::point_summary(&p, &["CONTOSO.LOCAL".to_string()]);
         r.collection = Some(CollectionInfo {
             read_started: None,
+            plain_allowed: false,
+            plain_fallback: false,
             method: "builtin".into(),
             scope: "dc-only".into(),
             domain: "contoso.local".into(),
