@@ -171,6 +171,7 @@ stored passphrases are this account's own: no number, never shared.
 |---|---|---|
 | The event document (`--event`, output plugins) | `pathwarden.event.v1` | It only grows: a field is never removed or changed in meaning within v1. [Fields](#the-event-document-pathwardeneventv1). |
 | Finding actions: describe, request and result | `pathwarden.action-describe.v1`, `pathwarden.action-request.v1`, `pathwarden.action-result.v1` | They only grow. A program ignores fields it doesn't know, and so does Pathwarden. [Fields](#finding-actions-pathwardenaction-v1). |
+| An output plugin's result file | `pathwarden.output-result.v1` | It only grows; Pathwarden ignores fields it doesn't know. [Fields](#the-output-result-file-pathwardenoutput-resultv1). |
 | The run bundle (`runs/<run>/run.json`) | `pathwarden.run-bundle.v1`, `"format"`: 2 | [Fields](#the-run-bundle-pathwardenrun-bundlev1). |
 | Evidence packs | `pathwarden.evidence.v1` | A verifier refuses another schema. [The format](../evidence.md#the-format). |
 | SARIF and DefectDojo exports | The receiver's own. | [Integrations](../integrations.md). |
@@ -383,6 +384,47 @@ absent; a plugin should ignore fields it doesn't know.
 The event carries names and details. Treat it like the collector output:
 write it to the run's working folder and delete it afterwards.
 
+## The output result file (`pathwarden.output-result.v1`)
+
+On a real run of `pathwarden run` (not Test, and not when the plugin's
+settings have `dry_run = true`), Pathwarden names a fresh file in the
+plugin's private folder in `PATHWARDEN_OUTPUT_RESULT`. A plugin may write
+one JSON object there: the tickets it keeps for the event's findings.
+Pathwarden reads it once the plugin exited 0, then removes it.
+
+| Field | Meaning |
+|---|---|
+| `schema` | Should be `pathwarden.output-result.v1`: a missing one is noted, another refuses the file. |
+| `records` | Required, a list: at most 10,000 are read. Each is a [result's record](#finding-actions-pathwardenaction-v1) (`id` required, `kind`, `label`, `number`, `url`, `status`, `open`, `fields`) plus `fingerprint` (required): the finding it is on. At most 5 per finding; one of the same `fingerprint` and `id` as an earlier one is left out. |
+
+The checks are a result's: text is never read as HTML, control characters
+are dropped, texts are cut to the same caps, and a `url` that isn't
+`https://` is left out. The file is at most 8 MiB and must be a plain file
+(not a link or a pipe). A record on a fingerprint that is neither in the
+event nor in the history's findings is left out. A file that can't be read
+(not JSON, another schema, no `records`) is a warning in the run log, and
+so is a part left out; the plugin and the run still count as succeeded.
+A plugin that writes no file changes nothing.
+
+The records are saved on their findings in the history's
+[`actions.json`](#what-actions-did-actionsjson) as records whose `action`
+is `plugin:<plugin>` (the `[[output]]` block's `plugin`, such as
+`plugin:servicenow`): no `[[action]]` block can have that name, so such a
+record has no follow-ups, and it counts for every action's `once`.
+Only what changed is saved: a new record (with `by`, `on` and `at` of the
+run), or one whose fields changed (`updated_at` set, who first made it
+kept). A record seen again unchanged writes nothing. A finding gets one
+entry of activity for a run when a ticket is first seen ("INC0012345 ·
+Open"), closed ("Closed INC0012345 · Resolved") or reopened, labelled
+with the plugin and shown with it ("ServiceNow plugin: INC0012345 ·
+Open"). The save is one commit with the
+fixed message `pathwarden: save the tickets output plugins keep`, made
+again on what another computer pushed first, and kept on this computer
+when the push fails, as a finding action's is. A run with `--no-push`, or
+`[state] push = false`, doesn't save them. A plugin's record someone
+removes comes back with the plugin's next run, as long as the plugin
+still reports it.
+
 ## Finding actions (`pathwarden.action-*.v1`)
 
 An `[[action]]` block in `pathwarden.toml` names a program someone runs
@@ -422,7 +464,7 @@ another is refused), and
 | `sends` | What leaves the computer, in plain words, at most 500 characters. |
 | `applies_to` | Optional: `min_severity`, `rules`, `categories` (`attack_path`, `hygiene`), on top of the block's own filters. A fixed or held finding is rated by its rule: its category, and for a held one the highest severity the rule gives. |
 | `inputs` | At most 20, each `id`, `label`, `type` (`text`, `textarea`, `choice` or `bool`), `required`, `max` (text: 200 by default, at most 1,000; textarea: 2,000, at most 4,000), `choices` (for `choice`, at most 50) and `default`. |
-| `once` | True to hide the action while the finding has an open record from it. |
+| `once` | True to hide the action while the finding has an open record from it, or an open ticket an output plugin reported (from 1.0.0-rc.4). |
 | `follow_ups` | IDs of this program's `for: "record"` actions, offered on the records this one returns. |
 | `for` | `"record"`: only offered as a follow-up on a record. |
 | `when` | Optional: where the finding must stand for the action to be offered, a list of `open`, `held`, `accepted` and `fixed` (one value alone is a list of one, so `"fixed"` still reads). Without it: open, held and accepted findings, not fixed ones; a follow-up (`for: "record"`) without it is offered on a record however the finding stands. A fixed finding is offered only the actions that list `fixed`, and the follow-ups on its records. |
@@ -473,7 +515,7 @@ because `findings.json` is rebuilt every run.
 |---|---|
 | `findings` | By fingerprint, as the event has it. |
 | `activity` | Oldest first; the latest 100 of a finding are kept. Each: `at` (RFC 3339, UTC, with milliseconds), `by` and `on` (the user and computer, each optional), `run_id` (the run the finding was in, optional), `action` (`<name>/<id>`), `label` (the action's then), `ok`, `message` (the result's, or what went wrong), `record_ids` (the records it made, changed or removed), `dry_run` (always false), `kind` (absent for a run; `remove` when someone removed a record, with `action` the record's) and `outcome` (optional: `cancelled` for a run someone stopped with Ctrl-C or Cancel, then with `ok` false and the message "Cancelled"; it is saved in one quick try without the network, and goes to the repository with the next pull and push). |
-| `records` | What the actions returned (a [result's record](#finding-actions-pathwardenaction-v1)), plus `action` (the action that made it), `by`, `on` and `at` (who first made it, where and when) and `updated_at`. A follow-up that returns the same `id` updates the record of its block, keeping when and by whom it was first made. A record stays until someone removes it (`pathwarden action records remove`), which is logged as activity. |
+| `records` | What the actions returned (a [result's record](#finding-actions-pathwardenaction-v1)), plus `action` (the action that made it; `plugin:<plugin>` for a ticket an output plugin reported, see [the output result file](#the-output-result-file-pathwardenoutput-resultv1)), `by`, `on` and `at` (who first made it, where and when) and `updated_at`. A follow-up that returns the same `id` updates the record of its block, keeping when and by whom it was first made. A record stays until someone removes it (`pathwarden action records remove`), which is logged as activity. |
 | `removed` | Optional: the records someone removed, each `action`, `id`, `at` (when), `by` and `record_at` (when the record removed was made). A record of that `action` and `id` made no later than `at` or `record_at`, whichever is later (two computers' clocks may disagree), never comes back (a follow-up that started before the removal, a computer that hadn't seen it); one a later run makes anew does. The latest 100 of a finding are kept. |
 
 When another computer pushed first, the change is made again on what it
@@ -487,7 +529,9 @@ record's unknown fields, at most 8 KB of them, are passed on as they are:
 to a follow-up's program in its request's `record`, and in the event.
 
 A save whose push failed is kept on that computer (in the working copy's
-`.git`, never committed; encrypted with the history's key when the
+`.git`, never committed, in `pathwarden-actions-pending.json`: finding
+actions' saves in `changes`, output plugins' in `records`, one entry per
+finding however many runs add to it; encrypted with the history's key when the
 history is encrypted, and written again in the new form when the history
 is encrypted, decrypted or given a new passphrase), made again on what
 every later pull brings, and dropped once a push carried it (the file is
@@ -521,6 +565,7 @@ What each does with what 0.2 writes:
 | 0.1.7 | As 0.1.6, and reads an encrypted history of marker format 1 only: it refuses format 2. Refuses `[state]` keys it doesn't know (for example `full_runs_kept`, `refresh`). |
 | 0.2.0 | Ignores `last-run.json`'s `hosts` and drops it when it writes the file, so the next run of 0.3 treats that run as an upgrade (see `last-run.json`). Holds a finding whose `requires` has session or local group units (`s:`, `l:`) it doesn't know, with the wrong reason ("its source did not report covering the affected host this run"), until a run sees the finding again. Ignores the paths' `edge_hosts`. A `last-run.json` written by a development build between 0.2.0 and 0.3 with stored credential units (`h:`) in `sources` makes 0.2.0 hold every attack path for one run, as a missing source. |
 | 1.0.0-rc.2 and earlier | Keep `actions.json` as the repository has it when they record runs, pull and share settings: they commit only the files they know, and their pull cleans only files no commit holds. They don't read it, so their runs' findings carry no `actions`. They don't rewrite it when they change how the history is stored: turning encryption off leaves `actions.json.age` (which 1.0.0-rc.3 then can't open, so what actions did is unavailable), changing the passphrase leaves it under the old key (the same), and turning encryption on leaves it plain. 1.0.0-rc.3 never reads a plain `actions.json` in an encrypted history (anyone who can push could have put it there), never removes it, and says so: "A plain actions.json is in this encrypted history and wasn't read. If an older Pathwarden left it when encryption was turned on, import it with `pathwarden action log import`." That command pulls, shows what the file holds (counts, every record with its number, status and link's host, at most 20 lines, and the latest activity), asks, and then takes in exactly those bytes (a file that changed since is refused), encrypted, removing the plain copy in the same commit. Decrypting a history moves such a file aside, so it never becomes the plain history's log: into the working copy's `.git` as `pathwarden-actions.json.leftover-<date>` (where no commit picks it up), or beside a folder history as `actions.json.leftover-<date>`. In each case 1.0.0-rc.3 keeps working with the rest of the history and never writes over the file. **Upgrade every computer to 1.0.0-rc.3 before changing how a history is stored** (`pathwarden history storage set`, or the History storage page). |
+| 1.0.0-rc.3 | Read a plugin's record (`action` `plugin:<plugin>`) as a record of an action they don't know: it shows as a chip, counts for Has a record and Fixed, ticket still open, is listed by `pathwarden action records` (by `plugin:<plugin>`) and goes in the event and exports, with no follow-ups. Their `once` counts only the action's own records, so they still show a `once` button on a finding with an open plugin ticket. They don't read the plugin saves kept on a computer for a push in `pathwarden-actions-pending.json` (the `records` list), and drop them when they write that file again; the plugin's next run reports the tickets again. The file's `version` stays 1. |
 | 0.1.9 | Leaves full runs of format 2 alone and says to update. Refuses an encrypted history of marker format 2. Reads `settings/pathwarden.toml` without checking `format`, keeping the keys it doesn't know aside. Doesn't see runs loaded by 0.2. |
 
 **Going back to 0.1.9 on a computer that loaded full runs with 0.2.** 0.1.9

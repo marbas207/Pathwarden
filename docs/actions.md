@@ -347,7 +347,7 @@ program's actions.
 
 | Field | Effect |
 |---|---|
-| `once: true` | The action is hidden while the finding has an open record from it. One ticket per finding. |
+| `once: true` | The action is hidden while the finding has an open record from it, or an open ticket from an output plugin (ServiceNow, Jira). One ticket per finding. |
 | `for: "record"` | Only offered as a follow-up on a record. |
 | `when` | The finding statuses the action is offered on: one of `open`, `held`, `accepted` and `fixed`, or a list of them. Without it: open, held and accepted; a `for: "record"` action without it is offered on its records whatever the finding's status, fixed included. |
 
@@ -549,7 +549,7 @@ Each action:
 | `description` | text | no | One line in the dialog, at most 300 characters. |
 | `applies_to` | object | no | `min_severity`, `rules`, `categories`, on top of the block's filters. |
 | `inputs` | list | no | At most 20 inputs; see below. |
-| `once` | true or false | no | Hide the action while the finding has an open record from it. |
+| `once` | true or false | no | Hide the action while the finding has an open record from it or an open ticket from an output plugin. |
 | `follow_ups` | list | no | IDs of this program's `for: "record"` actions, offered on the records this one returns. |
 | `for` | text | no | `"record"`: only offered as a follow-up. |
 | `when` | text or list | no | Finding statuses it is offered on: one of `open`, `held`, `accepted`, `fixed`, or a list of them (`"fixed"` means `["fixed"]`). Default: open, held and accepted; for a `for: "record"` action, every status. |

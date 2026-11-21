@@ -26,6 +26,13 @@ When the record closes and the finding is still there, the next run opens
 or reopens the plugin's ticket as usual. The run log and Test say how many
 findings were skipped; `skip_action_tickets = false` turns this off.
 
+Both plugins also tell Pathwarden which ticket each finding has, so a
+finding shows `INC0012345 · Open` (or the Jira key) like a finding
+action's record, for everyone who shares the run history. The other way
+round, an action with `once` shows no button while the finding has an
+open ticket from a plugin. A plugin's tickets never count as action
+tickets for the skip rule.
+
 ## Set up a plugin
 
 ![Setting up ticketing in the app](images/set-up-ticketing.gif)
@@ -155,6 +162,32 @@ It writes lines to stdout and stderr, and exits 0 on success. Plugins run
 once per run, after the run history is saved, so reconcile with the target
 system by finding ID instead of trusting that the last run's plugin worked.
 When `dry_run` is true in its settings, it must change nothing.
+
+### Telling Pathwarden what it did
+
+On a real run (not Test, not `dry_run`), `PATHWARDEN_OUTPUT_RESULT`
+names a file in the plugin's own folder. A plugin that writes it there
+gets its tickets shown on the findings; one that doesn't works as before.
+
+```json
+{
+  "schema": "pathwarden.output-result.v1",
+  "records": [
+    { "fingerprint": "PW-015-...", "id": "a1b2...", "kind": "ticket",
+      "number": "INC0012345", "url": "https://contoso.service-now.com/incident.do?sys_id=a1b2...",
+      "status": "Open", "open": true }
+  ]
+}
+```
+
+List every ticket you keep for a finding in the event, open or closed this
+run. Each record has the fields of an
+[action's record](actions.md) plus `fingerprint`, with the same limits:
+links only `https://`, text only, never HTML. At most 10,000 records and
+8 MiB are read. Pathwarden saves only what changed since the last run, and
+says in the run log when the file can't be read; the run still succeeds.
+It reads the file only when the plugin exits 0. Full rules:
+[File formats](dev/formats.md#the-output-result-file-pathwardenoutput-resultv1).
 
 The event's main parts:
 

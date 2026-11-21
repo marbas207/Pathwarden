@@ -83,7 +83,7 @@
         },
         "once": {
           "type": ["boolean", "null"],
-          "description": "True: hide the action while the finding has an open record from it."
+          "description": "True: hide the action while the finding has an open record from it, or an open ticket an output plugin reported."
         },
         "follow_ups": {
           "type": ["array", "null"],
