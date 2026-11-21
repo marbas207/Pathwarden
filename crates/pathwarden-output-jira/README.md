@@ -24,7 +24,8 @@ In the app: **Plugins and actions** > **Add Jira**. From the terminal:
 (`pathwarden plugins add jira --help` lists the options). Both write an
 `[[output]]` block like this one; the form covers every setting below except
 `categories`, `priority_map`, `respect_resolutions`, `resolve_suppressed`,
-`created_by`, `allow_insecure_http` and `dry_run`, which it keeps as written.
+`skip_action_tickets`, `created_by`, `allow_insecure_http` and `dry_run`,
+which it keeps as written.
 
 ```toml
 [[output]]
@@ -57,6 +58,7 @@ components = [{ name = "Active Directory" }]
 | `close_resolution` | none | Resolution set while closing, for workflows whose close screen asks for one |
 | `on_closed_but_present` | `reopen` | `reopen`, `comment` or `ignore` |
 | `resolve_suppressed` | `true` | Close issues of findings that became accepted risks |
+| `skip_action_tickets` | `true` | Create no issue for a finding that has an open ticket from a finding action (see below) |
 | `respect_resolutions` | `Won't Do`, `Won't Fix`, `Duplicate`, `Cannot Reproduce`, `Declined`, `Risk Accepted` | A closed issue with one of these resolutions is never reopened or commented on |
 | `scope` | none | Separates deployments sharing one project: label `pathwarden-<scope>` |
 | `created_by` | the account the plugin signs in as | Only issues this account created are read or changed (see below) |
@@ -74,6 +76,7 @@ components = [{ name = "Active Directory" }]
 | regressed | open | **comment**: present again |
 | new / open / regressed | closed | **reopen** with a comment (or comment / ignore) |
 | new / open / regressed | closed with a respected resolution | nothing; an info line suggests a `[[suppress]]` entry |
+| new / open / regressed, with an open ticket from a finding action | none or closed | nothing; a line says it was skipped ([see below](#findings-with-a-ticket-from-a-finding-action)) |
 | suppressed (accepted risk) | open | **close** with "Accepted risk: reason" |
 | gone | open | **close** with "No longer present in Pathwarden run ..." |
 
@@ -90,6 +93,32 @@ the accepted-risk route, the path as text, the severity, affected objects,
 references and the rule's step-by-step guide. Text is sent as plain text (paragraphs in
 Atlassian Document Format on Cloud), never as wiki markup or Markdown, so
 an object name can't add links or formatting.
+
+## Findings with a ticket from a finding action
+
+A finding action (a button such as "Open a ticket") saves the ticket it
+opened as a record on the finding, and the event carries it. A finding
+with a record still open is left to that ticket, so the plugin and the
+button never open two tickets for one finding:
+
+- No new issue is created for it, and a closed issue of the plugin's is
+  not reopened or commented on.
+- An issue the plugin already has open is kept as it is: it isn't resolved
+  because of the record, it is still commented on when the finding comes
+  back, and closed once the finding is gone.
+- Once the record is closed (or removed) and the finding is still there,
+  the next run creates or reopens an issue as usual: the finding isn't
+  fixed, and nothing else tracks it any more.
+
+Any open record counts, whatever its kind (`ticket`, `request`, ...): the
+kind is free text the action chooses. "Open" is what Pathwarden last
+heard from the action, saved when someone ran it or a follow-up. Each
+finding skipped gets a line in the run log (`skipped <fingerprint>: a
+finding action's ticket (SEC-123) is open, so no new one`) and the
+summary says how many (`3 skipped because a finding action's ticket is
+open`); a dry run shows the same. Set `skip_action_tickets = false` to
+create tickets regardless. Skipped findings don't count towards
+`max_create`.
 
 ## Security
 

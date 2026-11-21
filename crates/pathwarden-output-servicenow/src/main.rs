@@ -113,6 +113,7 @@ fn run() -> Result<bool> {
         eprintln!("servicenow: warning: {w}");
     }
     let (mut created, mut commented, mut reopened, mut resolved, mut failed) = (0, 0, 0, 0, 0);
+    let mut skipped = 0;
     for action in &guarded.actions {
         if let Action::Info {
             ticket,
@@ -121,6 +122,15 @@ fn run() -> Result<bool> {
         } = action
         {
             println!("info: {ticket} ({fingerprint}) {message}");
+            continue;
+        }
+        if let Action::Skip {
+            fingerprint,
+            record,
+        } = action
+        {
+            println!("skipped {fingerprint}: {}", reconcile::skip_reason(record));
+            skipped += 1;
             continue;
         }
         if settings.dry_run || client.is_none() {
@@ -164,7 +174,7 @@ fn run() -> Result<bool> {
                 fingerprint,
                 fields,
             } => apply(client, sys_id, fields, "resolved", ticket, fingerprint),
-            Action::Info { .. } => Ok(()),
+            Action::Info { .. } | Action::Skip { .. } => Ok(()),
         };
         match result {
             Err(e) => {
@@ -181,8 +191,9 @@ fn run() -> Result<bool> {
         }
     }
     println!(
-        "servicenow ({}): {created} created, {commented} commented, {reopened} reopened, {resolved} resolved{}{}",
+        "servicenow ({}): {created} created, {commented} commented, {reopened} reopened, {resolved} resolved{}{}{}",
         settings.table,
+        reconcile::skipped_words(skipped),
         if failed > 0 { format!(", {failed} failed") } else { String::new() },
         if settings.dry_run { " (dry run, nothing changed)" } else { "" }
     );
@@ -201,7 +212,7 @@ fn count(
         Action::Comment { .. } => *commented += 1,
         Action::Reopen { .. } => *reopened += 1,
         Action::Resolve { .. } => *resolved += 1,
-        Action::Info { .. } => {}
+        Action::Info { .. } | Action::Skip { .. } => {}
     }
 }
 
@@ -227,7 +238,7 @@ fn print_dry_run(a: &Action) {
             fingerprint,
             ..
         } => println!("[dry-run] would resolve {ticket} ({fingerprint})"),
-        Action::Info { .. } => {}
+        Action::Info { .. } | Action::Skip { .. } => {}
     }
 }
 

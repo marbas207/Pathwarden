@@ -43,6 +43,7 @@ struct Counts {
     commented: u32,
     reopened: u32,
     closed: u32,
+    skipped: u32,
     failed: u32,
 }
 
@@ -53,6 +54,7 @@ impl Counts {
             Action::Comment { .. } => self.commented += 1,
             Action::Reopen { .. } => self.reopened += 1,
             Action::Resolve { .. } => self.closed += 1,
+            Action::Skip { .. } => self.skipped += 1,
             Action::Info { .. } => {}
         }
     }
@@ -143,6 +145,15 @@ fn run() -> Result<bool> {
             println!("info: {key} ({fingerprint}) {message}");
             continue;
         }
+        if let Action::Skip {
+            fingerprint,
+            record,
+        } = action
+        {
+            println!("skipped {fingerprint}: {}", reconcile::skip_reason(record));
+            counts.add(action);
+            continue;
+        }
         let Some(client) = client.as_ref().filter(|_| !settings.dry_run) else {
             print_dry_run(action);
             counts.add(action);
@@ -160,12 +171,13 @@ fn run() -> Result<bool> {
         }
     }
     println!(
-        "jira ({}): {} created, {} commented, {} reopened, {} closed{}{}",
+        "jira ({}): {} created, {} commented, {} reopened, {} closed{}{}{}",
         settings.project,
         counts.created,
         counts.commented,
         counts.reopened,
         counts.closed,
+        reconcile::skipped_words(counts.skipped),
         if counts.failed > 0 {
             format!(", {} failed", counts.failed)
         } else {
@@ -223,7 +235,7 @@ fn perform(client: &api::Client, settings: &Settings, action: &Action) -> Result
             )?;
             format!("closed {key} ({fingerprint}) with \"{t}\"")
         }
-        Action::Info { .. } => String::new(),
+        Action::Info { .. } | Action::Skip { .. } => String::new(),
     })
 }
 
@@ -246,6 +258,6 @@ fn print_dry_run(a: &Action) {
         Action::Resolve {
             key, fingerprint, ..
         } => println!("[dry-run] would close {key} ({fingerprint})"),
-        Action::Info { .. } => {}
+        Action::Info { .. } | Action::Skip { .. } => {}
     }
 }

@@ -58,6 +58,7 @@ impact = "1"
 | `reopen_fields` | incident: `state=2`; RITM: `state=1` | A `work_notes` entry explaining why is always added |
 | `on_closed_but_present` | `reopen` | What to do when a ticket was closed but the finding is still there |
 | `resolve_suppressed` | `true` | Resolve tickets of findings that became accepted risks |
+| `skip_action_tickets` | `true` | Create no ticket for a finding that has an open ticket from a finding action (see below) |
 | `respect_close_codes` | `Won't Fix`, `Not Solved (Not Reproducible)`, `Duplicate`, `Accepted Risk`, `Risk Accepted` | A closed ticket with one of these close codes (any case) is never reopened or commented on |
 | `max_resolve_percent` | `50` | Safety limit on resolves per run (see below); `100` disables it |
 | `max_create` | `100` | Safety limit on creates per run (see below) |
@@ -113,6 +114,32 @@ unrelated ticket. Two defenses:
 ACLs that keep other users from writing `correlation_display` and
 `correlation_id` close the gap on the ServiceNow side.
 
+### Findings with a ticket from a finding action
+
+A finding action (a button such as "Open a ticket") saves the ticket it
+opened as a record on the finding, and the event carries it. A finding
+with a record still open is left to that ticket, so the plugin and the
+button never open two tickets for one finding:
+
+- No new ticket is created for it, and a closed ticket of the plugin's is
+  not reopened or commented on.
+- A ticket the plugin already has open is kept as it is: it isn't resolved
+  because of the record, it is still commented on when the finding comes
+  back, and resolved once the finding is gone.
+- Once the record is closed (or removed) and the finding is still there,
+  the next run creates or reopens a ticket as usual: the finding isn't
+  fixed, and nothing else tracks it any more.
+
+Any open record counts, whatever its kind (`ticket`, `request`, ...): the
+kind is free text the action chooses. "Open" is what Pathwarden last
+heard from the action, saved when someone ran it or a follow-up. Each
+finding skipped gets a line in the run log (`skipped <fingerprint>: a
+finding action's ticket (RITM0012345) is open, so no new one`) and the
+summary says how many (`3 skipped because a finding action's ticket is
+open`); a dry run shows the same. Set `skip_action_tickets = false` to
+create tickets regardless. Skipped findings don't count towards
+`max_create`.
+
 ### Safety limits
 
 A run that would resolve a large share of the open tickets usually means an
@@ -165,6 +192,7 @@ never print credentials.
 | regressed | active | **comment**: present again after being resolved |
 | new / open / regressed | closed | **reopen** with a note (or comment / ignore) |
 | new / open / regressed | closed with a respected close code | nothing; an info line suggests a `[[suppress]]` entry with the fingerprint |
+| new / open / regressed, with an open ticket from a finding action | none or closed | nothing; a line says it was skipped ([see above](#findings-with-a-ticket-from-a-finding-action)) |
 | suppressed (accepted risk) | active | **resolve**: "Accepted risk: reason" |
 | gone | active | **resolve**: "No longer present in Pathwarden run ..." |
 

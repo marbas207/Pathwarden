@@ -58,6 +58,11 @@ pub struct Finding {
     pub exposure: Option<Exposure>,
     pub references: Vec<String>,
     pub suppressed: Option<String>,
+    /// What finding actions did on it (from 1.0.0-rc.3): `records` and
+    /// `activity_count`. Kept as plain JSON and read leniently
+    /// ([`Finding::open_action_record`]), so an odd shape never stops the
+    /// plugin.
+    pub actions: Option<Value>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -127,6 +132,28 @@ impl Finding {
     pub fn is_active(&self) -> bool {
         self.change != "suppressed" && self.suppressed.is_none()
     }
+
+    /// The first record a finding action made for this finding that is
+    /// still open in the other system (as Pathwarden last heard), named by
+    /// its number, label or ID. Any kind counts (`ticket`, `request`, ...):
+    /// the kind is free text an action chooses, and an open record means
+    /// someone is already tracking the finding there.
+    pub fn open_action_record(&self) -> Option<String> {
+        let records = self.actions.as_ref()?.get("records")?.as_array()?;
+        records
+            .iter()
+            .filter(|r| r.get("open").and_then(Value::as_bool) == Some(true))
+            .map(|r| {
+                ["number", "label", "id"]
+                    .iter()
+                    .filter_map(|k| r.get(*k).and_then(Value::as_str))
+                    .map(str::trim)
+                    .find(|v| !v.is_empty())
+                    .map(|v| v.chars().take(80).collect::<String>())
+                    .unwrap_or_else(|| "a record".into())
+            })
+            .next()
+    }
 }
 
 #[cfg(test)]
@@ -147,5 +174,23 @@ mod tests {
         ] {
             assert!(Event::parse(bad).is_err(), "accepted {bad}");
         }
+    }
+
+    #[test]
+    fn reads_open_action_records_leniently() {
+        let text = r#"{"schema":"pathwarden.event.v1","run":{"run_id":"R1"},"findings":[
+            {"fingerprint":"A","actions":{"records":[
+                {"id":"1","number":"RITM1","open":false},
+                {"id":"2","kind":"request","number":"RITM2","open":true}],"activity_count":2}},
+            {"fingerprint":"B","actions":{"records":[{"id":"x9","open":true,"number":null}]}},
+            {"fingerprint":"C","actions":{"records":[{"id":"1","open":"yes"}]}},
+            {"fingerprint":"D","actions":{"records":"odd"}},
+            {"fingerprint":"E"}]}"#;
+        let e = Event::parse(text).unwrap();
+        let got: Vec<_> = e.findings.iter().map(Finding::open_action_record).collect();
+        assert_eq!(
+            got,
+            [Some("RITM2".into()), Some("x9".into()), None, None, None]
+        );
     }
 }

@@ -55,6 +55,13 @@ pub enum Action {
         fingerprint: String,
         note: String,
     },
+    /// Left out because a finding action's record for it is open: a
+    /// ticket from this plugin would duplicate it (no API call).
+    Skip {
+        fingerprint: String,
+        /// The open record, by its number, label or ID.
+        record: String,
+    },
     /// Nothing to change; tell the operator why (no API call).
     Info {
         key: String,
@@ -163,15 +170,30 @@ pub fn plan(
             }
             continue;
         }
+        // A finding action's open record (an "Open a ticket" button) tracks
+        // the finding already: no new issue and no reopened one, so the two
+        // never duplicate each other. An active issue of this plugin's is
+        // kept as it is, and once the record closes the finding is handled
+        // as usual again.
+        let tracked = settings
+            .skip_action_tickets
+            .then(|| f.open_action_record())
+            .flatten();
         match issue {
-            None => {
-                if settings.wants(&f.severity, &f.category) {
+            None if settings.wants(&f.severity, &f.category) => {
+                if let Some(record) = tracked {
+                    actions.push(Action::Skip {
+                        fingerprint: f.fingerprint.clone(),
+                        record,
+                    });
+                } else {
                     actions.push(Action::Create {
                         fingerprint: f.fingerprint.clone(),
                         issue: new_issue(f, event, settings),
                     });
                 }
             }
+            None => {}
             Some(i) if i.active => {
                 if f.change == "regressed" {
                     actions.push(Action::Comment {
@@ -196,6 +218,15 @@ pub fn plan(
                 });
             }
             Some(i) => {
+                if let Some(record) = tracked {
+                    if on_closed != OnClosed::Ignore {
+                        actions.push(Action::Skip {
+                            fingerprint: i.fingerprint.clone(),
+                            record,
+                        });
+                    }
+                    continue;
+                }
                 let note = format!("Closed in Jira but still present in Pathwarden run {run_id}.");
                 match on_closed {
                     OnClosed::Reopen => actions.push(Action::Reopen {
@@ -231,6 +262,23 @@ fn resolve(i: &Issue, note: String) -> Action {
         key: i.key.clone(),
         fingerprint: i.fingerprint.clone(),
         note,
+    }
+}
+
+/// Why a finding was skipped, for its line in the run log.
+pub fn skip_reason(record: &str) -> String {
+    format!(
+        "a finding action's ticket ({}) is open, so no new one",
+        one_line(record)
+    )
+}
+
+/// The summary's skipped part: nothing when none were.
+pub fn skipped_words(n: u32) -> String {
+    match n {
+        0 => String::new(),
+        1 => ", 1 skipped because a finding action's ticket is open".into(),
+        n => format!(", {n} skipped because a finding action's ticket is open"),
     }
 }
 
@@ -550,6 +598,96 @@ mod tests {
         }
     }
 
+    fn with_action_record(mut f: Finding, open: bool) -> Finding {
+        f.actions = Some(serde_json::json!({
+            "records": [{"id": "4f1c", "kind": "request", "number": "RITM1", "open": open}],
+            "activity_count": 1
+        }));
+        f
+    }
+
+    #[test]
+    fn an_open_action_record_gets_no_new_issue() {
+        let e = event(vec![
+            with_action_record(finding("PW-1", "new", "high"), true),
+            finding("PW-2", "new", "high"),
+        ]);
+        let a = plan(&e, &[], &settings(), OnClosed::Reopen);
+        assert_eq!(kinds(&a), ["skip PW-1 for RITM1", "create PW-2"]);
+        // Skips never count towards max_create.
+        let g = guard(a, &[], &settings());
+        assert!(!g.flagged);
+    }
+
+    #[test]
+    fn a_closed_action_record_is_handled_as_usual() {
+        let e = event(vec![with_action_record(
+            finding("PW-1", "open", "high"),
+            false,
+        )]);
+        let a = plan(&e, &[], &settings(), OnClosed::Reopen);
+        assert_eq!(kinds(&a), ["create PW-1"]);
+    }
+
+    #[test]
+    fn skipping_can_be_turned_off() {
+        let mut s = settings();
+        s.skip_action_tickets = false;
+        let e = event(vec![with_action_record(
+            finding("PW-1", "new", "high"),
+            true,
+        )]);
+        let a = plan(&e, &[], &s, OnClosed::Reopen);
+        assert_eq!(kinds(&a), ["create PW-1"]);
+    }
+
+    #[test]
+    fn own_issues_beside_an_action_record_are_left_as_they_are() {
+        // Active: kept open (not closed for the action's record), still
+        // commented on when the finding comes back, closed once it's gone.
+        let e = event(vec![
+            with_action_record(finding("PW-1", "open", "high"), true),
+            with_action_record(finding("PW-2", "regressed", "high"), true),
+        ]);
+        let mine = [
+            issue("PW-1", "PROJ-1", true),
+            issue("PW-2", "PROJ-2", true),
+            issue("PW-3", "PROJ-3", true),
+        ];
+        let a = plan(&e, &mine, &settings(), OnClosed::Reopen);
+        assert_eq!(kinds(&a), ["comment PROJ-2", "resolve PROJ-3"]);
+        // Closed: not reopened while the action's record is open.
+        let e = event(vec![with_action_record(
+            finding("PW-1", "open", "high"),
+            true,
+        )]);
+        let closed = [issue("PW-1", "PROJ-1", false)];
+        let a = plan(&e, &closed, &settings(), OnClosed::Reopen);
+        assert_eq!(kinds(&a), ["skip PW-1 for RITM1"]);
+        let a = plan(&e, &closed, &settings(), OnClosed::Ignore);
+        assert!(a.is_empty());
+        // The record closed: reopened as usual.
+        let e = event(vec![with_action_record(
+            finding("PW-1", "open", "high"),
+            false,
+        )]);
+        let a = plan(&e, &closed, &settings(), OnClosed::Reopen);
+        assert_eq!(kinds(&a), ["reopen PROJ-1"]);
+    }
+
+    #[test]
+    fn the_summary_names_skipped_findings_in_plain_words() {
+        assert_eq!(skipped_words(0), "");
+        assert_eq!(
+            skipped_words(3),
+            ", 3 skipped because a finding action's ticket is open"
+        );
+        assert_eq!(
+            skip_reason("RITM1"),
+            "a finding action's ticket (RITM1) is open, so no new one"
+        );
+    }
+
     fn kinds(actions: &[Action]) -> Vec<String> {
         actions
             .iter()
@@ -559,6 +697,10 @@ mod tests {
                 Action::Reopen { key, .. } => format!("reopen {key}"),
                 Action::Resolve { key, .. } => format!("resolve {key}"),
                 Action::Info { key, .. } => format!("info {key}"),
+                Action::Skip {
+                    fingerprint,
+                    record,
+                } => format!("skip {fingerprint} for {record}"),
             })
             .collect()
     }

@@ -43,6 +43,9 @@ pub struct Settings {
     pub on_closed_but_present: String,
     /// Resolve tickets for findings that became accepted risks.
     pub resolve_suppressed: bool,
+    /// Leave out findings that already have an open record from a finding
+    /// action (an "Open a ticket" button): no new ticket, no reopened one.
+    pub skip_action_tickets: bool,
     pub dry_run: bool,
     /// Separates deployments sharing one instance and table: tickets are
     /// marked `Pathwarden:<scope>`, and only tickets with exactly this marker
@@ -81,6 +84,7 @@ impl Default for Settings {
             reopen_fields: None,
             on_closed_but_present: "reopen".into(),
             resolve_suppressed: true,
+            skip_action_tickets: true,
             dry_run: false,
             scope: None,
             max_resolve_percent: 50.0,

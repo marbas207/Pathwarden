@@ -18,6 +18,14 @@ What each action did is saved on its finding in the run history
 plugins get carries it as each finding's `actions`, so a plugin can, for
 example, leave out findings that already have a ticket.
 
+The ServiceNow and Jira plugins do that: a finding with an open record
+from a finding action (an "Open a ticket" button) gets no new ticket from
+the plugin, and a closed ticket of the plugin's isn't reopened while the
+record is open. A ticket the plugin already has open is kept as it is.
+When the record closes and the finding is still there, the next run opens
+or reopens the plugin's ticket as usual. The run log and Test say how many
+findings were skipped; `skip_action_tickets = false` turns this off.
+
 ## Set up a plugin
 
 ![Setting up ticketing in the app](images/set-up-ticketing.gif)
