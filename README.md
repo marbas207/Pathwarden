@@ -76,7 +76,8 @@ See the [sample report](docs/sample-report.html).
 - [How it works](docs/how-it-works.md) and the [rules](docs/rules.md).
 - [Output plugins](docs/plugins.md), [using finding actions](docs/finding-actions.md)
   and [writing an action](docs/actions.md):
-  your own buttons on a finding.
+  your own buttons on a finding, with the
+  [action reference](docs/action-reference.md).
 - For developers and reviewers: [building](docs/dev/building.md),
   [threat model](docs/dev/threat-model.md) and
   [file formats](docs/dev/formats.md).

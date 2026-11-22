@@ -697,7 +697,7 @@ def main(
     """Runs the action program: reads the request from stdin, and writes
     the answer to the file named in PATHWARDEN_ACTION_RESULT.
 
-    - `describe`: the list of actions (as docs/actions.md describes them),
+    - `describe`: the list of actions (as docs/action-reference.md describes them),
       or a function of the settings that returns it. `schema` is added.
     - `handlers`: a function per action ID. It gets a `Request` and
       returns `pw.ok(...)`, `pw.failed(...)`, a message (it worked) or

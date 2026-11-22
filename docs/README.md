@@ -31,6 +31,8 @@
   on a finding (a chat alert, a ticket, an owner lookup).
 - [Writing an action](actions.md): your own buttons on a finding, with the
   [examples and helpers](../examples/actions/README.md).
+- [Action reference](action-reference.md): every field, limit and
+  security rule of the action protocol.
 
 ## For developers and reviewers
 

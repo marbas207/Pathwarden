@@ -184,7 +184,7 @@ gets its tickets shown on the findings; one that doesn't works as before.
 
 List every ticket you keep for a finding in the event, open or closed this
 run. Each record has the fields of an
-[action's record](actions.md) plus `fingerprint`, with the same limits:
+[action's record](action-reference.md#the-result) plus `fingerprint`, with the same limits:
 links only `https://`, text only, never HTML. At most 10,000 records and
 8 MiB are read. Pathwarden saves only what changed since the last run, and
 says in the run log when the file can't be read; the run still succeeds.

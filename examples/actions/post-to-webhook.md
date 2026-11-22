@@ -63,4 +63,4 @@ $env:PATHWARDEN_ALERT_WEBHOOK = 'http://127.0.0.1:8765/api/hooks/team'
 
 The helper allows `http://` only to this computer.
 
-More: [Writing an action](../../docs/actions.md#a-chat-alert).
+More: [Writing an action](../../docs/actions.md#examples).

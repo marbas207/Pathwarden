@@ -429,7 +429,8 @@ still reports it.
 
 An `[[action]]` block in `pathwarden.toml` names a program someone runs
 for one finding, when they ask. [Writing an action](../actions.md) is the
-guide, with JSON Schemas in [docs/schemas](../schemas/). Pathwarden writes one JSON request to
+guide, and the [Action reference](../action-reference.md) has every field,
+with JSON Schemas in [docs/schemas](../schemas/). Pathwarden writes one JSON request to
 the program's stdin and names its kind, `describe` or `run`, in
 `PATHWARDEN_ACTION_REQUEST`. The program writes one JSON answer to the
 file named in `PATHWARDEN_ACTION_RESULT`. Each line it prints to stdout is

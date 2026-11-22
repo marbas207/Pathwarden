@@ -501,7 +501,7 @@ function Invoke-PathwardenAction {
     answer to the file named in PATHWARDEN_ACTION_RESULT.
 
     .PARAMETER Describe
-    The actions, as hashtables (docs/actions.md), or a script block that
+    The actions, as hashtables (docs/action-reference.md), or a script block that
     gets the settings and returns them. The schema is added.
 
     .PARAMETER Handlers

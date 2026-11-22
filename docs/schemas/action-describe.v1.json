@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/marbas207/Pathwarden/blob/main/docs/schemas/action-describe.v1.json",
   "title": "Pathwarden finding action: describe answer (pathwarden.action-describe.v1)",
-  "description": "What a finding action program writes to the file named in PATHWARDEN_ACTION_RESULT when PATHWARDEN_ACTION_REQUEST is describe: the actions it offers, in order. docs/actions.md explains each field. A document that passes this schema passes `pathwarden action check`'s describe checks; the few rules JSON Schema can't say are in $comment. Fields Pathwarden doesn't know are ignored, so the schema allows them.",
+  "description": "What a finding action program writes to the file named in PATHWARDEN_ACTION_RESULT when PATHWARDEN_ACTION_REQUEST is describe: the actions it offers, in order. docs/action-reference.md explains each field. A document that passes this schema passes `pathwarden action check`'s describe checks; the few rules JSON Schema can't say are in $comment. Fields Pathwarden doesn't know are ignored, so the schema allows them.",
   "type": "object",
   "required": ["schema", "actions"],
   "properties": {

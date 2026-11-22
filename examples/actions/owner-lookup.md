@@ -2,7 +2,8 @@
 
 A finding action that says who owns the objects a finding is about, from a
 CSV file of owners. It returns a message, sends nothing anywhere and
-changes nothing, so a dry run does the same as a run.
+changes nothing, so a dry run does the same as a run. Its `sends` says
+so: "Nothing: it reads a file of owners on this computer."
 
 It offers one action, **Find the owners** (`lookup`), with one input,
 **Look up**: **Affected objects** (the default), or **Affected objects and
@@ -64,4 +65,4 @@ No owner on file: HELPDESK@SCALE.LOCAL
 The same shape fits a lookup in a CMDB or an HR system: read, then answer
 in the message. When it calls another system, say so in `sends`.
 
-More: [Writing an action](../../docs/actions.md#an-owner-lookup-that-shows-a-message).
+More: [Writing an action](../../docs/actions.md#examples).

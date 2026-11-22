@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/marbas207/Pathwarden/blob/main/docs/schemas/action-result.v1.json",
   "title": "Pathwarden finding action: result (pathwarden.action-result.v1)",
-  "description": "What a finding action program writes to the file named in PATHWARDEN_ACTION_RESULT when PATHWARDEN_ACTION_REQUEST is run: whether it worked, a message, links and records. docs/actions.md explains each field. A result that passes this schema is kept as it is; Pathwarden cuts a text that is too long and leaves out a link or record it can't keep, each with a problem `pathwarden action check` names. No text is ever read as HTML. Fields Pathwarden doesn't know are ignored, so the schema allows them.",
+  "description": "What a finding action program writes to the file named in PATHWARDEN_ACTION_RESULT when PATHWARDEN_ACTION_REQUEST is run: whether it worked, a message, links and records. docs/action-reference.md explains each field. A result that passes this schema is kept as it is; Pathwarden cuts a text that is too long and leaves out a link or record it can't keep, each with a problem `pathwarden action check` names. No text is ever read as HTML. Fields Pathwarden doesn't know are ignored, so the schema allows them.",
   "type": "object",
   "required": ["schema", "ok"],
   "properties": {

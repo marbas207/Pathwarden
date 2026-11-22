@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/marbas207/Pathwarden/blob/main/docs/schemas/action-request.v1.json",
   "title": "Pathwarden finding action: request (pathwarden.action-request.v1)",
-  "description": "What Pathwarden writes to a finding action program's stdin: a describe request (what do you offer?) or a run request (run this action on this finding). PATHWARDEN_ACTION_REQUEST names the kind too. docs/actions.md explains each field. Within v1 fields are only added: a program must ignore fields it doesn't know, so the schema allows them.",
+  "description": "What Pathwarden writes to a finding action program's stdin: a describe request (what do you offer?) or a run request (run this action on this finding). PATHWARDEN_ACTION_REQUEST names the kind too. docs/action-reference.md explains each field. Within v1 fields are only added: a program must ignore fields it doesn't know, so the schema allows them.",
   "type": "object",
   "required": ["schema", "kind", "settings"],
   "properties": {

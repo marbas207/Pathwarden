@@ -894,7 +894,8 @@ findings. Attackers: Collector file.
 
 A plugin is a program Pathwarden runs after a run, with the run's event on
 stdin (docs/plugins.md). A finding action is a program someone runs for
-one finding, with that finding on stdin (docs/actions.md, and
+one finding, with that finding on stdin (docs/actions.md,
+docs/action-reference.md and
 docs/dev/formats.md, "Finding actions"); it is held to the same rules.
 
 Assets: the event (every finding, path, object name and SID, accepted risks

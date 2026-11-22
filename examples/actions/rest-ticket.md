@@ -10,6 +10,12 @@ issue. Each ticket comes back as a record, saved on the finding.
 | **Check status** | `status` | On a ticket it opened (`for: "record"`). | Reads the ticket and returns its whole record, which replaces the saved one: what the answer lacks comes from the record it ran on. |
 | **Close ticket** | `close` | On a ticket it opened, once the finding is fixed (`"when": ["fixed"]`). | Sets the ticket's status to closed, with a note. Refuses on a finding that isn't fixed. |
 
+Because `open` has `once` and searches before it creates, a second click
+or a retry returns the same ticket. Each record's `open` comes from the
+ticket's status, so the chip and `once` stay right. The paths, the field
+names and the closed statuses are settings, so most ticket systems fit
+without code changes.
+
 It needs Python 3.9 or later, and nothing outside the standard library.
 
 ## The API it expects
@@ -99,4 +105,4 @@ shows: a `run` request with `"action": "open"`, then `"status"` and
 `"close"` with the returned record in `record` and, for close,
 `"status": "fixed"` in the finding.
 
-More: [Writing an action](../../docs/actions.md#a-rest-ticket-with-status-and-close).
+More: [Writing an action](../../docs/actions.md#examples).
